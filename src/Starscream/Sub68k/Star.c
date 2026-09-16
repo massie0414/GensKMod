@@ -2881,14 +2881,28 @@ static void flick_reg(char*op,int needxf,int affectx,int asl,int rotate){
 		case 'c':/* register shift count */
 			emit("cmp cl, 32\n");
 			emit("jb short ln%d\n",linenum);
-			emit("%s%c %s, 16\n", op,direction[main_dr],x86dx[main_size]);
+					if(needxf){
+						emit("shr al, 1\n");
+					}
+					emit("ln%d:\n",linenum + 1);
+					emit("%s%c %s, 31\n", op,direction[main_dr],x86dx[main_size]);
 			emit("sub cl, 31\n");
-			emit("%s%c %s, 15\n", op,direction[main_dr],x86dx[main_size]);
+					emit("cmp cl, 32\n");
+					emit("jnb short ln%d\n",linenum + 1);
+					emit("%s%c %s,%s\n", op,direction[main_dr],x86dx[main_size],tmps);
+					emit("jmp short ln%d\n",linenum + 2);
+					emit("ln%d:\n",linenum); linenum += 2;
+					if(needxf){
+						emit("shr al, 1\n");
+					}
+					emit("%s%c %s,%s\n", op,direction[main_dr],x86dx[main_size],tmps);
 			emit("ln%d:\n",linenum); linenum++;
-			emit("%s%c %s,%s\n", op,direction[main_dr],x86dx[main_size],tmps);
 			break;
 
 		default:/* immediate shift count >1 */
+					if(needxf){
+						emit("shr al,1\n");
+					}
 			emit("%s%c %s,%s\n", op,direction[main_dr],x86dx[main_size],tmps);
 			break;
 	}
@@ -2924,14 +2938,28 @@ static void flick_reg(char*op,int needxf,int affectx,int asl,int rotate){
 		case 'c':/* register shift count */
 			emit("cmp cl, 32\n");
 			emit("jb short ln%d\n",linenum);
-			emit("%s%c %s[__dreg+ebx*4], 16\n", op,direction[main_dr],sizename[main_size]);
+			if(needxf){
+				emit("shr al, 1\n");
+			}
+			emit("ln%d:\n",linenum + 1);
+			emit("%s%c %s[__dreg+ebx*4], 31\n", op,direction[main_dr],sizename[main_size]);
 			emit("sub cl, 31\n");
-			emit("%s%c %s[__dreg+ebx*4], 15\n", op,direction[main_dr],sizename[main_size]);
-			emit("ln%d:\n",linenum); linenum++;
+			emit("cmp cl, 32\n");
+			emit("jnb short ln%d\n",linenum + 1);
 			emit("%s%c %s[__dreg+ebx*4],%s\n", op,direction[main_dr],sizename[main_size],tmps);
+			emit("jmp short ln%d\n",linenum + 2);
+			emit("ln%d:\n",linenum); linenum += 2;
+			if(needxf){
+				emit("shr al, 1\n");
+			}
+			emit("%s%c %s[__dreg+ebx*4],%s\n", op,direction[main_dr],sizename[main_size],tmps);
+			emit("ln%d:\n",linenum); linenum++;
 			break;
 
 		default:/* immediate shift count >1 */
+			if(needxf){
+				emit("shr al, 1\n");
+			}
 			emit("%s%c %s[__dreg+ebx*4],%s\n", op,direction[main_dr],sizename[main_size],tmps);
 			break;
 	}
