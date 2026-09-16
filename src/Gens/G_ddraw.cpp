@@ -930,28 +930,7 @@ int Show_Genesis_Screen(HWND hWnd)
 	return 1;
 }
 
-#ifdef GENS_KMOD
-
-int Take_Raw_Shot()
-{
-	int width, height, stride, sidebar;
-	width = VDP_Reg.Set4 & 0x01 ? 320 : 256;
-	height = VDP_Reg.Set2 & 0x08 ? 240 : 224;
-	stride = 336 * 2;
-	sidebar = 336 - width;
-	return Save_Shot((unsigned char*)MD_Screen+sidebar, Mode_555 & 1, width, height, stride);
-}
-
-int Copy_Raw_Shot()
-{
-	int width, height, stride, sidebar;
-	width = VDP_Reg.Set4 & 0x01 ? 320 : 256;
-	height = VDP_Reg.Set2 & 0x08 ? 240 : 224;
-	stride = 336 * 2;
-	sidebar = 336 - width;
-	return Copy_Shot((unsigned char*)MD_Screen + sidebar, Mode_555 & 1, width, height, stride);
-}
-
+//GENS_KMOD refactored code to avoid duplicate code in Take_Shot and Copy_Shot_ToClipboard
 RECT GetShotRect()
 {
 	RECT RD;
@@ -1070,6 +1049,28 @@ RECT GetShotRect()
 	}
 
 	return RD;
+}
+
+#ifdef GENS_KMOD
+
+int Take_Raw_Shot()
+{
+	int width, height, stride, sidebar;
+	width = VDP_Reg.Set4 & 0x01 ? 320 : 256;
+	height = VDP_Reg.Set2 & 0x08 ? 240 : 224;
+	stride = 336 * 2;
+	sidebar = 336 - width;
+	return Save_Shot((unsigned char*)MD_Screen+sidebar, Mode_555 & 1, width, height, stride);
+}
+
+int Copy_Raw_Shot()
+{
+	int width, height, stride, sidebar;
+	width = VDP_Reg.Set4 & 0x01 ? 320 : 256;
+	height = VDP_Reg.Set2 & 0x08 ? 240 : 224;
+	stride = 336 * 2;
+	sidebar = 336 - width;
+	return Copy_Shot((unsigned char*)MD_Screen + sidebar, Mode_555 & 1, width, height, stride);
 }
 
 int Copy_Shot_ToClipboard()

@@ -1807,7 +1807,7 @@ int PASCAL WinMain(HINSTANCE hInst,	HINSTANCE hPrevInst, LPSTR lpCmdLine, int nC
 		if (Debug)						// DEBUG
 		{
 			Update_Debug_Screen();
-			Flip(HWnd);
+			Flip_GFX(HWnd);
 		}
 		else
 #endif //not GENS_KMOD

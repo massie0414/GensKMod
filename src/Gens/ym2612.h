@@ -101,9 +101,10 @@ typedef struct ym2612__ {
 } ym2612_;
 
 /* Gens */
-#ifdef GENS_KMOD
+//incorect define GENS_KMOD
+//#ifdef GENS_KMOD
 extern struct ym2612__ YM2612;
-#endif
+//#endif
 
 extern int YM2612_Enable;
 extern int YM2612_Improv;
