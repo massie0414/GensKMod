@@ -262,6 +262,7 @@
     <ClCompile Include="G_dsound.cpp" />
     <ClCompile Include="G_main.cpp" />
     <ClCompile Include="Gens.cpp" />
+    <ClCompile Include="32x_boot.cpp" />
     <ClCompile Include="ggenie.cpp" />
     <ClCompile Include="kmod.c" />
     <ClCompile Include="LC89510.c" />

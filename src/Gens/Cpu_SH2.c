@@ -147,6 +147,7 @@ void MSH2_Reset()
 	memset(_32X_FIFO_A, 0, 4 * 2);
 	memset(_32X_FIFO_B, 0, 4 * 2);
 	_32X_ADEN = 0;
+	_32X_RES = 0;
 	_32X_FM = 0;
 	_32X_RV = 0;
 	_32X_DREQ_ST = 0;

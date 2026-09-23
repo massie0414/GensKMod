@@ -30,6 +30,7 @@
 #include "cd_sys.h"
 #include "cd_file.h"
 #include "cd_hle.h"
+#include "32x_boot.h"
 #define main68k_exec CD_HLE_MainExec
 #define sub68k_exec CD_HLE_SubExec
 
@@ -981,40 +982,11 @@ int Do_Genesis_Frame()
 int Init_32X(struct Rom *MD_Rom)
 {
 	char Str_Err[256];
-	FILE *f;
 	int i;
 
-	if (f = fopen(_32X_Genesis_Bios, "rb"))
+	if (!Load_32X_Boot(Rom_Data, Rom_Size))
 	{
-		fread(&_32X_Genesis_Rom[0], 1, 256, f);
-		Byte_Swap(&_32X_Genesis_Rom[0], 256);
-		fclose(f);
-	}
-	else
-	{
-		MessageBox(NULL, "Your 32X bios files aren't correctly configured :\nGenesis 32X bios not found.\nGo to menu 'Option -> Bios/Misc Files' to set up them", "Error", MB_OK);
-		return 0;
-	}
-
-	if (f = fopen(_32X_Master_Bios, "rb"))
-	{
-		fread(&_32X_MSH2_Rom[0], 1, 2 * 1024, f);
-		fclose(f);
-	}
-	else
-	{
-		MessageBox(NULL, "Your 32X bios files aren't correctly configured :\nMaster SH2 bios not found.\nGo to menu 'Option -> Bios/Misc Files' to set up them", "Error", MB_OK);
-		return 0;
-	}
-
-	if (f = fopen(_32X_Slave_Bios, "rb"))
-	{
-		fread(&_32X_SSH2_Rom[0], 1, 1 * 1024, f);
-		fclose(f);
-	}
-	else
-	{
-		MessageBox(NULL, "Your 32X bios files aren't correctly configured :\nSlave SH2 bios not found.\nGo to menu 'Option -> Bios/Misc Files' to set up them", "Error", MB_OK);
+		MessageBox(NULL, "Invalid 32X cartridge boot header.", "Error", MB_OK);
 		return 0;
 	}
 
@@ -1169,7 +1141,8 @@ int Init_32X(struct Rom *MD_Rom)
 	// this permit 32X games with older BIOS version to run correctly
 	// Ecco 32X demo needs it
 
-	for(i = 0; i < 0x400; i++) _32X_MSH2_Rom[i + 0x36C] = _32X_Rom[i + 0x400];
+	if (!Boot_32X_Internal)
+		for(i = 0; i < 0x400; i++) _32X_MSH2_Rom[i + 0x36C] = _32X_Rom[i + 0x400];
 
 
 #ifdef GENS_KMOD
@@ -1228,7 +1201,8 @@ void Reset_32X()
 	// this permit 32X games with older BIOS version to run correctly
 	// Ecco 32X demo needs it
 
-	for(i = 0; i < 0x400; i++) _32X_MSH2_Rom[i + 0x36C] = _32X_Rom[i + 0x400];
+	if (!Boot_32X_Internal)
+		for(i = 0; i < 0x400; i++) _32X_MSH2_Rom[i + 0x36C] = _32X_Rom[i + 0x400];
 }
 
 
