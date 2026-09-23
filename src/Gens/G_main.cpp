@@ -3565,7 +3565,7 @@ HMENU Build_Main_Menu(void)
 #endif
 	}
 
-	if (_32X_Started)
+	if (_32X_Started || CD_32X_Active)
 	{
 #ifdef GENS_KMOD
 		Flags = MF_BYPOSITION | MF_STRING;

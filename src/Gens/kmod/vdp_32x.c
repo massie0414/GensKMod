@@ -137,7 +137,7 @@ static void Decode32X_KMod(unsigned bank, DWORD *pixels)
     const WORD *fb = (const WORD *)(_32X_VDP_Ram + bank * 0x20000);
     unsigned mode = _32X_VDP.Mode & 3;
     unsigned y, x, address, word, index, run;
-    unsigned lines = _32X_Started ? VDP_Num_Vis_Lines : 0;
+    unsigned lines = (_32X_Started || CD_32X_Active) ? VDP_Num_Vis_Lines : 0;
     if (lines > VDP32X_VIEW_HEIGHT) lines = VDP32X_VIEW_HEIGHT;
     memset(pixels, 0, VDP32X_VIEW_WIDTH * VDP32X_VIEW_HEIGHT * sizeof(*pixels));
     if (!mode) return;

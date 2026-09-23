@@ -51,6 +51,7 @@ def main():
             parser.error("Release objects are missing; omit --skip-build")
         compile_test("cd32x_boot_test", ["tests/cd32x_boot_test.cpp"], objects, [
             "/LIBPATH:" + str(root / "src/dx70_min/lib"),
+            str(root / "src/Gens/bin/obj/Release/Gens.res"),
             str(root / "src/Gens/libs/zlib.lib"), str(root / "src/Gens/libs/htmlhelp.lib"),
             "wsock32.lib", "comctl32.lib", "ddraw.lib", "dsound.lib", "dinput.lib",
             "dxguid.lib", "winmm.lib", "vfw32.lib", "user32.lib", "gdi32.lib",

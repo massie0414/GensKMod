@@ -11,7 +11,7 @@ unsigned char _32X_VDP_Ram[0x40000];
 unsigned short _32X_VDP_CRam[256], _32X_VDP_CRam_Ajusted[256];
 struct VDP_32X_Type _32X_VDP;
 unsigned short _32X_Palette_16B[65536];
-int Mode_555, VDP_Num_Vis_Lines, _32X_Started;
+int Mode_555, VDP_Num_Vis_Lines, _32X_Started, CD_32X_Active;
 UCHAR OpenedWindow_KMod[WIN_NUMBER];
 char Rom_Name[512];
 void Put_Info(const char *text, int duration) { }
@@ -73,6 +73,13 @@ int main(void)
     _32X_VDP.Mode=1;
     Decode32X_KMod(0,decoded);assert(decoded[0]==0xff0000 && decoded[1]==0x0000ff);
     Decode32X_KMod(1,decoded);assert(decoded[0]==0x0000ff && decoded[1]==0xff0000);
+    _32X_Started=0;CD_32X_Active=1;
+    Decode32X_KMod(0,decoded);assert(decoded[0]==0xff0000 && decoded[1]==0x0000ff);
+    Decode32X_KMod(1,decoded);assert(decoded[0]==0x0000ff && decoded[1]==0xff0000);
+    CD_32X_Active=0;
+    Decode32X_KMod(0,decoded);assert(decoded[0]==0 && decoded[1]==0);
+    Decode32X_KMod(1,decoded);assert(decoded[0]==0 && decoded[1]==0);
+    _32X_Started=1;
     _32X_VDP.Mode=0x10001;fb0[257]=0x0101;
     Decode32X_KMod(0,decoded);assert(decoded[0]==0x0000ff && decoded[1]==0xff0000);
     _32X_VDP.Mode=2;fb0[256]=0x001f;fb0[257]=0xfc00;
@@ -101,6 +108,14 @@ int main(void)
     fb1[256]=0x7c00;
     Draw32XVDPRaw_KMod(&d);GdiFlush();assert(output[9*340+7]==0xff0000);
     Draw32XVDP_KMod(&d);GdiFlush();assert(output[9*340+7]==0x0000ff);
+    _32X_Started=0;CD_32X_Active=1;
+    Draw32XVDPRaw_KMod(&d);GdiFlush();assert(output[9*340+7]==0xff0000);
+    Draw32XVDP_KMod(&d);GdiFlush();assert(output[9*340+7]==0x0000ff);
+    CD_32X_Active=0;
+    Draw32XVDPRaw_KMod(&d);GdiFlush();assert(output[9*340+7]==0);
+    Draw32XVDP_KMod(&d);GdiFlush();assert(output[9*340+7]==0);
+    _32X_Started=1;
+    puts("PASS: CD32X active without cartridge, both panel paints, inactive blanking");
     select_view(IDC_32XVDP_FB1);fb0[256]=31;
     Draw32XVDPRaw_KMod(&d);GdiFlush();assert(output[9*340+7]==0xf80000);
     select_view(IDC_32XVDP_FB2);Draw32XVDP_KMod(&d);GdiFlush();assert(output[9*340+7]==0x0000f8);

@@ -3,9 +3,16 @@
 #include <stdlib.h>
 #include <string.h>
 #include <windows.h>
+extern "C" {
+#include "../src/Gens/Kmod.h"
+#include "../src/Gens/kmod/common.h"
+}
+
 #include "../src/Gens/gens.h"
 #include "../src/Gens/G_gfx.h"
 #include "../src/Gens/G_main.h"
+#include "../src/Gens/resource.h"
+#include "../src/Gens/kmod/vdp_32x.h"
 #include "../src/Gens/Cpu_68k.h"
 #include "../src/Gens/Cpu_Z80.h"
 #include "../src/Gens/Cpu_SH2.h"
@@ -27,6 +34,29 @@
 #include "../src/Gens/io.h"
 
 #define CHECK(x) do { if(!(x)) { fprintf(stderr,"FAILED line %d: %s\n",__LINE__,#x); return 1; } } while(0)
+static HWND test_vdp_window;
+static BOOL CALLBACK find_test_vdp(HWND window, LPARAM unused) {
+    if(GetDlgItem(window,IDC_32XVDP_TILES)) test_vdp_window=window;
+    return TRUE;
+}
+static int live_vdp_test(void) {
+    CHECK(CD_32X_Active && !_32X_Started);
+    vdp32x_create(GetModuleHandle(NULL),NULL);
+    EnumThreadWindows(GetCurrentThreadId(),find_test_vdp,0);
+    CHECK(test_vdp_window);
+    ShowWindow(test_vdp_window,SW_SHOWNOACTIVATE);
+    const int controls[]={IDC_32XVDP_TILES,IDC_32XVDP_TILES2,IDC_32XVDP_PAL};
+    OpenedWindow_KMod[DMODE_32_VDP-1]=TRUE;
+    for(int frame=0;frame<3;frame++) {
+        for(int n=0;n<3;n++) ValidateRect(GetDlgItem(test_vdp_window,controls[n]),NULL);
+        Update_KMod();
+        for(int n=0;n<3;n++) CHECK(GetUpdateRect(GetDlgItem(test_vdp_window,controls[n]),NULL,FALSE));
+    }
+    OpenedWindow_KMod[DMODE_32_VDP-1]=FALSE;
+    vdp32x_destroy();
+    puts("PASS: CD32X periodic debugger update invalidates both framebuffers and palette");
+    return 0;
+}
 static int pulse(int frame,int when) { return frame>=when && frame<when+24; }
 static unsigned hash(const unsigned char *p,unsigned n) { unsigned h=2166136261U; while(n--)h=(h^*p++)*16777619U; return h; }
 static void release_pad(void) {
@@ -154,7 +184,14 @@ int main(int argc,char **argv)
                 fwrite(pair,2,2,pcm);
             }
         }
-        if(i==150) { CHECK(CD_32X_Active && _32X_ADEN && _32X_RES); screenshot("menu.bmp"); }
+        if(i==150) {
+            CHECK(CD_32X_Active && _32X_ADEN && _32X_RES);
+            CHECK(!_32X_Started);
+            CHECK(GetMenuState(Gens_Menu,ID_CPU_DEBUG_32X_VDP,MF_BYCOMMAND)!=0xffffffff);
+            CHECK(GetMenuState(Gens_Menu,ID_CPU_DEBUG_SEGACD_68000,MF_BYCOMMAND)!=0xffffffff);
+            CHECK(live_vdp_test()==0);
+            screenshot("menu.bmp");
+        }
         if(i==959) { CHECK(screenshot("playing.bmp")); before=hash((unsigned char*)MD_Screen,336*240*2); }
         if(i==1019) { CHECK(screenshot("playing-later.bmp")); after=hash((unsigned char*)MD_Screen,336*240*2); }
         if(i==1200) {

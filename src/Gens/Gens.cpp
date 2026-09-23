@@ -992,6 +992,7 @@ void Enable_CD_32X(void)
     _32X_VDP.State |= 0x2000;
     Update_Frame=Do_32X_Frame;
     Update_Frame_Fast=Do_32X_Frame_No_VDP;
+    Build_Main_Menu();
 }
 
 int Init_32X(struct Rom *MD_Rom)

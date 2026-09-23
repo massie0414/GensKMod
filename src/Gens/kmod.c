@@ -261,7 +261,7 @@ void Update_KMod( )
 		cdreg_update();
 	}
 
-	if (_32X_Started)
+	if (_32X_Started || CD_32X_Active)
 	{
 		mSH2_update();
 		sSH2_update();
