@@ -10,6 +10,8 @@ void sprites_show(BOOL visibility);
 void sprites_update();
 void sprites_reset();
 void sprites_destroy();
+void sprites_save_window(const char *config_file);
+void sprites_restore_window(const char *config_file);
 
 #ifdef __cplusplus
 };

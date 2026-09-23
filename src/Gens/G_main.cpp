@@ -48,6 +48,8 @@
 #include "kmod/gmv.h"
 #include "kmod/config.h"
 #include "kmod/planes.h"
+#include "kmod/vdp.h"
+#include "kmod/sprites.h"
 
 static gdbServerThread * g_gdb_main68k_server;
 static gdbServerThread * g_gdb_sub68k_server;
@@ -1876,6 +1878,8 @@ int PASCAL WinMain(HINSTANCE hInst,	HINSTANCE hPrevInst, LPSTR lpCmdLine, int nC
 	strcpy(Str_Tmp, Gens_Path);
 	strcat(Str_Tmp, "GensKMod.cfg");
 	planes_save_visibility(Str_Tmp);
+	vdpdebug_save_window(Str_Tmp);
+	sprites_save_window(Str_Tmp);
 #endif
 
 	End_All();

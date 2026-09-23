@@ -11,6 +11,7 @@
 
 #include "common.h"
 #include "planes.h"
+#include "window_geometry.h"
 
 #define PLANE_COUNT 2
 #define PLANE_BITMAP_WIDTH 1024
@@ -459,6 +460,8 @@ void planes_save_visibility(const char *config_file)
 		OpenedWindow_KMod[DMODE_PLANE_A - 1] ? "1" : "0", config_file);
 	WritePrivateProfileString("DebugWindows", "PlaneBOpen",
 		OpenedWindow_KMod[DMODE_PLANE_B - 1] ? "1" : "0", config_file);
+	DebugWindow_SaveGeometry(explorers[0].hwnd, "PlaneARect", config_file);
+	DebugWindow_SaveGeometry(explorers[1].hwnd, "PlaneBRect", config_file);
 }
 
 void planes_restore_visibility(const char *config_file)
@@ -468,6 +471,8 @@ void planes_restore_visibility(const char *config_file)
 	{
 		BOOL visible = GetPrivateProfileInt("DebugWindows",
 			plane == 0 ? "PlaneAOpen" : "PlaneBOpen", 0, config_file) != 0;
+		DebugWindow_RestoreGeometry(explorers[plane].hwnd,
+			plane == 0 ? "PlaneARect" : "PlaneBRect", config_file);
 		OpenedWindow_KMod[PlaneExplorerMode(plane) - 1] =
 			visible && explorers[plane].hwnd != NULL;
 		planes_show(plane, visible);

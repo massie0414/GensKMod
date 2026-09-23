@@ -12,6 +12,8 @@ void vdpdebug_show(BOOL visibility);
 void vdpdebug_update();
 void vdpdebug_reset();
 void vdpdebug_destroy();
+void vdpdebug_save_window(const char *config_file);
+void vdpdebug_restore_window(const char *config_file);
 BOOL vdpdebug_isMessage(LPMSG lpMsg);
 
 

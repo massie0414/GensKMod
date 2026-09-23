@@ -16,8 +16,10 @@
 #include "common.h"
 #include "utils.h"
 #include "vdp.h"
+#include "window_geometry.h"
 UCHAR pal_KMod;
 static HWND hVDP;
+static SIZE minimumVDPSize;
 
 static long palH, palV;
 static UCHAR zoomTile_KMod, TileCurDraw; //, tileBank_KMod;
@@ -454,6 +456,20 @@ BOOL CALLBACK VDPDlgProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam)
 	{
 	case WM_INITDIALOG:
 		VDPInit_KMod(hwnd);
+		{
+			RECT rect;
+			GetWindowRect(hwnd, &rect);
+			minimumVDPSize.cx = rect.right - rect.left;
+			minimumVDPSize.cy = rect.bottom - rect.top;
+		}
+		break;
+
+	case WM_GETMINMAXINFO:
+		if (minimumVDPSize.cx && minimumVDPSize.cy)
+		{
+			((MINMAXINFO *)lParam)->ptMinTrackSize.x = minimumVDPSize.cx;
+			((MINMAXINFO *)lParam)->ptMinTrackSize.y = minimumVDPSize.cy;
+		}
 		break;
 
 	case WM_DRAWITEM:
@@ -571,8 +587,8 @@ BOOL CALLBACK VDPDlgProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam)
 		break;
 
 	case WM_DESTROY:
-		vdpdebug_destroy();
-		PostQuitMessage(0);
+		hVDP = NULL;
+		OpenedWindow_KMod[DMODE_VDP - 1] = FALSE;
 		break;
 	default:
 		return FALSE;
@@ -604,6 +620,22 @@ void vdpdebug_reset()
 void vdpdebug_destroy()
 {
 	DestroyWindow(hVDP);
+}
+
+
+void vdpdebug_save_window(const char *config_file)
+{
+	WritePrivateProfileString("DebugWindows", "VDPOpen",
+		OpenedWindow_KMod[DMODE_VDP - 1] ? "1" : "0", config_file);
+	DebugWindow_SaveGeometry(hVDP, "VDPRect", config_file);
+}
+
+void vdpdebug_restore_window(const char *config_file)
+{
+	BOOL visible = GetPrivateProfileInt("DebugWindows", "VDPOpen", 0, config_file) != 0;
+	DebugWindow_RestoreGeometry(hVDP, "VDPRect", config_file);
+	OpenedWindow_KMod[DMODE_VDP - 1] = visible && hVDP != NULL;
+	vdpdebug_show(visible);
 }
 
 

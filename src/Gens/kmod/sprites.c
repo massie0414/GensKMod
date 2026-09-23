@@ -14,10 +14,12 @@
 #include "common.h"
 #include "utils.h"
 #include "sprites.h"
+#include "window_geometry.h"
 #include "vdp.h"
 
 
 static HWND hSprites;
+static SIZE minimumSpritesSize;
 static HWND hSpriteList;
 
 unsigned char TrueSize_KMod(unsigned short int data)
@@ -56,7 +58,8 @@ void SpritesInit_KMod(HWND hDlg)
 	for (i = 0; i < 8; i++)
 	{
 		lvColumn.pszText = szString[i];
-		ListView_InsertColumn(hSpriteList, i, &lvColumn);
+		if (Header_GetItemCount(ListView_GetHeader(hSpriteList)) <= i)
+			ListView_InsertColumn(hSpriteList, i, &lvColumn);
 	}
 
 	ListView_SetExtendedListViewStyle(hSpriteList, LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES);
@@ -542,7 +545,22 @@ BOOL CALLBACK SpritesDlgProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lPar
 	switch (Message)
 	{
 	case WM_INITDIALOG:
+		hSprites = hwnd;
 		sprites_reset();
+		{
+			RECT rect;
+			GetWindowRect(hwnd, &rect);
+			minimumSpritesSize.cx = rect.right - rect.left;
+			minimumSpritesSize.cy = rect.bottom - rect.top;
+		}
+		break;
+
+	case WM_GETMINMAXINFO:
+		if (minimumSpritesSize.cx && minimumSpritesSize.cy)
+		{
+			((MINMAXINFO *)lParam)->ptMinTrackSize.x = minimumSpritesSize.cx;
+			((MINMAXINFO *)lParam)->ptMinTrackSize.y = minimumSpritesSize.cy;
+		}
 
 		break;
 	case WM_DRAWITEM:
@@ -555,6 +573,9 @@ BOOL CALLBACK SpritesDlgProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lPar
 	case WM_COMMAND:
 		switch (LOWORD(wParam))
 		{
+		case IDCANCEL:
+			CloseWindow_KMod(DMODE_SPRITES);
+			break;
 		case IDC_SPRITES_DUMP:
 			DumpSprite_KMod(hSprites);
 			break;
@@ -585,9 +606,9 @@ BOOL CALLBACK SpritesDlgProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lPar
 		break;
 
 	case WM_DESTROY:
-		sprites_destroy();
-		
-		PostQuitMessage(0);
+		hSprites = NULL;
+		hSpriteList = NULL;
+		OpenedWindow_KMod[DMODE_SPRITES - 1] = FALSE;
 		break;
 
 	default:
@@ -622,4 +643,19 @@ void sprites_destroy()
 {
 	ListView_DeleteAllItems(hSpriteList);
 	DestroyWindow(hSprites);
+}
+
+void sprites_save_window(const char *config_file)
+{
+	WritePrivateProfileString("DebugWindows", "SpritesOpen",
+		OpenedWindow_KMod[DMODE_SPRITES - 1] ? "1" : "0", config_file);
+	DebugWindow_SaveGeometry(hSprites, "SpritesRect", config_file);
+}
+
+void sprites_restore_window(const char *config_file)
+{
+	BOOL visible = GetPrivateProfileInt("DebugWindows", "SpritesOpen", 0, config_file) != 0;
+	DebugWindow_RestoreGeometry(hSprites, "SpritesRect", config_file);
+	OpenedWindow_KMod[DMODE_SPRITES - 1] = visible && hSprites != NULL;
+	sprites_show(visible);
 }

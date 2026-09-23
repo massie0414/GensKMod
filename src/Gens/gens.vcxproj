@@ -451,6 +451,7 @@
     <ClInclude Include="kmod\message.h" />
     <ClInclude Include="kmod\mSH2.h" />
     <ClInclude Include="kmod\planes.h" />
+    <ClInclude Include="kmod\window_geometry.h" />
     <ClInclude Include="kmod\psg.h" />
     <ClInclude Include="kmod\s32x_reg.h" />
     <ClInclude Include="kmod\s68k.h" />
