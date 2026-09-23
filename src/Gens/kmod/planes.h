@@ -8,7 +8,7 @@ extern "C" {
 
 
 void planes_create(HINSTANCE hInstance, HWND hWndParent);
-void planes_show(BOOL visibility);
+void planes_show(int plane, BOOL visibility);
 void planes_update();
 void planes_reset();
 void planes_destroy();

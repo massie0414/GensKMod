@@ -61,8 +61,11 @@ void CloseWindow_KMod(UCHAR mode)
 	case DMODE_LAYERS:
 		layers_show(FALSE);
 		break;
-	case DMODE_PLANEEXPLORER:
-		planes_show(FALSE);
+	case DMODE_PLANE_A:
+		planes_show(0, FALSE);
+		break;
+	case DMODE_PLANE_B:
+		planes_show(1, FALSE);
 		break; 
 	case DMODE_68K:
 		m68kdebug_show(FALSE);
@@ -129,8 +132,11 @@ void OpenWindow_KMod(UCHAR mode)
 	case DMODE_LAYERS:
 		layers_show(TRUE);
 		break;
-	case DMODE_PLANEEXPLORER:
-		planes_show(TRUE);
+	case DMODE_PLANE_A:
+		planes_show(0, TRUE);
+		break;
+	case DMODE_PLANE_B:
+		planes_show(1, TRUE);
 		break;
 	case DMODE_68K:
 		m68kdebug_show(TRUE);

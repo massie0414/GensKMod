@@ -12,35 +12,44 @@
 #include "common.h"
 #include "planes.h"
 
-HWND hPlaneExplorer;
+#define PLANE_COUNT 2
+#define PLANE_BITMAP_WIDTH 1024
+#define PLANE_BITMAP_HEIGHT 2048
 
-static unsigned char plane_explorer_data[128 * 8 * 128 * 8];
-static COLORREF plane_explorer_palette[256];
-static int old_plane_width = 0;
-static int old_plane_height = 0;
-static int plane_explorer_plane = 0;
-static BOOL show_transparence = FALSE;
-
-
-static void PlaneExplorerInit_KMod(HWND hDlg)
+typedef struct PlaneExplorer
 {
-	HWND hexplorer;
+	HWND hwnd;
+	int plane;
+	BOOL show_transparence;
+	unsigned int old_width;
+	unsigned int old_height;
+	unsigned int old_tile_height;
+	unsigned char data[PLANE_BITMAP_WIDTH * PLANE_BITMAP_HEIGHT];
+} PlaneExplorer;
+
+static PlaneExplorer explorers[PLANE_COUNT];
+static COLORREF plane_explorer_palette[256];
+
+static UCHAR PlaneExplorerMode(int plane)
+{
+	return plane == 0 ? DMODE_PLANE_A : DMODE_PLANE_B;
+}
+
+static void PlaneExplorerInit_KMod(PlaneExplorer *explorer)
+{
+	HWND hexplorer = GetDlgItem(explorer->hwnd, IDC_PLANEXPLEORER_MAIN);
 	RECT rc;
 
-	SendDlgItemMessage(hDlg, IDC_PLANEEXPLORER_COMBO, CB_RESETCONTENT, (WPARAM)0, (LPARAM)0);
-	SendDlgItemMessage(hDlg, IDC_PLANEEXPLORER_COMBO, CB_INSERTSTRING, (WPARAM)-1, (LONG)(LPTSTR) "Plane A");
-	SendDlgItemMessage(hDlg, IDC_PLANEEXPLORER_COMBO, CB_INSERTSTRING, (WPARAM)-1, (LONG)(LPTSTR) "Plane B");
-	
-	//TODO add support for 32X ?
-
-	SendDlgItemMessage(hDlg, IDC_PLANEEXPLORER_COMBO, CB_SETCURSEL, (WPARAM)0, (LPARAM)0);
-
-	InitCommonControls();
-
-
-	hexplorer = (HWND)GetDlgItem(hDlg, IDC_PLANEXPLEORER_MAIN);
-	GetClientRect(hDlg, &rc);
-	MoveWindow(hexplorer, 20, 60, (rc.right - rc.left) - 40, (rc.bottom - rc.top) - 80, TRUE);
+	SetWindowText(explorer->hwnd, explorer->plane == 0 ? "Plane A" : "Plane B");
+	CheckDlgButton(explorer->hwnd, IDC_PLANEEXPLORER_TRANS,
+		explorer->show_transparence ? BST_CHECKED : BST_UNCHECKED);
+	explorer->old_width = 0;
+	explorer->old_height = 0;
+	explorer->old_tile_height = 0;
+	SetDlgItemText(explorer->hwnd, IDC_PLANEEXPLORER_TILEINFO, "TILE: ");
+	GetClientRect(explorer->hwnd, &rc);
+	MoveWindow(hexplorer, 20, 60, max(0, rc.right - 40), max(0, rc.bottom - 80), TRUE);
+	InvalidateRect(explorer->hwnd, NULL, FALSE);
 }
 
 static void PlaneExplorer_UpdatePalette(void)
@@ -101,11 +110,11 @@ static unsigned short byte_swap(unsigned short w)
 	return (w >> 8) | (w << 8);
 }
 
-static void PlaneExplorer_DrawTile(unsigned short name_word, unsigned int x, unsigned int y, int transcolor)
+static void PlaneExplorer_DrawTile(PlaneExplorer *explorer, unsigned short name_word, unsigned int x, unsigned int y, int transcolor)
 {
 	union PATTERN_NAME name;
 	unsigned int tile_height = ((VDP_Reg.Set4 & 0x6) == 6) ? 16 : 8;
-	unsigned char * ptr = &plane_explorer_data[y * 1024 * tile_height + x * 8];
+	unsigned char * ptr = &explorer->data[y * 1024 * tile_height + x * 8];
 	unsigned int j, k;
 	unsigned int * tile_data;
 	int stride = 1024;
@@ -175,7 +184,7 @@ static void PlaneExplorer_DrawTile(unsigned short name_word, unsigned int x, uns
 	}
 }
 
-static void PlaneExplorer_UpdateBitmap(HWND hwnd, int plane)
+static void PlaneExplorer_UpdateBitmap(PlaneExplorer *explorer)
 {
 	unsigned int i, j;
 
@@ -183,20 +192,21 @@ static void PlaneExplorer_UpdateBitmap(HWND hwnd, int plane)
 	unsigned int plane_height = 32 + ((VDP_Reg.Scr_Size >> 4) & 0x3) * 32;
 	unsigned int plane_a_base = (VDP_Reg.Pat_ScrA_Adr & 0x38) << 10;
 	unsigned int plane_b_base = (VDP_Reg.Pat_ScrB_Adr & 0x7) << 13;
-	unsigned short * plane_a = (unsigned short *)(&VRam[plane_a_base]);
-	unsigned short * plane_b = (unsigned short *)(&VRam[plane_b_base]);
-	unsigned short * plane_data = (plane == 0) ? plane_a : plane_b;
+	unsigned int plane_base = explorer->plane == 0 ? plane_a_base : plane_b_base;
+	unsigned int tile_height = ((VDP_Reg.Set4 & 0x6) == 6) ? 16 : 8;
 
-	if (plane_width != old_plane_width ||
-		plane_height != old_plane_height)
+	if (plane_width != explorer->old_width ||
+		plane_height != explorer->old_height ||
+		tile_height != explorer->old_tile_height)
 	{
-		old_plane_width = plane_width;
-		old_plane_height = plane_height;
-		for (i = 0; i < 1024; i++)
+		explorer->old_width = plane_width;
+		explorer->old_height = plane_height;
+		explorer->old_tile_height = tile_height;
+		for (i = 0; i < PLANE_BITMAP_HEIGHT; i++)
 		{
 			for (j = 0; j < 1024; j++)
 			{
-				plane_explorer_data[i * 1024 + j] = (unsigned char)(((j ^ i) >> 2) & 1) + 253;
+				explorer->data[i * 1024 + j] = (unsigned char)(((j ^ i) >> 2) & 1) + 253;
 			}
 		}
 	}
@@ -205,13 +215,14 @@ static void PlaneExplorer_UpdateBitmap(HWND hwnd, int plane)
 	{
 		for (i = 0; i < plane_width; i++)
 		{
-			int trans_color = show_transparence ? (unsigned char)(((j ^ i) >> 1) & 1) + 254 : -1;
-			PlaneExplorer_DrawTile(plane_data[j * plane_width + i], i, j, trans_color);
+			int trans_color = explorer->show_transparence ? (unsigned char)(((j ^ i) >> 1) & 1) + 254 : -1;
+			unsigned int address = (plane_base + (j * plane_width + i) * 2) & 0xFFFF;
+			PlaneExplorer_DrawTile(explorer, *(unsigned short *)&VRam[address], i, j, trans_color);
 		}
 	}
 }
 
-static void PlaneExplorerPaint_KMod(HWND hwnd, LPDRAWITEMSTRUCT lpdi)
+static void PlaneExplorerPaint_KMod(PlaneExplorer *explorer, LPDRAWITEMSTRUCT lpdi)
 {
 	struct BMI_LOCAL
 	{
@@ -224,7 +235,7 @@ static void PlaneExplorerPaint_KMod(HWND hwnd, LPDRAWITEMSTRUCT lpdi)
 		{
 			sizeof(BITMAPINFOHEADER),
 			128 * 8,
-			-128 * 8,
+			-PLANE_BITMAP_HEIGHT,
 			1,
 			8,
 			BI_RGB,
@@ -243,13 +254,8 @@ static void PlaneExplorerPaint_KMod(HWND hwnd, LPDRAWITEMSTRUCT lpdi)
 	unsigned int plane_b_base = (VDP_Reg.Pat_ScrB_Adr & 0x7) << 13;
 
 	char buffer[1024];
-	int plane;
-
 	PlaneExplorer_UpdatePalette();
-
-	plane = (int)SendDlgItemMessage(hwnd, IDC_PLANEEXPLORER_COMBO, CB_GETCURSEL, 0, 0);
-
-	PlaneExplorer_UpdateBitmap(hwnd, plane);
+	PlaneExplorer_UpdateBitmap(explorer);
 
 	memcpy(bmi.palette, plane_explorer_palette, sizeof(bmi.palette));
 
@@ -260,39 +266,20 @@ static void PlaneExplorerPaint_KMod(HWND hwnd, LPDRAWITEMSTRUCT lpdi)
 		lpdi->rcItem.bottom - lpdi->rcItem.top,
 		lpdi->rcItem.left, lpdi->rcItem.top,
 		lpdi->rcItem.top, lpdi->rcItem.bottom - lpdi->rcItem.top,
-		plane_explorer_data,
+		explorer->data,
 		(const BITMAPINFO *)&bmi,
 		DIB_RGB_COLORS);
 
-	{
-		static unsigned int old_scr_size = 0xFFF;
-		static unsigned int old_a_base = 0;
-		static unsigned int old_b_base = 0;
-		static unsigned int old_mode = 0xFFF;
-
-		if (old_scr_size != VDP_Reg.Scr_Size ||
-			old_a_base != plane_a_base ||
-			old_b_base != plane_b_base)
-		{
-			old_mode = VDP_Reg.Set4 & 0x6;
-			wsprintf(buffer, "Width: %d Height %d: Plane A Base: 0x%04X Plane B Base: 0x%04X: Mode %s",
-				32 + (VDP_Reg.Scr_Size & 0x3) * 32,
-				32 + ((VDP_Reg.Scr_Size >> 4) & 0x3) * 32,
-				plane_a_base, plane_b_base,
-				(old_mode == 2) ? "Interlaced" :
-				(old_mode == 6) ? "Double interlaced" :
-				"Normal");
-
-			SetDlgItemText(hwnd, IDC_PLANEEXPLORER_PROPS, buffer);
-
-			old_scr_size = VDP_Reg.Scr_Size;
-			old_a_base = plane_a_base;
-			old_b_base = plane_b_base;
-		}
-	}
+	wsprintf(buffer, "Width: %d Height: %d  Plane A Base: 0x%04X  Plane B Base: 0x%04X  Mode: %s",
+		32 + (VDP_Reg.Scr_Size & 0x3) * 32,
+		32 + ((VDP_Reg.Scr_Size >> 4) & 0x3) * 32,
+		plane_a_base, plane_b_base,
+		((VDP_Reg.Set4 & 0x6) == 2) ? "Interlaced" :
+		((VDP_Reg.Set4 & 0x6) == 6) ? "Double interlaced" : "Normal");
+	SetDlgItemText(explorer->hwnd, IDC_PLANEEXPLORER_PROPS, buffer);
 }
 
-void PlaneExplorer_GetTipText(int x, int y, char * buffer)
+static void PlaneExplorer_GetTipText(PlaneExplorer *explorer, int x, int y, char * buffer)
 {
 	int plane_size_x = 32 + (VDP_Reg.Scr_Size & 0x3) * 32;
 	int plane_size_y = 32 + ((VDP_Reg.Scr_Size >> 4) & 0x3) * 32;
@@ -300,14 +287,15 @@ void PlaneExplorer_GetTipText(int x, int y, char * buffer)
 
 	unsigned int plane_a_base = (VDP_Reg.Pat_ScrA_Adr & 0x38) << 10;
 	unsigned int plane_b_base = (VDP_Reg.Pat_ScrB_Adr & 0x7) << 13;
-	unsigned int base = plane_explorer_plane ? plane_b_base : plane_a_base;
-	char plane_char = plane_explorer_plane ? 'B' : 'A';
-	unsigned int tile_addr = base + ((y >> 3) * plane_size_x + (x >> 3)) * 2;
+	unsigned int base = explorer->plane ? plane_b_base : plane_a_base;
+	char plane_char = explorer->plane ? 'B' : 'A';
+	unsigned int tile_height = ((VDP_Reg.Set4 & 0x6) == 6) ? 16 : 8;
+	unsigned int tile_addr = (base + ((y / tile_height) * plane_size_x + (x >> 3)) * 2) & 0xFFFF;
 	union PATTERN_NAME name;
 
 
-	if (x >= (plane_size_x * 8) ||
-		y >= (plane_size_y * 8))
+	if (x < 0 || y < 0 || x >= (plane_size_x * 8) ||
+		y >= (int)(plane_size_y * tile_height))
 	{
 		buffer[0] = 0;
 		return;
@@ -317,7 +305,7 @@ void PlaneExplorer_GetTipText(int x, int y, char * buffer)
 
 	wsprintf(buffer, "%d, %d in plane %c @ 0x%04X is @ 0x%04X = 0x%04X [tile %d, pal %d,%s%s prior %d]",
 		x >> 3,
-		y >> 3,
+		y / tile_height,
 		plane_char,
 		base,
 		tile_addr,
@@ -330,28 +318,37 @@ void PlaneExplorer_GetTipText(int x, int y, char * buffer)
 		);
 }
 
-BOOL CALLBACK PlaneExplorerDialogProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam)
+static INT_PTR CALLBACK PlaneExplorerDialogProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam)
 {
+	PlaneExplorer *explorer = (PlaneExplorer *)GetWindowLongPtr(hwnd, DWLP_USER);
+	if (Message == WM_INITDIALOG)
+	{
+		explorer = (PlaneExplorer *)lParam;
+		explorer->hwnd = hwnd;
+		SetWindowLongPtr(hwnd, DWLP_USER, (LONG_PTR)explorer);
+	}
+	if (!explorer) return FALSE;
+
 	switch (Message)
 	{
 	case WM_INITDIALOG:
-		PlaneExplorerInit_KMod(hwnd);
+		PlaneExplorerInit_KMod(explorer);
 		break;
 
 	case WM_DRAWITEM:
-		PlaneExplorerPaint_KMod(hwnd, (LPDRAWITEMSTRUCT)lParam);
+		if (wParam != IDC_PLANEXPLEORER_MAIN) return FALSE;
+		PlaneExplorerPaint_KMod(explorer, (LPDRAWITEMSTRUCT)lParam);
 		break;
 
 	case WM_COMMAND:
 		switch (LOWORD(wParam))
 		{
-		case IDC_PLANEEXPLORER_COMBO:
-			plane_explorer_plane = (int)SendDlgItemMessage(hwnd, IDC_PLANEEXPLORER_COMBO, CB_GETCURSEL, 0, 0);
+		case IDC_PLANEEXPLORER_TRANS:
+			explorer->show_transparence = (IsDlgButtonChecked(hwnd, IDC_PLANEEXPLORER_TRANS) == BST_CHECKED);
 			InvalidateRect(hwnd, NULL, FALSE);
 			break;
-		case IDC_PLANEEXPLORER_TRANS:
-			show_transparence = (IsDlgButtonChecked(hwnd, IDC_PLANEEXPLORER_TRANS) == BST_CHECKED);
-			InvalidateRect(hwnd, NULL, FALSE);
+		case IDCANCEL:
+			CloseWindow_KMod(PlaneExplorerMode(explorer->plane));
 			break;
 		default:
 			break;
@@ -361,17 +358,18 @@ BOOL CALLBACK PlaneExplorerDialogProc(HWND hwnd, UINT Message, WPARAM wParam, LP
 	case WM_SIZE:
 	{
 		HWND hexplorer = GetDlgItem(hwnd, IDC_PLANEXPLEORER_MAIN);
-		MoveWindow(hexplorer, 20, 60, LOWORD(lParam) - 40, HIWORD(lParam) - 80, TRUE);
+		MoveWindow(hexplorer, 20, 60, max(0, (int)LOWORD(lParam) - 40), max(0, (int)HIWORD(lParam) - 80), TRUE);
 		break;
 	}
 
 	case WM_CLOSE:
-		CloseWindow_KMod(DMODE_PLANEEXPLORER);
+		CloseWindow_KMod(PlaneExplorerMode(explorer->plane));
 		break;
 
 	case WM_DESTROY:
-		planes_destroy();
-		PostQuitMessage(0);
+		OpenedWindow_KMod[PlaneExplorerMode(explorer->plane) - 1] = FALSE;
+		HandleWindow_KMod[PlaneExplorerMode(explorer->plane) - 1] = NULL;
+		explorer->hwnd = NULL;
 		break;
 
 	case WM_MOUSELEAVE:
@@ -397,7 +395,7 @@ BOOL CALLBACK PlaneExplorerDialogProc(HWND hwnd, UINT Message, WPARAM wParam, LP
 		GetClientRect(hexplorer, &rc1);
 		if (PtInRect(&rc1, pt))
 		{
-			PlaneExplorer_GetTipText(pt.x, pt.y, buffer + 6);
+			PlaneExplorer_GetTipText(explorer, pt.x, pt.y, buffer + 6);
 		}
 		SetDlgItemText(hwnd, IDC_PLANEEXPLORER_TILEINFO, buffer);
 		return FALSE;
@@ -412,26 +410,44 @@ BOOL CALLBACK PlaneExplorerDialogProc(HWND hwnd, UINT Message, WPARAM wParam, LP
 
 void planes_create(HINSTANCE hInstance, HWND hWndParent)
 {
-	hPlaneExplorer = CreateDialog(hInstance, MAKEINTRESOURCE(IDD_DEBUGPLANEEXPLORER), hWndParent, PlaneExplorerDialogProc);
+	int plane;
+	for (plane = 0; plane < PLANE_COUNT; ++plane)
+	{
+		PlaneExplorer *explorer = &explorers[plane];
+		explorer->plane = plane;
+		explorer->hwnd = CreateDialogParam(hInstance, MAKEINTRESOURCE(IDD_DEBUGPLANEEXPLORER),
+			hWndParent, PlaneExplorerDialogProc, (LPARAM)explorer);
+		HandleWindow_KMod[PlaneExplorerMode(plane) - 1] = explorer->hwnd;
+	}
 }
 
-void planes_show(BOOL visibility)
+void planes_show(int plane, BOOL visibility)
 {
-	ShowWindow(hPlaneExplorer, visibility ? SW_SHOW : SW_HIDE);
+	if (plane < 0 || plane >= PLANE_COUNT) return;
+	ShowWindow(explorers[plane].hwnd, visibility ? SW_SHOW : SW_HIDE);
 }
 
 void planes_update()
 {
-	if (OpenedWindow_KMod[DMODE_PLANEEXPLORER-1] == FALSE)	return;
-
-	RedrawWindow(GetDlgItem(hPlaneExplorer, IDC_PLANEXPLEORER_MAIN), NULL, NULL, RDW_INVALIDATE);
+	int plane;
+	for (plane = 0; plane < PLANE_COUNT; ++plane)
+	{
+		if (OpenedWindow_KMod[PlaneExplorerMode(plane) - 1] && explorers[plane].hwnd)
+			RedrawWindow(GetDlgItem(explorers[plane].hwnd, IDC_PLANEXPLEORER_MAIN),
+				NULL, NULL, RDW_INVALIDATE);
+	}
 }
 
 void planes_reset()
 {
-	PlaneExplorerInit_KMod(hPlaneExplorer);
+	int plane;
+	for (plane = 0; plane < PLANE_COUNT; ++plane)
+		if (explorers[plane].hwnd) PlaneExplorerInit_KMod(&explorers[plane]);
 }
+
 void planes_destroy()
 {
-	DestroyWindow(hPlaneExplorer);
+	int plane;
+	for (plane = 0; plane < PLANE_COUNT; ++plane)
+		if (explorers[plane].hwnd) DestroyWindow(explorers[plane].hwnd);
 }
