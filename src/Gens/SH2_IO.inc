@@ -2698,8 +2698,9 @@ ALIGN32
 		mov eax, [esp + 8]
 		mov dl, [ebp + SH2.DREQ1]
 		dec eax
-		test dl, dl
 		mov [esp + 8], eax
+        jz near .DREQ1_End
+		test dl, dl
 		jnz short .DREQ1_D_S_
 		jmp .DREQ1_End
 
@@ -2731,8 +2732,9 @@ ALIGN32
 		mov eax, [esp + 8]
 		mov dl, [ebp + SH2.DREQ1]
 		dec eax
-		test dl, dl
 		mov [esp + 8], eax
+        jz near .DREQ1_End
+		test dl, dl
 		jnz short .DREQ1_D_SI
 		jmp .DREQ1_End
 
@@ -2764,8 +2766,9 @@ ALIGN32
 		mov eax, [esp + 8]
 		mov dl, [ebp + SH2.DREQ1]
 		dec eax
-		test dl, dl
 		mov [esp + 8], eax
+        jz near .DREQ1_End
+		test dl, dl
 		jnz short .DREQ1_D_SD
 		jmp .DREQ1_End
 
@@ -2797,8 +2800,9 @@ ALIGN32
 		mov eax, [esp + 8]
 		mov dl, [ebp + SH2.DREQ1]
 		dec eax
-		test dl, dl
 		mov [esp + 8], eax
+        jz near .DREQ1_End
+		test dl, dl
 		jnz short .DREQ1_DIS_
 		jmp .DREQ1_End
 
@@ -2831,8 +2835,9 @@ ALIGN32
 		mov eax, [esp + 8]
 		mov dl, [ebp + SH2.DREQ1]
 		dec eax
-		test dl, dl
 		mov [esp + 8], eax
+        jz near .DREQ1_End
+		test dl, dl
 		jnz short .DREQ1_DISI
 		jmp .DREQ1_End
 
@@ -2865,8 +2870,9 @@ ALIGN32
 		mov eax, [esp + 8]
 		mov dl, [ebp + SH2.DREQ1]
 		dec eax
-		test dl, dl
 		mov [esp + 8], eax
+        jz near .DREQ1_End
+		test dl, dl
 		jnz short .DREQ1_DISD
 		jmp .DREQ1_End
 
@@ -2898,8 +2904,9 @@ ALIGN32
 		mov eax, [esp + 8]
 		mov dl, [ebp + SH2.DREQ1]
 		dec eax
-		test dl, dl
 		mov [esp + 8], eax
+        jz near .DREQ1_End
+		test dl, dl
 		jnz short .DREQ1_DDS_
 		jmp .DREQ1_End
 
@@ -2932,8 +2939,9 @@ ALIGN32
 		mov eax, [esp + 8]
 		mov dl, [ebp + SH2.DREQ1]
 		dec eax
-		test dl, dl
 		mov [esp + 8], eax
+        jz near .DREQ1_End
+		test dl, dl
 		jnz short .DREQ1_DDSI
 		jmp short .DREQ1_End
 
@@ -2966,8 +2974,9 @@ ALIGN32
 		mov eax, [esp + 8]
 		mov dl, [ebp + SH2.DREQ1]
 		dec eax
-		test dl, dl
 		mov [esp + 8], eax
+        jz near .DREQ1_End
+		test dl, dl
 		jnz short .DREQ1_DDSD
 		jmp short .DREQ1_End
 

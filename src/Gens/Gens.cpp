@@ -979,6 +979,21 @@ int Do_Genesis_Frame()
 /*************************************/
 
 
+int CD_32X_Active;
+void Enable_CD_32X(void)
+{
+    if (CD_32X_Active) return;
+    CD_32X_Active=1;
+    Load_32X_CD_Boot();
+    MSH2_Reset(); SSH2_Reset();
+    _32X_VDP_Reset(); _32X_Set_FB(); PWM_Init();
+    if(CPU_Mode) _32X_VDP.Mode &= ~0x8000;
+    else _32X_VDP.Mode |= 0x8000;
+    _32X_VDP.State |= 0x2000;
+    Update_Frame=Do_32X_Frame;
+    Update_Frame_Fast=Do_32X_Frame_No_VDP;
+}
+
 int Init_32X(struct Rom *MD_Rom)
 {
 	char Str_Err[256];
@@ -1234,6 +1249,7 @@ int Do_32X_Frame_No_VDP()
 	SH2_Clear_Odo(&M_SH2);
 	SH2_Clear_Odo(&S_SH2);
 	PWM_Clear_Timer();
+    if(CD_32X_Active) { CPL_S68K=795; Cycles_S68K=0; sub68k_tripOdometer(); CD_HLE_Frame(); }
 
 	Patch_Codes();
 
@@ -1256,6 +1272,7 @@ int Do_32X_Frame_No_VDP()
 		buf[0] = Seg_L + Sound_Extrapol[VDP_Current_Line][0];
 		buf[1] = Seg_R + Sound_Extrapol[VDP_Current_Line][0];
 		YM2612_DacAndTimers_Update(buf, Sound_Extrapol[VDP_Current_Line][1]);
+        if(CD_32X_Active) { if(PCM_Enable) Update_PCM(buf,Sound_Extrapol[VDP_Current_Line][1]); Update_CDC_TRansfert(); if(S68K_State==1) Cycles_S68K+=CPL_S68K; }
 		PWM_Update(buf, Sound_Extrapol[VDP_Current_Line][1]);
 		YM_Len += Sound_Extrapol[VDP_Current_Line][1];
 		PSG_Len += Sound_Extrapol[VDP_Current_Line][1];
@@ -1279,6 +1296,7 @@ int Do_32X_Frame_No_VDP()
         if (!Paused)
         {
             main68k_exec(i - p_i);
+        if(CD_32X_Active && S68K_State==1) sub68k_exec(Cycles_S68K-(Cycles_M68K-(i-p_i))*CPL_S68K/CPL_M68K);
         }
 		SH2_Exec(&M_SH2, j - p_j);
 		SH2_Exec(&S_SH2, k - p_k);
@@ -1306,6 +1324,7 @@ int Do_32X_Frame_No_VDP()
 		while (i < Cycles_M68K)
 		{
 			main68k_exec(i);
+        if(CD_32X_Active && S68K_State==1) sub68k_exec(Cycles_S68K-(Cycles_M68K-i)*CPL_S68K/CPL_M68K);
 			SH2_Exec(&M_SH2, j);
 			SH2_Exec(&S_SH2, k);
 			PWM_Update_Timer(l);
@@ -1316,16 +1335,19 @@ int Do_32X_Frame_No_VDP()
 		}
 
 		main68k_exec(Cycles_M68K);
+        if(CD_32X_Active && S68K_State==1) sub68k_exec(Cycles_S68K);
 		SH2_Exec(&M_SH2, Cycles_MSH2);
 		SH2_Exec(&S_SH2, Cycles_SSH2);
 		PWM_Update_Timer(PWM_Cycles);
 		if (Z80_State == 3) z80_Exec(&M_Z80, Cycles_Z80);
 		else z80_Set_Odo(&M_Z80, Cycles_Z80);
+        if(CD_32X_Active) Update_SegaCD_Timer();
 	}
 
 	buf[0] = Seg_L + Sound_Extrapol[VDP_Current_Line][0];
 	buf[1] = Seg_R + Sound_Extrapol[VDP_Current_Line][0];
 	YM2612_DacAndTimers_Update(buf, Sound_Extrapol[VDP_Current_Line][1]);
+        if(CD_32X_Active) { if(PCM_Enable) Update_PCM(buf,Sound_Extrapol[VDP_Current_Line][1]); Update_CDC_TRansfert(); if(S68K_State==1) Cycles_S68K+=CPL_S68K; }
 	PWM_Update(buf, Sound_Extrapol[VDP_Current_Line][1]);
 	YM_Len += Sound_Extrapol[VDP_Current_Line][1];
 	PSG_Len += Sound_Extrapol[VDP_Current_Line][1];
@@ -1367,6 +1389,7 @@ int Do_32X_Frame_No_VDP()
 	while (i < (Cycles_M68K - 360))
 	{
 		main68k_exec(i);
+        if(CD_32X_Active && S68K_State==1) sub68k_exec(Cycles_S68K-(Cycles_M68K-i)*CPL_S68K/CPL_M68K);
 		SH2_Exec(&M_SH2, j);
 		SH2_Exec(&S_SH2, k);
 		PWM_Update_Timer(l);
@@ -1377,6 +1400,7 @@ int Do_32X_Frame_No_VDP()
 	}
 
 	main68k_exec(Cycles_M68K - 360);
+        if(CD_32X_Active && S68K_State==1) sub68k_exec(Cycles_S68K-360*CPL_S68K/CPL_M68K);
 	if (Z80_State == 3) z80_Exec(&M_Z80, Cycles_Z80 - 168);
 	else z80_Set_Odo(&M_Z80, Cycles_Z80 - 168);
 
@@ -1393,6 +1417,7 @@ int Do_32X_Frame_No_VDP()
 	while (i < Cycles_M68K)
 	{
 		main68k_exec(i);
+        if(CD_32X_Active && S68K_State==1) sub68k_exec(Cycles_S68K-(Cycles_M68K-i)*CPL_S68K/CPL_M68K);
 		SH2_Exec(&M_SH2, j);
 		SH2_Exec(&S_SH2, k);
 		PWM_Update_Timer(l);
@@ -1403,17 +1428,20 @@ int Do_32X_Frame_No_VDP()
 	}
 
 	main68k_exec(Cycles_M68K);
+        if(CD_32X_Active && S68K_State==1) sub68k_exec(Cycles_S68K);
 	SH2_Exec(&M_SH2, Cycles_MSH2);
 	SH2_Exec(&S_SH2, Cycles_SSH2);
 	PWM_Update_Timer(PWM_Cycles);
 	if (Z80_State == 3) z80_Exec(&M_Z80, Cycles_Z80);
 	else z80_Set_Odo(&M_Z80, Cycles_Z80);
+        if(CD_32X_Active) Update_SegaCD_Timer();
 
 	for(VDP_Current_Line++; VDP_Current_Line < VDP_Num_Lines; VDP_Current_Line++)
 	{
 		buf[0] = Seg_L + Sound_Extrapol[VDP_Current_Line][0];
 		buf[1] = Seg_R + Sound_Extrapol[VDP_Current_Line][0];
 		YM2612_DacAndTimers_Update(buf, Sound_Extrapol[VDP_Current_Line][1]);
+        if(CD_32X_Active) { if(PCM_Enable) Update_PCM(buf,Sound_Extrapol[VDP_Current_Line][1]); Update_CDC_TRansfert(); if(S68K_State==1) Cycles_S68K+=CPL_S68K; }
 		PWM_Update(buf, Sound_Extrapol[VDP_Current_Line][1]);
 		YM_Len += Sound_Extrapol[VDP_Current_Line][1];
 		PSG_Len += Sound_Extrapol[VDP_Current_Line][1];
@@ -1435,6 +1463,7 @@ int Do_32X_Frame_No_VDP()
 		_32X_VDP.State |= 0x6000;
 
 		main68k_exec(i - p_i);
+        if(CD_32X_Active && S68K_State==1) sub68k_exec(Cycles_S68K-(Cycles_M68K-(i-p_i))*CPL_S68K/CPL_M68K);
 		SH2_Exec(&M_SH2, j - p_j);
 		SH2_Exec(&S_SH2, k - p_k);
 		PWM_Update_Timer(l - p_l);
@@ -1454,6 +1483,7 @@ int Do_32X_Frame_No_VDP()
 		while (i < Cycles_M68K)
 		{
 			main68k_exec(i);
+        if(CD_32X_Active && S68K_State==1) sub68k_exec(Cycles_S68K-(Cycles_M68K-i)*CPL_S68K/CPL_M68K);
 			SH2_Exec(&M_SH2, j);
 			SH2_Exec(&S_SH2, k);
 			PWM_Update_Timer(l);
@@ -1464,15 +1494,18 @@ int Do_32X_Frame_No_VDP()
 		}
 
 		main68k_exec(Cycles_M68K);
+        if(CD_32X_Active && S68K_State==1) sub68k_exec(Cycles_S68K);
 		SH2_Exec(&M_SH2, Cycles_MSH2);
 		SH2_Exec(&S_SH2, Cycles_SSH2);
 		PWM_Update_Timer(PWM_Cycles);
 		if (Z80_State == 3) z80_Exec(&M_Z80, Cycles_Z80);
 		else z80_Set_Odo(&M_Z80, Cycles_Z80);
+        if(CD_32X_Active) Update_SegaCD_Timer();
 	}
 
 	PSG_Special_Update();
 	YM2612_Special_Update();
+    if(CD_32X_Active) { buf[0]=Seg_L; buf[1]=Seg_R; Update_CD_Audio(buf,Seg_Lenght); }
 
 	if (WAV_Dumping) Update_WAV_Dump();
 	if (GYM_Dumping) Update_GYM_Dump((unsigned char) 0, (unsigned char) 0, (unsigned char) 0);
@@ -1509,6 +1542,7 @@ int Do_32X_Frame()
 	SH2_Clear_Odo(&M_SH2);
 	SH2_Clear_Odo(&S_SH2);
 	PWM_Clear_Timer();
+    if(CD_32X_Active) { CPL_S68K=795; Cycles_S68K=0; sub68k_tripOdometer(); CD_HLE_Frame(); }
 
 	Patch_Codes();
 
@@ -1531,6 +1565,7 @@ int Do_32X_Frame()
 		buf[0] = Seg_L + Sound_Extrapol[VDP_Current_Line][0];
 		buf[1] = Seg_R + Sound_Extrapol[VDP_Current_Line][0];
 		YM2612_DacAndTimers_Update(buf, Sound_Extrapol[VDP_Current_Line][1]);
+        if(CD_32X_Active) { if(PCM_Enable) Update_PCM(buf,Sound_Extrapol[VDP_Current_Line][1]); Update_CDC_TRansfert(); if(S68K_State==1) Cycles_S68K+=CPL_S68K; }
 		PWM_Update(buf, Sound_Extrapol[VDP_Current_Line][1]);
 		YM_Len += Sound_Extrapol[VDP_Current_Line][1];
 		PSG_Len += Sound_Extrapol[VDP_Current_Line][1];
@@ -1552,6 +1587,7 @@ int Do_32X_Frame()
 		_32X_VDP.State |= 0x6000;
 
 		main68k_exec(i - p_i);
+        if(CD_32X_Active && S68K_State==1) sub68k_exec(Cycles_S68K-(Cycles_M68K-(i-p_i))*CPL_S68K/CPL_M68K);
 		SH2_Exec(&M_SH2, j - p_j);
 		SH2_Exec(&S_SH2, k - p_k);
 		PWM_Update_Timer(l - p_l);
@@ -1580,6 +1616,7 @@ int Do_32X_Frame()
 		while (i < Cycles_M68K)
 		{
 			main68k_exec(i);
+        if(CD_32X_Active && S68K_State==1) sub68k_exec(Cycles_S68K-(Cycles_M68K-i)*CPL_S68K/CPL_M68K);
 			SH2_Exec(&M_SH2, j);
 			SH2_Exec(&S_SH2, k);
 			PWM_Update_Timer(l);
@@ -1590,16 +1627,19 @@ int Do_32X_Frame()
 		}
 
 		main68k_exec(Cycles_M68K);
+        if(CD_32X_Active && S68K_State==1) sub68k_exec(Cycles_S68K);
 		SH2_Exec(&M_SH2, Cycles_MSH2);
 		SH2_Exec(&S_SH2, Cycles_SSH2);
 		PWM_Update_Timer(PWM_Cycles);
 		if (Z80_State == 3) z80_Exec(&M_Z80, Cycles_Z80);
 		else z80_Set_Odo(&M_Z80, Cycles_Z80);
+        if(CD_32X_Active) Update_SegaCD_Timer();
 	}
 
 	buf[0] = Seg_L + Sound_Extrapol[VDP_Current_Line][0];
 	buf[1] = Seg_R + Sound_Extrapol[VDP_Current_Line][0];
 	YM2612_DacAndTimers_Update(buf, Sound_Extrapol[VDP_Current_Line][1]);
+        if(CD_32X_Active) { if(PCM_Enable) Update_PCM(buf,Sound_Extrapol[VDP_Current_Line][1]); Update_CDC_TRansfert(); if(S68K_State==1) Cycles_S68K+=CPL_S68K; }
 	PWM_Update(buf, Sound_Extrapol[VDP_Current_Line][1]);
 	YM_Len += Sound_Extrapol[VDP_Current_Line][1];
 	PSG_Len += Sound_Extrapol[VDP_Current_Line][1];
@@ -1641,6 +1681,7 @@ int Do_32X_Frame()
 	while (i < (Cycles_M68K - 360))
 	{
 		main68k_exec(i);
+        if(CD_32X_Active && S68K_State==1) sub68k_exec(Cycles_S68K-(Cycles_M68K-i)*CPL_S68K/CPL_M68K);
 		SH2_Exec(&M_SH2, j);
 		SH2_Exec(&S_SH2, k);
 		PWM_Update_Timer(l);
@@ -1651,6 +1692,7 @@ int Do_32X_Frame()
 	}
 
 	main68k_exec(Cycles_M68K - 360);
+        if(CD_32X_Active && S68K_State==1) sub68k_exec(Cycles_S68K-360*CPL_S68K/CPL_M68K);
 	if (Z80_State == 3) z80_Exec(&M_Z80, Cycles_Z80 - 168);
 	else z80_Set_Odo(&M_Z80, Cycles_Z80 - 168);
 
@@ -1667,6 +1709,7 @@ int Do_32X_Frame()
 	while (i < Cycles_M68K)
 	{
 		main68k_exec(i);
+        if(CD_32X_Active && S68K_State==1) sub68k_exec(Cycles_S68K-(Cycles_M68K-i)*CPL_S68K/CPL_M68K);
 		SH2_Exec(&M_SH2, j);
 		SH2_Exec(&S_SH2, k);
 		PWM_Update_Timer(l);
@@ -1677,17 +1720,20 @@ int Do_32X_Frame()
 	}
 
 	main68k_exec(Cycles_M68K);
+        if(CD_32X_Active && S68K_State==1) sub68k_exec(Cycles_S68K);
 	SH2_Exec(&M_SH2, Cycles_MSH2);
 	SH2_Exec(&S_SH2, Cycles_SSH2);
 	PWM_Update_Timer(PWM_Cycles);
 	if (Z80_State == 3) z80_Exec(&M_Z80, Cycles_Z80);
 	else z80_Set_Odo(&M_Z80, Cycles_Z80);
+        if(CD_32X_Active) Update_SegaCD_Timer();
 
 	for(VDP_Current_Line++; VDP_Current_Line < VDP_Num_Lines; VDP_Current_Line++)
 	{
 		buf[0] = Seg_L + Sound_Extrapol[VDP_Current_Line][0];
 		buf[1] = Seg_R + Sound_Extrapol[VDP_Current_Line][0];
 		YM2612_DacAndTimers_Update(buf, Sound_Extrapol[VDP_Current_Line][1]);
+        if(CD_32X_Active) { if(PCM_Enable) Update_PCM(buf,Sound_Extrapol[VDP_Current_Line][1]); Update_CDC_TRansfert(); if(S68K_State==1) Cycles_S68K+=CPL_S68K; }
 		PWM_Update(buf, Sound_Extrapol[VDP_Current_Line][1]);
 		YM_Len += Sound_Extrapol[VDP_Current_Line][1];
 		PSG_Len += Sound_Extrapol[VDP_Current_Line][1];
@@ -1709,6 +1755,7 @@ int Do_32X_Frame()
 		_32X_VDP.State |= 0x6000;
 
 		main68k_exec(i - p_i);
+        if(CD_32X_Active && S68K_State==1) sub68k_exec(Cycles_S68K-(Cycles_M68K-(i-p_i))*CPL_S68K/CPL_M68K);
 		SH2_Exec(&M_SH2, j - p_j);
 		SH2_Exec(&S_SH2, k - p_k);
 		PWM_Update_Timer(l - p_l);
@@ -1728,6 +1775,7 @@ int Do_32X_Frame()
 		while (i < Cycles_M68K)
 		{
 			main68k_exec(i);
+        if(CD_32X_Active && S68K_State==1) sub68k_exec(Cycles_S68K-(Cycles_M68K-i)*CPL_S68K/CPL_M68K);
 			SH2_Exec(&M_SH2, j);
 			SH2_Exec(&S_SH2, k);
 			PWM_Update_Timer(l);
@@ -1738,15 +1786,18 @@ int Do_32X_Frame()
 		}
 
 		main68k_exec(Cycles_M68K);
+        if(CD_32X_Active && S68K_State==1) sub68k_exec(Cycles_S68K);
 		SH2_Exec(&M_SH2, Cycles_MSH2);
 		SH2_Exec(&S_SH2, Cycles_SSH2);
 		PWM_Update_Timer(PWM_Cycles);
 		if (Z80_State == 3) z80_Exec(&M_Z80, Cycles_Z80);
 		else z80_Set_Odo(&M_Z80, Cycles_Z80);
+        if(CD_32X_Active) Update_SegaCD_Timer();
 	}
 
 	PSG_Special_Update();
 	YM2612_Special_Update();
+    if(CD_32X_Active) { buf[0]=Seg_L; buf[1]=Seg_R; Update_CD_Audio(buf,Seg_Lenght); }
 
 	if (WAV_Dumping) Update_WAV_Dump();
 	if (GYM_Dumping) Update_GYM_Dump((unsigned char) 0, (unsigned char) 0, (unsigned char) 0);
@@ -1763,6 +1814,7 @@ int Do_32X_Frame()
 
 int Init_SegaCD(const char *iso_name)
 {
+    CD_32X_Active=0;
 	char Str_Err[256], *Bios_To_Use;
 	Free_Rom(Game);
 
@@ -1928,7 +1980,7 @@ int Init_SegaCD(const char *iso_name)
 int Reload_SegaCD(const char *iso_name)
 {
 	char Str_Err[256];
-	if (CD_HLE_Active) return SegaCD_Started = Init_SegaCD(iso_name);
+	if (CD_HLE_Active || CD_32X_Active) return SegaCD_Started = Init_SegaCD(iso_name);
 
 	Save_BRAM();
 
@@ -2016,6 +2068,7 @@ void Reset_SegaCD()
 
 int Do_SegaCD_Frame_No_VDP(void)
 {
+    if(CD_32X_Active) return Do_32X_Frame_No_VDP();
 	int *buf[2];
 	int HInt_Counter;
 
@@ -2166,6 +2219,7 @@ int Do_SegaCD_Frame_No_VDP(void)
 
 int Do_SegaCD_Frame_No_VDP_Cycle_Accurate(void)
 {
+    if(CD_32X_Active) return Do_32X_Frame_No_VDP();
 	int *buf[2], i, j;
 	int HInt_Counter;
 
@@ -2431,6 +2485,7 @@ int Do_SegaCD_Frame_No_VDP_Cycle_Accurate(void)
 
 int Do_SegaCD_Frame(void)
 {
+    if(CD_32X_Active) return Do_32X_Frame();
 	int *buf[2];
 	int HInt_Counter;
  
@@ -2609,6 +2664,7 @@ int Do_SegaCD_Frame(void)
 
 int Do_SegaCD_Frame_Cycle_Accurate(void)
 {
+    if(CD_32X_Active) return Do_32X_Frame();
 	int *buf[2], i, j;
 	int HInt_Counter;
  

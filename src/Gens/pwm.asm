@@ -95,6 +95,7 @@ section .text align=64
 
 
 	extern SH2_Interrupt
+	extern SH2_DMA1_Request
 
 
 	; void PWM_Init(void)
@@ -240,6 +241,16 @@ section .text align=64
 		call SH2_Interrupt
 
 	.no_sint
+        ; RTP drives DMA channel 1 independently of the PWM interrupt masks.
+        test byte [PWM_Mode], 0x80
+        jz short .no_dma
+        mov ecx, M_SH2
+        mov edx, 1
+        call SH2_DMA1_Request
+        mov ecx, S_SH2
+        mov edx, 1
+        call SH2_DMA1_Request
+    .no_dma
 		pop edx
 		pop ebx
 		ret

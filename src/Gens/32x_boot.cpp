@@ -135,3 +135,55 @@ int Load_32X_Boot(const unsigned char *rom, unsigned size)
     }
     return 1;
 }
+
+// CD boot uses the header uploaded by the 68000 to the back framebuffer.
+// Execute the handshake as guest code, just like the cartridge replacement.
+static void sh2_cd_boot(unsigned char *out, unsigned size, int slave)
+{
+    memset(out, 0, size);
+    for (unsigned i=0; i<0x200; i+=4) put32(out+i,0x1f0);
+    put16(out+0x1f0,0xaffe); put16(out+0x1f2,9);
+    put32(out,0x200); put32(out+8,0x200);
+    put32(out+4,slave?0x0603f800:0x06040000); put32(out+12,be32(out+4));
+    BootCode b(out);
+    b.imm(0,0x20004000); b.op(0x401e);
+    b.imm(1,slave?0x4d5f4f4b:0x5f43445f);
+    unsigned wait=b.pc;
+    b.op(0xc608); b.op(0x3010); b.bf(wait);
+    if(!slave) { b.op(0xe000); b.op(0xcf80); } // acquire framebuffer
+    b.imm(8,0x24000018);
+    b.op(slave?0x5b85:0x5b84); // VBR
+    b.op(slave?0x5a83:0x5a82); // entry
+    if(!slave) {
+        b.op(0x5980); b.op(0x5381); // destination and byte count
+        b.imm(2,0x06000000); b.op(0x3923); b.bf(0x1f0); // dst >= SDRAM
+        b.imm(2,0x06040000); b.op(0x3293); b.bf(0x1f0); // dst <= SDRAM end
+        b.op(0x3298); b.op(0x3233); b.bf(0x1f0); // size <= remaining SDRAM
+        b.imm(2,0x1ffc8); b.op(0x3233); b.bf(0x1f0); // framebuffer source bound
+        b.op(0x6033); b.op(0xc803); b.bf(0x1f0); // longword aligned length
+        b.op(0x7820); // payload starts at framebuffer + $38
+        b.op(0x4311); // cmp/pz r3
+        b.bf(0x1f0);
+        b.op(0x2338); // tst r3,r3
+        unsigned skip=b.pc; b.op(0x8900);
+        unsigned copy=b.pc;
+        b.op(0x6286); b.op(0x2922); b.op(0x7904);
+        b.op(0x73fc); b.op(0x2338); b.bf(copy);
+        put16(out+skip,0x8900|((b.pc-skip-4)/2));
+    }
+    b.op(0x4b2e);
+    b.imm(0,slave?0x535f4f4b:0x4d5f4f4b);
+    b.op(slave?0xc209:0xc208);
+    b.op(0x4a2b); b.op(9);
+}
+
+void Load_32X_CD_Boot(void)
+{
+    int m=read_bios(_32X_Master_Bios,_32X_MSH2_Rom,2048);
+    int s=read_bios(_32X_Slave_Bios,_32X_SSH2_Rom,1024);
+    Boot_32X_Internal=!(m&&s);
+    if(Boot_32X_Internal) {
+        sh2_cd_boot(_32X_MSH2_Rom,2048,0);
+        sh2_cd_boot(_32X_SSH2_Rom,1024,1);
+    }
+}

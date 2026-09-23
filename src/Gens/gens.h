@@ -67,6 +67,8 @@ int Do_VDP_Only(void);
 int Do_Genesis_Frame_No_VDP(void);
 int Do_Genesis_Frame(void);
 
+extern int CD_32X_Active;
+void Enable_CD_32X(void);
 int Init_32X(struct Rom *MD_Rom);
 void Reset_32X();
 int Do_32X_Frame_No_VDP(void);

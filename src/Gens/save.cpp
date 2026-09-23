@@ -172,6 +172,7 @@ void Get_State_File_Name(char *name)
 
 int Load_State(char *Name)
 {
+	if (CD_32X_Active) { Put_Info("32X CD save states are unavailable", 4000); return 0; }
 	if (CD_HLE_Active) { Put_Info("BIOS HLE: use the game save menu; save states are unavailable", 4000); return 0; }
 	FILE *f;
 	unsigned char *buf;
@@ -236,6 +237,7 @@ int Load_State(char *Name)
 
 int Save_State(char *Name)
 {
+	if (CD_32X_Active) { Put_Info("32X CD save states are unavailable", 4000); return 0; }
 	if (CD_HLE_Active) { Put_Info("BIOS HLE: use the game save menu; save states are unavailable", 4000); return 0; }
 	FILE *f;
 	unsigned char *buf;

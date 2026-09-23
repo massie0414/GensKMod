@@ -548,6 +548,7 @@ section .text align=64
 	extern _YM2612_Write
 	extern _YM2612_Read
 	extern _YM2612_Reset
+	extern _Enable_CD_32X
 	extern _PSG_Write
 	extern _Read_CDC_Host_MAIN
 	extern _M68K_32X_Mode

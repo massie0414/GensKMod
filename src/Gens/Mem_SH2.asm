@@ -1,4 +1,5 @@
 %include "nasmhead.inc"
+extern _CD_32X_Active
 
 %define PWM_BUF_SIZE 4
 
@@ -1111,6 +1112,7 @@ section .text align=64
 		mov ah, [_32X_FM]
 		add al, al
 		or al, ah
+        or al, [_CD_32X_Active] ; nCART: no cartridge on CD boot
 		ret
 
 	ALIGN32
@@ -1358,6 +1360,7 @@ section .text align=64
 		mov ah, [_32X_FM]
 		add al, al
 		or ah, al
+        or ah, [_CD_32X_Active] ; nCART
 		mov al, [_32X_MINT]
 		ret
 
@@ -1562,6 +1565,7 @@ section .text align=64
 		mov ah, [_32X_FM]
 		add al, al
 		or ah, al
+        or ah, [_CD_32X_Active] ; nCART
 		mov al, [_32X_SINT]
 		ret
 
@@ -2007,6 +2011,7 @@ section .text align=64
 	ALIGN32
 
 	SH2_WW_PWM_Pulse_L
+        mov byte [ebp + SH2.DREQ1], 0 ; acknowledge one PWM DMA sample
 		mov ecx, [PWM_RP_L]
 		mov eax, [PWM_WP_L]
 		test byte [PWM_FULL_TAB + ecx * PWM_BUF_SIZE + eax], 0x80
@@ -2026,6 +2031,7 @@ section .text align=64
 	ALIGN32
 
 	SH2_WW_PWM_Pulse_R
+        mov byte [ebp + SH2.DREQ1], 0 ; acknowledge one PWM DMA sample
 		mov ecx, [PWM_RP_R]
 		mov eax, [PWM_WP_R]
 		test byte [PWM_FULL_TAB + ecx * PWM_BUF_SIZE + eax], 0x80
@@ -2045,6 +2051,7 @@ section .text align=64
 	ALIGN32
 
 	SH2_WW_PWM_Pulse_C
+        mov byte [ebp + SH2.DREQ1], 0 ; acknowledge one PWM DMA sample
 		mov ecx, [PWM_RP_L]
 		mov eax, [PWM_WP_L]
 		test byte [PWM_FULL_TAB + ecx * PWM_BUF_SIZE + eax], 0x80

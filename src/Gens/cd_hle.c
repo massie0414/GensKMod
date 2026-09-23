@@ -183,6 +183,9 @@ int CD_HLE_Prepare(void) {
     for(i=0;i<sizeof(boot)/2048;i++)if(!sector(i,boot+i*2048,2048))return 0;
     if(memcmp(boot,"SEGADISCSYSTEM",14))return 0;
     ip_off=be32(boot+0x30); ip_size=be32(boot+0x34);
+    /* First-sector IP (the header may give the next sector, $800).
+     * Its security/startup block begins immediately after the disc header. */
+    if(ip_off==0x800)ip_off=0x200;
     sp_off=be32(boot+0x40); sp_size=be32(boot+0x44);
     if((ip_off|ip_size|sp_off|sp_size)&1)return 0;
     if(ip_size<2)return 0;
@@ -238,6 +241,12 @@ int CD_HLE_Boot(void) {
     ww(Ram_Prg,0x1120,0x48e7); ww(Ram_Prg,0x1122,0xfffe);
     ww(Ram_Prg,0x1124,0x4eb9); wl(Ram_Prg,0x1126,irq);
     ww(Ram_Prg,0x112a,0x4cdf); ww(Ram_Prg,0x112c,0x7fff); ww(Ram_Prg,0x112e,0x4e73);
+    /* User-call entry (fourth SP jump-table entry). */
+    if(rw(Ram_Prg,table+6)) {
+        unsigned user=table+(short)rw(Ram_Prg,table+6);
+        if((user&1)||user<0x6000||user>=0x6000+sp_size)return 0;
+        ww(Ram_Prg,0x5f3a,0x4ef9); wl(Ram_Prg,0x5f3c,user);
+    } else ww(Ram_Prg,0x5f3a,0x4e75);
     stub(Ram_Prg,0x5f22,0x1200); stub(Ram_Prg,0x5f16,0x1210);
     main68k_context.pc=0xff0000; main68k_context.areg[7]=0xfffd00; main68k_context.sr=0x2000;
     sub68k_context.pc=0x1000; sub68k_context.areg[7]=0x5e00; sub68k_context.sr=0x2000;
@@ -307,6 +316,9 @@ static void subcall(void) {
     case 0x18: read_lba=meml(1,a); read_count=0; read_paused=1; audio_track=-1; if(read_lba>=(unsigned)Tracks[0].Lenght)c->sr|=1; break;
     case 0x10: audio_track=-1; read_count=0; break;
     case 0x80: break;
+    case 0x96: /* CDCSETMODE: HLE transfers sectors through the sub CPU. */
+        if(c->dreg[1]&0xffff) { c->sr|=1; unsupported(1,fn); break; }
+        read_count=0; read_paused=0; break;
     case 0x81:
         /* CDBSTAT returns a pointer, not a caller-provided output buffer. */
         c->areg[0]=0x1300; memset(Ram_Prg+0x1300,0,32);

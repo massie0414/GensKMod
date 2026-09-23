@@ -10,6 +10,7 @@
 #include "gfx_cd.h"
 
 #include "io.h"
+extern int SegaCD_Started;
 #include "cd_sys.h"
 
 
@@ -254,6 +255,7 @@ void S68K_Reset(void)
 
 void M68K_32X_Mode()
 {
+    if (SegaCD_Started) return; // CD boot keeps its BIOS and RAM map.
 //	if (_32X_ADEN && !_32X_RV)			// 32X ON
 	if (_32X_ADEN)			// 32X ON
 	{
@@ -353,6 +355,7 @@ void M68K_32X_Mode()
 
 void M68K_Set_32X_Rom_Bank()
 {
+    if (SegaCD_Started) return;
 	if (_32X_ADEN && !_32X_RV)
 	{
 		M68K_Fetch[1].offset = (unsigned) &Rom_Data[Bank_SH2 << 20] - 0x900000;

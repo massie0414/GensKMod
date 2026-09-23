@@ -156,6 +156,21 @@
 	ALIGN32
 	
 	M68K_Read_Byte_Misc_CD:
+        cmp ebx, 0xA130EC
+        jb near .cd_only
+        cmp ebx, 0xA130F0
+        jb near .cd32x
+        cmp ebx, 0xA15100
+        jb near .cd_only
+        cmp ebx, 0xA15400
+        jae near .cd_only
+    .cd32x
+        pushad
+        call _Enable_CD_32X
+        popad
+        jmp M68K_Read_Byte_Misc_32X
+    .cd_only
+
 		cmp ebx, 0xA0FFFF
 		ja short .no_Z80_mem
 
@@ -601,6 +616,21 @@
 	ALIGN32
 	
 	M68K_Read_Word_Misc_CD:
+        cmp ebx, 0xA130EC
+        jb near .cd_only
+        cmp ebx, 0xA130F0
+        jb near .cd32x
+        cmp ebx, 0xA15100
+        jb near .cd_only
+        cmp ebx, 0xA15400
+        jae near .cd_only
+    .cd32x
+        pushad
+        call _Enable_CD_32X
+        popad
+        jmp M68K_Read_Word_Misc_32X
+    .cd_only
+
 		cmp ebx, 0xA0FFFF
 		ja short .no_Z80_ram
 		
@@ -979,6 +1009,21 @@
 	ALIGN32
 	
 	M68K_Write_Byte_Misc_CD:
+        cmp ebx, 0xA130EC
+        jb near .cd_only
+        cmp ebx, 0xA130F0
+        jb near .cd32x
+        cmp ebx, 0xA15100
+        jb near .cd_only
+        cmp ebx, 0xA15400
+        jae near .cd_only
+    .cd32x
+        pushad
+        call _Enable_CD_32X
+        popad
+        jmp M68K_Write_Byte_Misc_32X
+    .cd_only
+
 		cmp ebx, 0xA0FFFF
 		ja short .no_Z80_mem
 
@@ -1524,6 +1569,21 @@
 	ALIGN32
 	
 	M68K_Write_Word_Misc_CD:
+        cmp ebx, 0xA130EC
+        jb near .cd_only
+        cmp ebx, 0xA130F0
+        jb near .cd32x
+        cmp ebx, 0xA15100
+        jb near .cd_only
+        cmp ebx, 0xA15400
+        jae near .cd_only
+    .cd32x
+        pushad
+        call _Enable_CD_32X
+        popad
+        jmp M68K_Write_Word_Misc_32X
+    .cd_only
+
 		cmp ebx, 0xA0FFFF
 		ja short .no_Z80_ram
 		

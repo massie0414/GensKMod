@@ -944,6 +944,7 @@ void Free_Rom(Rom *Rom_MD)
 	Net_Play = 0;
 	Genesis_Started = 0;
 	_32X_Started = 0;
+    CD_32X_Active = 0;
 	SegaCD_Started = 0;
 	Game = NULL;
 	
