@@ -12,6 +12,8 @@ void planes_show(int plane, BOOL visibility);
 void planes_update();
 void planes_reset();
 void planes_destroy();
+void planes_save_visibility(const char *config_file);
+void planes_restore_visibility(const char *config_file);
 
 
 #ifdef __cplusplus

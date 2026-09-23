@@ -170,6 +170,7 @@ void SpecialReg( unsigned char a, unsigned char b)
 /********************************** PUBLIC ****************************************/
 void Init_KMod( )
 {
+	char config_file[MAX_PATH];
 	LoadConfig_KMod( );
 
 	m68kdebug_create(ghInstance, HWnd);
@@ -194,6 +195,9 @@ void Init_KMod( )
 	watchers_create(ghInstance, HWnd);
 	message_create(ghInstance, HWnd);
 	planes_create(ghInstance, HWnd);
+	strcpy(config_file, Gens_Path);
+	strcat(config_file, "GensKMod.cfg");
+	planes_restore_visibility(config_file);
 
    
 	//HandleWindow_KMod[0] = hM68K;
@@ -269,7 +273,9 @@ void kmod_close()
 
 	for (mode = 0; mode < WIN_NUMBER; mode++)
 	{
-		if (OpenedWindow_KMod[mode] && mode != (DMODE_MSG - 1))
+		// Plane windows belong to the session, so loading another ROM keeps them open.
+		if (OpenedWindow_KMod[mode] && mode != (DMODE_MSG - 1) &&
+			mode != (DMODE_PLANE_A - 1) && mode != (DMODE_PLANE_B - 1))
 		{
 			CloseWindow_KMod((UCHAR)(mode + 1));
 		}

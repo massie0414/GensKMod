@@ -451,3 +451,25 @@ void planes_destroy()
 	for (plane = 0; plane < PLANE_COUNT; ++plane)
 		if (explorers[plane].hwnd) DestroyWindow(explorers[plane].hwnd);
 }
+
+/* Keep session state separate from the debug options dialog's Apply/Cancel. */
+void planes_save_visibility(const char *config_file)
+{
+	WritePrivateProfileString("DebugWindows", "PlaneAOpen",
+		OpenedWindow_KMod[DMODE_PLANE_A - 1] ? "1" : "0", config_file);
+	WritePrivateProfileString("DebugWindows", "PlaneBOpen",
+		OpenedWindow_KMod[DMODE_PLANE_B - 1] ? "1" : "0", config_file);
+}
+
+void planes_restore_visibility(const char *config_file)
+{
+	int plane;
+	for (plane = 0; plane < PLANE_COUNT; ++plane)
+	{
+		BOOL visible = GetPrivateProfileInt("DebugWindows",
+			plane == 0 ? "PlaneAOpen" : "PlaneBOpen", 0, config_file) != 0;
+		OpenedWindow_KMod[PlaneExplorerMode(plane) - 1] =
+			visible && explorers[plane].hwnd != NULL;
+		planes_show(plane, visible);
+	}
+}
