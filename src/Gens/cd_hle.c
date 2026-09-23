@@ -6,10 +6,13 @@
 #include <string.h>
 #include <errno.h>
 #include "G_gfx.h"
+#include <mmsystem.h>
+#include "G_dsound.h"
 #include "cd_hle.h"
 #include "Cpu_68k.h"
 #include "Mem_M68K.h"
 #include "Mem_S68K.h"
+#include "Mem_Z80.h"
 #include "cd_file.h"
 #include "cd_sys.h"
 #include "Rom.h"
@@ -201,6 +204,10 @@ int CD_HLE_Prepare(void) {
 
 int CD_HLE_Boot(void) {
     unsigned i,table,init,main,irq;
+    /* The disc may release Z80 reset before installing a sound driver.
+     * Empty RAM would run through the banked 68K window and corrupt RAM.
+     * Supply our own DI / JP $0001 idle loop, replaceable by the game. */
+    Ram_Z80[0]=0xf3; Ram_Z80[1]=0xc3; Ram_Z80[2]=1; Ram_Z80[3]=0;
     read_lba=read_count=frame=0; read_paused=0;
     audio_track=-1; audio_sector=audio_clock=audio_paused=0;
     volume=master_volume=fade_target=1024; fade_step=0;
@@ -244,12 +251,16 @@ int CD_HLE_AudioPlaying(void) { return CD_HLE_Active && audio_track>=1 && !audio
 
 static void audio_tick(void) {
     short samples[1176];
-    int hz=CPU_Mode?50:60;
+    int clock_rate=Sound_Rate>0?Sound_Rate:44100;
+    int frame_samples=Seg_Lenght>0?Seg_Lenght:clock_rate/(CPU_Mode?50:60);
     if(audio_track<1 || audio_paused)return;
-    audio_clock+=75;
-    while(audio_clock>=hz && audio_track>=1) {
+    /* Match the samples actually consumed by the mixer. At 22050 Hz NTSC,
+     * each frame consumes 368 samples, not the nominal 367.5. Scheduling
+     * exactly 75 sectors per 60 frames slowly empties the CD audio buffer. */
+    audio_clock+=frame_samples*75;
+    while(audio_clock>=clock_rate && audio_track>=1) {
         struct _file_track *t=&Tracks[audio_track];
-        audio_clock-=hz;
+        audio_clock-=clock_rate;
         if(volume<fade_target)volume+=fade_target-volume<fade_step?fade_target-volume:fade_step;
         else if(volume>fade_target)volume-=volume-fade_target<fade_step?volume-fade_target:fade_step;
         if(audio_sector>=t->Lenght) {

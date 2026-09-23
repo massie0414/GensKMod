@@ -64,9 +64,14 @@ def main():
         for timing in ("normal", "accurate"):
             folder = run / timing
             folder.mkdir()
-            for mode in ("new", "continue"):
+            for mode in ("opening", "new", "continue"):
                 subprocess.run([str(out / "cd_hle_boot_test.exe"), str(image), mode, timing],
                                cwd=folder, env=env, check=True)
+            for rate in (11025, 22050):
+                audio_folder = folder / ("opening-" + str(rate))
+                audio_folder.mkdir()
+                subprocess.run([str(out / "cd_hle_boot_test.exe"), str(image), "opening", timing, str(rate)],
+                               cwd=audio_folder, env=env, check=True)
     print("PASS. Screenshots, traces and isolated test saves:", run)
 
 

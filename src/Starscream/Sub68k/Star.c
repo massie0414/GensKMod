@@ -2869,21 +2869,32 @@ static void flick_reg(char*op,int needxf,int affectx,int asl,int rotate){
 			emit("mov edx,[__dreg+ebx*4]\n");
 			if(needxf){
 				emit("mov al,[__xflag]\n");
-				emit("shr al,1\n");
 			}else{
 				emit("mov al,0\n");
 			}
 
 /*****************/
 
+	if(needxf){
+		/* Consume X once. For register counts, rotate one bit at a time:
+		** x86 masks counts to five bits, while the 68000 accepts 0..63.
+		** DEC preserves carry between iterations. */
+		emit("shr al,1\n");
+		if(tmps[0]=='c'){
+			int myline=linenum++;
+			emit("ln%d:\n",myline);
+			emit("%s%c %s,1\n",op,direction[main_dr],x86dx[main_size]);
+			emit("dec cl\n");
+			emit("jnz short ln%d\n",myline);
+		}else{
+			emit("%s%c %s,%s\n",op,direction[main_dr],x86dx[main_size],tmps);
+		}
+	}else{
 	switch(tmps[0])
 	{
 		case 'c':/* register shift count */
 			emit("cmp cl, 32\n");
 			emit("jb short ln%d\n",linenum);
-					if(needxf){
-						emit("shr al, 1\n");
-					}
 					emit("ln%d:\n",linenum + 1);
 					emit("%s%c %s, 31\n", op,direction[main_dr],x86dx[main_size]);
 			emit("sub cl, 31\n");
@@ -2892,19 +2903,14 @@ static void flick_reg(char*op,int needxf,int affectx,int asl,int rotate){
 					emit("%s%c %s,%s\n", op,direction[main_dr],x86dx[main_size],tmps);
 					emit("jmp short ln%d\n",linenum + 2);
 					emit("ln%d:\n",linenum); linenum += 2;
-					if(needxf){
-						emit("shr al, 1\n");
-					}
 					emit("%s%c %s,%s\n", op,direction[main_dr],x86dx[main_size],tmps);
 			emit("ln%d:\n",linenum); linenum++;
 			break;
 
 		default:/* immediate shift count >1 */
-					if(needxf){
-						emit("shr al,1\n");
-					}
 			emit("%s%c %s,%s\n", op,direction[main_dr],x86dx[main_size],tmps);
 			break;
+	}
 	}
 
 /*****************/
