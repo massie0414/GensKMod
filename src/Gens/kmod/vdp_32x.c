@@ -94,161 +94,71 @@ void Draw32XPal_KMod(LPDRAWITEMSTRUCT hlDIS)
 
 }
 
-void Draw32XVDP_KMod(LPDRAWITEMSTRUCT hlDIS)
+/* Both owner-drawn views run synchronously on the emulation/UI thread.
+ * Reuse one top-down 32-bit DIB buffer; no per-pixel GDI calls or per-paint
+ * bitmap/DC allocation. SetDIBitsToDevice consumes the pixels before returning.
+ */
+#define VDP32X_VIEW_WIDTH 320
+#define VDP32X_VIEW_HEIGHT 240
+#define VDP32X_FB_WORDS 0x10000
+static DWORD vdp32x_pixels[VDP32X_VIEW_WIDTH * VDP32X_VIEW_HEIGHT];
+
+static unsigned int Selected32XFB_KMod(void)
 {
-	unsigned char toDraw, tone;
-	WORD pix, lineToDraw;
-	WORD *VRAM, *lineTable;
-	COLORREF col;
-	WORD posX, posY, maxY, maxX;
-
-	HDC hDC;
-	HBITMAP hBitmap, hOldBitmap;
-
-	hDC = CreateCompatibleDC(hlDIS->hDC);
-	hBitmap = CreateCompatibleBitmap(hlDIS->hDC, hlDIS->rcItem.right - hlDIS->rcItem.left, hlDIS->rcItem.bottom - hlDIS->rcItem.top);
-	hOldBitmap = SelectObject(hDC, hBitmap);
-
-
-	toDraw = (unsigned char)_32X_VDP.State & 1;
-	if (IsDlgButtonChecked(h32X_VDP, IDC_32XVDP_FB2) == BST_CHECKED)
-	{
-		toDraw = 0;
-	}
-	else if (IsDlgButtonChecked(h32X_VDP, IDC_32XVDP_FB2) == BST_CHECKED)
-	{
-		toDraw = 1;
-	}
-
-	lineTable = (WORD *)(_32X_VDP_Ram + ((unsigned int)toDraw * 0x20000));
-
-	maxX = 320;
-	maxY = 240;
-
-	for (posY = 0; posY < maxY; posY++)
-	{
-
-		lineToDraw = lineTable[posY];
-		VRAM = lineTable + lineToDraw;
-		for (posX = 0; posX < maxX; posX++)
-		{
-			// COLORREF = 0x00bbggrr
-			// pix = bgr (3*5bit)
-			pix = VRAM[posX];
-			col = 0x000000;
-			tone = (pix >> 10) & 0x1F;
-			col |= (tone << 3);
-			col <<= 8;
-			tone = (pix >> 5) & 0x1F;
-			col |= (tone << 3);
-			col <<= 8;
-			tone = pix & 0x1F;
-			col |= (tone << 3);
-
-
-			SetPixelV(hDC, posX, posY, col);
-		}
-	}
-
-
-	BitBlt(
-		hlDIS->hDC, // handle to destination device context
-		0,  // x-coordinate of destination rectangle's upper-left
-		// corner
-		0,  // y-coordinate of destination rectangle's upper-left
-		// corner
-		maxX,  // width of destination rectangle
-		maxY, // height of destination rectangle
-		hDC,  // handle to source device context
-		0,   // x-coordinate of source rectangle's upper-left
-		// corner
-		0,   // y-coordinate of source rectangle's upper-left
-		// corner
-		SRCCOPY  // raster operation code
-		);
-
-	SelectObject(hDC, hOldBitmap);
-	DeleteObject(hBitmap);
-
-	DeleteDC(hDC);
+    if (IsDlgButtonChecked(h32X_VDP, IDC_32XVDP_FB1) == BST_CHECKED) return 0;
+    if (IsDlgButtonChecked(h32X_VDP, IDC_32XVDP_FB2) == BST_CHECKED) return 1;
+    return _32X_VDP.State & 1;
 }
 
-void Draw32XVDPRaw_KMod(LPDRAWITEMSTRUCT hlDIS)
+static void Draw32XBitmap_KMod(LPDRAWITEMSTRUCT item, BOOL useLineTable)
 {
-	unsigned char toDraw, tone;
-	WORD pix;
-	WORD *VRAM;
-	COLORREF col;
-	WORD posX, posY, maxY, maxX;
+    const WORD *fb = (const WORD *)(_32X_VDP_Ram + Selected32XFB_KMod() * 0x20000);
+    BITMAPINFO bmi = {0};
+    unsigned int x, y, address;
+    int width = item->rcItem.right - item->rcItem.left;
+    int height = item->rcItem.bottom - item->rcItem.top;
+    if (width <= 0 || height <= 0) return;
 
-	HDC hDC;
-	HBITMAP hBitmap, hOldBitmap;
+    for (y = 0; y < VDP32X_VIEW_HEIGHT; ++y)
+    {
+        address = useLineTable ? fb[y] : 256 + y * VDP32X_VIEW_WIDTH;
+        for (x = 0; x < VDP32X_VIEW_WIDTH; ++x)
+        {
+            /* Raw inspection must not spill into another framebuffer (or past
+             * VRAM for FB1). Display unavailable words as black in both views.
+             */
+            WORD pix = address + x < VDP32X_FB_WORDS ? fb[address + x] : 0;
+            /* BI_RGB DWORD is 0x00RRGGBB, unlike GDI's COLORREF. Preserve the
+             * original 5-bit expansion and raw-word interpretation of VRAM.
+             */
+            vdp32x_pixels[y * VDP32X_VIEW_WIDTH + x] =
+                ((DWORD)(pix & 31) << 19) |
+                ((DWORD)((pix >> 5) & 31) << 11) |
+                ((DWORD)((pix >> 10) & 31) << 3);
+        }
+    }
 
-	hDC = CreateCompatibleDC(hlDIS->hDC);
-	hBitmap = CreateCompatibleBitmap(hlDIS->hDC, hlDIS->rcItem.right - hlDIS->rcItem.left, hlDIS->rcItem.bottom - hlDIS->rcItem.top);
-	hOldBitmap = SelectObject(hDC, hBitmap);
+    bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    bmi.bmiHeader.biWidth = VDP32X_VIEW_WIDTH;
+    bmi.bmiHeader.biHeight = -VDP32X_VIEW_HEIGHT;
+    bmi.bmiHeader.biPlanes = 1;
+    bmi.bmiHeader.biBitCount = 32;
+    bmi.bmiHeader.biCompression = BI_RGB;
+    if (width > VDP32X_VIEW_WIDTH) width = VDP32X_VIEW_WIDTH;
+    if (height > VDP32X_VIEW_HEIGHT) height = VDP32X_VIEW_HEIGHT;
+    SetDIBitsToDevice(item->hDC, item->rcItem.left, item->rcItem.top,
+        width, height, 0, VDP32X_VIEW_HEIGHT - height, 0, VDP32X_VIEW_HEIGHT,
+        vdp32x_pixels, &bmi, DIB_RGB_COLORS);
+}
 
+void Draw32XVDP_KMod(LPDRAWITEMSTRUCT item)
+{
+    Draw32XBitmap_KMod(item, TRUE);
+}
 
-	toDraw = (unsigned char)_32X_VDP.State & 1;
-	if (IsDlgButtonChecked(h32X_VDP, IDC_32XVDP_FB2) == BST_CHECKED)
-	{
-		toDraw = 0;
-	}
-	else if (IsDlgButtonChecked(h32X_VDP, IDC_32XVDP_FB2) == BST_CHECKED)
-	{
-		toDraw = 1;
-	}
-
-	VRAM = (WORD *)(_32X_VDP_Ram + ((unsigned int)toDraw * 0x20000) + 256 * 2); //skip 256 words of line table
-
-
-	maxX = 320;
-	maxY = 240;
-
-	for (posY = 0; posY < maxY; posY++)
-	{
-		for (posX = 0; posX < maxX; posX++)
-		{
-			// COLORREF = 0x00bbggrr
-			// pix = bgr (3*5bit)
-			pix = VRAM[posX + (posY*maxX)];
-			col = 0x000000;
-			tone = (pix >> 10) & 0x1F;
-			col |= (tone << 3);
-			col <<= 8;
-			tone = (pix >> 5) & 0x1F;
-			col |= (tone << 3);
-			col <<= 8;
-			tone = pix & 0x1F;
-			col |= (tone << 3);
-
-
-			SetPixelV(hDC, posX, posY, col);
-
-		}
-	}
-
-
-	BitBlt(
-		hlDIS->hDC, // handle to destination device context
-		0,  // x-coordinate of destination rectangle's upper-left
-		// corner
-		0,  // y-coordinate of destination rectangle's upper-left
-		// corner
-		maxX,  // width of destination rectangle
-		maxY, // height of destination rectangle
-		hDC,  // handle to source device context
-		0,   // x-coordinate of source rectangle's upper-left
-		// corner
-		0,   // y-coordinate of source rectangle's upper-left
-		// corner
-		SRCCOPY  // raster operation code
-		);
-
-	SelectObject(hDC, hOldBitmap);
-	DeleteObject(hBitmap);
-
-	DeleteDC(hDC);
+void Draw32XVDPRaw_KMod(LPDRAWITEMSTRUCT item)
+{
+    Draw32XBitmap_KMod(item, FALSE);
 }
 
 
