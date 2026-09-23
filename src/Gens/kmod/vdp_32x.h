@@ -12,6 +12,8 @@ void vdp32x_show(BOOL visibility);
 void vdp32x_update();
 void vdp32x_reset();
 void vdp32x_destroy();
+void vdp32x_save_window(const char *config_file);
+void vdp32x_restore_window(const char *config_file);
 
 
 

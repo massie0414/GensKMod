@@ -13,8 +13,10 @@
 #include "common.h"
 #include "utils.h"
 #include "vdp_32x.h"
+#include "window_geometry.h"
 
 static HWND h32X_VDP;
+static SIZE minimum32XVDPSize;
 static long palH, palV;
 
 void Update32X_VDP_KMod()
@@ -247,7 +249,21 @@ BOOL CALLBACK _32X_VDPDlgProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lPa
 	switch (Message)
 	{
 	case WM_INITDIALOG:
+		{
+			RECT rect;
+			GetWindowRect(hwnd, &rect);
+			minimum32XVDPSize.cx = rect.right - rect.left;
+			minimum32XVDPSize.cy = rect.bottom - rect.top;
+		}
 		CheckRadioButton(hwnd, IDC_32XVDP_FB0, IDC_32XVDP_FB2, IDC_32XVDP_FB0);
+		break;
+
+	case WM_GETMINMAXINFO:
+		if (minimum32XVDPSize.cx && minimum32XVDPSize.cy)
+		{
+			((MINMAXINFO *)lParam)->ptMinTrackSize.x = minimum32XVDPSize.cx;
+			((MINMAXINFO *)lParam)->ptMinTrackSize.y = minimum32XVDPSize.cy;
+		}
 		break;
 
 	case WM_DRAWITEM:
@@ -280,8 +296,7 @@ BOOL CALLBACK _32X_VDPDlgProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lPa
 		break;
 
 	case WM_DESTROY:
-		vdp32x_destroy();
-		PostQuitMessage(0);
+		h32X_VDP = NULL;
 		break;
 	default:
 		return FALSE;
@@ -292,6 +307,7 @@ BOOL CALLBACK _32X_VDPDlgProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lPa
 
 void vdp32x_create(HINSTANCE hInstance, HWND hWndParent)
 {
+	minimum32XVDPSize.cx = minimum32XVDPSize.cy = 0;
 	h32X_VDP = CreateDialog(hInstance, MAKEINTRESOURCE(IDD_DEBUG32X_VDP), hWndParent, _32X_VDPDlgProc);
 }
 
@@ -313,6 +329,21 @@ void vdp32x_reset()
 }
 void vdp32x_destroy()
 {
-	DestroyWindow(h32X_VDP);
+	if (h32X_VDP) DestroyWindow(h32X_VDP);
 }
 
+
+void vdp32x_save_window(const char *config_file)
+{
+	WritePrivateProfileString("DebugWindows", "32XVDPOpen",
+		OpenedWindow_KMod[DMODE_32_VDP - 1] ? "1" : "0", config_file);
+	DebugWindow_SaveGeometry(h32X_VDP, "32XVDPRect", config_file);
+}
+
+void vdp32x_restore_window(const char *config_file)
+{
+	BOOL visible = GetPrivateProfileInt("DebugWindows", "32XVDPOpen", 0, config_file) != 0;
+	DebugWindow_RestoreGeometry(h32X_VDP, "32XVDPRect", config_file);
+	OpenedWindow_KMod[DMODE_32_VDP - 1] = visible && h32X_VDP != NULL;
+	vdp32x_show(visible);
+}

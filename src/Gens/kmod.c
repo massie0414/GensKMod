@@ -200,6 +200,7 @@ void Init_KMod( )
 	planes_restore_visibility(config_file);
 	vdpdebug_restore_window(config_file);
 	sprites_restore_window(config_file);
+	vdp32x_restore_window(config_file);
 
    
 	//HandleWindow_KMod[0] = hM68K;
@@ -278,7 +279,8 @@ void kmod_close()
 		// Restored graphics windows stay open when loading another ROM.
 		if (OpenedWindow_KMod[mode] && mode != (DMODE_MSG - 1) &&
 			mode != (DMODE_PLANE_A - 1) && mode != (DMODE_PLANE_B - 1) &&
-			mode != (DMODE_VDP - 1) && mode != (DMODE_SPRITES - 1))
+			mode != (DMODE_VDP - 1) && mode != (DMODE_SPRITES - 1) &&
+			mode != (DMODE_32_VDP - 1))
 		{
 			CloseWindow_KMod((UCHAR)(mode + 1));
 		}
