@@ -5,6 +5,8 @@
 #include "../gens.h"
 #include "../resource.h"
 #include "../vdp_32X.h"
+#include "../vdp_rend.h"
+#include "../vdp_io.h"
 #include "../G_gfx.h" //used for Put_Info
 
 //TODO remove to use right header(s)
@@ -21,6 +23,17 @@ static long palH, palV;
 
 void Update32X_VDP_KMod()
 {
+    const char *names[] = { "blank", "256-color", "direct color", "RLE" };
+    char label[100], old[100];
+    unsigned bank;
+    for (bank = 0; bank < 2; ++bank)
+    {
+        int id = bank ? IDC_32XVDP_LABEL1 : IDC_32XVDP_LABEL0;
+        sprintf(label, "FB%u (%s) - %s", bank, names[_32X_VDP.Mode & 3],
+            ((_32X_VDP.State & 1) == bank) ? "displayed" : "other");
+        GetDlgItemText(h32X_VDP, id, old, sizeof(old));
+        if (strcmp(old, label)) SetDlgItemText(h32X_VDP, id, label);
+    }
 	RedrawWindow(GetDlgItem(h32X_VDP, IDC_32XVDP_TILES), NULL, NULL, RDW_INVALIDATE);
 	RedrawWindow(GetDlgItem(h32X_VDP, IDC_32XVDP_TILES2), NULL, NULL, RDW_INVALIDATE);
 	RedrawWindow(GetDlgItem(h32X_VDP, IDC_32XVDP_PAL), NULL, NULL, RDW_INVALIDATE);
@@ -105,34 +118,75 @@ void Draw32XPal_KMod(LPDRAWITEMSTRUCT hlDIS)
 #define VDP32X_FB_WORDS 0x10000
 static DWORD vdp32x_pixels[VDP32X_VIEW_WIDTH * VDP32X_VIEW_HEIGHT];
 
-static unsigned int Selected32XFB_KMod(void)
+/* Convert the emulator's adjusted RGB555/RGB565 output palette to a DIB.
+ * No MD_Screen access: these previews show only the selected 32X framebuffer.
+ */
+static DWORD Color32X_KMod(WORD color)
 {
-    if (IsDlgButtonChecked(h32X_VDP, IDC_32XVDP_FB1) == BST_CHECKED) return 0;
-    if (IsDlgButtonChecked(h32X_VDP, IDC_32XVDP_FB2) == BST_CHECKED) return 1;
-    return _32X_VDP.State & 1;
+    unsigned r = (color >> ((Mode_555 & 1) ? 10 : 11)) & 31;
+    unsigned g = (color >> 5) & ((Mode_555 & 1) ? 31 : 63);
+    unsigned b = color & 31;
+    r = (r << 3) | (r >> 2);
+    g = (Mode_555 & 1) ? ((g << 3) | (g >> 2)) : ((g << 2) | (g >> 4));
+    b = (b << 3) | (b >> 2);
+    return (r << 16) | (g << 8) | b;
 }
 
-static void Draw32XBitmap_KMod(LPDRAWITEMSTRUCT item, BOOL useLineTable)
+static void Decode32X_KMod(unsigned bank, DWORD *pixels)
 {
-    const WORD *fb = (const WORD *)(_32X_VDP_Ram + Selected32XFB_KMod() * 0x20000);
+    const WORD *fb = (const WORD *)(_32X_VDP_Ram + bank * 0x20000);
+    unsigned mode = _32X_VDP.Mode & 3;
+    unsigned y, x, address, word, index, run;
+    unsigned lines = _32X_Started ? VDP_Num_Vis_Lines : 0;
+    if (lines > VDP32X_VIEW_HEIGHT) lines = VDP32X_VIEW_HEIGHT;
+    memset(pixels, 0, VDP32X_VIEW_WIDTH * VDP32X_VIEW_HEIGHT * sizeof(*pixels));
+    if (!mode) return;
+    for (y = 0; y < lines; ++y)
+    {
+        address = fb[y];
+        if (mode == 3) /* RLE: high byte = run length minus one, low = index. */
+        {
+            x = 0;
+            while (x < VDP32X_VIEW_WIDTH && address < VDP32X_FB_WORDS)
+            {
+                word = fb[address++];
+                run = (word >> 8) + 1;
+                if (run > VDP32X_VIEW_WIDTH - x) run = VDP32X_VIEW_WIDTH - x;
+                while (run--) pixels[y * VDP32X_VIEW_WIDTH + x++] =
+                    Color32X_KMod(_32X_Palette_16B[_32X_VDP_CRam[word & 255]]);
+            }
+        }
+        else for (x = 0; x < VDP32X_VIEW_WIDTH; ++x)
+        {
+            index = x + ((mode == 1 && (_32X_VDP.Mode & 0x10000)) ? 1 : 0);
+            word = address + ((mode == 1) ? index / 2 : x);
+            if (word >= VDP32X_FB_WORDS) break;
+            word = fb[word];
+            if (mode == 1) /* Packed pixels: high byte is the left pixel. */
+                word = _32X_VDP_CRam[(index & 1) ? (word & 255) : (word >> 8)];
+            pixels[y * VDP32X_VIEW_WIDTH + x] = Color32X_KMod(_32X_Palette_16B[word]);
+        }
+    }
+}
+
+static void Draw32XBitmap_KMod(LPDRAWITEMSTRUCT item, unsigned bank)
+{
+    const WORD *fb = (const WORD *)(_32X_VDP_Ram + bank * 0x20000);
     BITMAPINFO bmi = {0};
     unsigned int x, y, address;
+    BOOL raw = IsDlgButtonChecked(h32X_VDP, IDC_32XVDP_FB1) == BST_CHECKED;
+    BOOL lineTable = IsDlgButtonChecked(h32X_VDP, IDC_32XVDP_FB2) == BST_CHECKED;
     int width = item->rcItem.right - item->rcItem.left;
     int height = item->rcItem.bottom - item->rcItem.top;
     if (width <= 0 || height <= 0) return;
 
-    for (y = 0; y < VDP32X_VIEW_HEIGHT; ++y)
+    if (!raw && !lineTable) Decode32X_KMod(bank, vdp32x_pixels);
+    else for (y = 0; y < VDP32X_VIEW_HEIGHT; ++y)
     {
-        address = useLineTable ? fb[y] : 256 + y * VDP32X_VIEW_WIDTH;
+        address = lineTable ? fb[y] : 256 + y * VDP32X_VIEW_WIDTH;
         for (x = 0; x < VDP32X_VIEW_WIDTH; ++x)
         {
-            /* Raw inspection must not spill into another framebuffer (or past
-             * VRAM for FB1). Display unavailable words as black in both views.
-             */
             WORD pix = address + x < VDP32X_FB_WORDS ? fb[address + x] : 0;
-            /* BI_RGB DWORD is 0x00RRGGBB, unlike GDI's COLORREF. Preserve the
-             * original 5-bit expansion and raw-word interpretation of VRAM.
-             */
             vdp32x_pixels[y * VDP32X_VIEW_WIDTH + x] =
                 ((DWORD)(pix & 31) << 19) |
                 ((DWORD)((pix >> 5) & 31) << 11) |
@@ -155,12 +209,12 @@ static void Draw32XBitmap_KMod(LPDRAWITEMSTRUCT item, BOOL useLineTable)
 
 void Draw32XVDP_KMod(LPDRAWITEMSTRUCT item)
 {
-    Draw32XBitmap_KMod(item, TRUE);
+    Draw32XBitmap_KMod(item, 1);
 }
 
 void Draw32XVDPRaw_KMod(LPDRAWITEMSTRUCT item)
 {
-    Draw32XBitmap_KMod(item, FALSE);
+    Draw32XBitmap_KMod(item, 0);
 }
 
 

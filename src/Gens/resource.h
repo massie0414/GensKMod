@@ -611,6 +611,8 @@
 #define IDC_32XVDP_CRAM         53026
 #define IDC_32XVDP_PAL          53027
 #define IDC_32XVDP_TILES2       53028
+#define IDC_32XVDP_LABEL0       53029
+#define IDC_32XVDP_LABEL1       53030
 
 #define IDC_32XREG_LIST			53031
 
