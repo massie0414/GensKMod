@@ -249,6 +249,8 @@
     <ClCompile Include="CCnet.c" />
     <ClCompile Include="cd_aspi.cpp" />
     <ClCompile Include="cd_file.c" />
+    <ClCompile Include="cd_hle.c" />
+    <ClCompile Include="cd_cue.c" />
     <ClCompile Include="cd_sys.c" />
     <ClCompile Include="cdda_mp3.c" />
     <ClCompile Include="Cpu_68k.c" />

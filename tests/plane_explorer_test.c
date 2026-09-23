@@ -29,6 +29,119 @@ static void paint(HWND hwnd, HDC dc)
     SendMessage(hwnd, WM_DRAWITEM, item.CtlID, (LPARAM)&item);
 }
 
+static void create_session_windows(void)
+{
+    int plane;
+    planes_create(GetModuleHandle(NULL), NULL);
+    for (plane = 0; plane < PLANE_COUNT; ++plane)
+    {
+        assert(explorers[plane].hwnd);
+        SetWindowPos(explorers[plane].hwnd, NULL, -10000, -10000, 500, 400,
+            SWP_NOACTIVATE | SWP_NOZORDER);
+    }
+}
+
+static void test_geometry_persistence(const char *config_file)
+{
+    RECT expected[2], actual;
+    MONITORINFO monitor = { sizeof(monitor) };
+    int plane;
+    assert(GetMonitorInfo(MonitorFromPoint((POINT){0, 0}, MONITOR_DEFAULTTOPRIMARY), &monitor));
+    create_session_windows();
+    for (plane = 0; plane < 2; ++plane)
+    {
+        SetWindowPos(explorers[plane].hwnd, NULL,
+            monitor.rcWork.left + 30 + plane * 40, monitor.rcWork.top + 30 + plane * 40,
+            450 + plane * 100, 300 + plane * 50, SWP_NOZORDER | SWP_NOACTIVATE);
+        GetWindowRect(explorers[plane].hwnd, &expected[plane]);
+    }
+    planes_save_visibility(config_file);
+    planes_destroy();
+    create_session_windows();
+    planes_restore_visibility(config_file);
+    for (plane = 0; plane < 2; ++plane)
+    {
+        GetWindowRect(explorers[plane].hwnd, &actual);
+        assert(EqualRect(&actual, &expected[plane]));
+        assert(!IsWindowVisible(explorers[plane].hwnd));
+    }
+    /* Maximizing must save the normal rectangle, not the entire desktop. */
+    ShowWindow(explorers[0].hwnd, SW_SHOWMAXIMIZED);
+    planes_save_visibility(config_file);
+    planes_destroy();
+    create_session_windows();
+    planes_restore_visibility(config_file);
+    GetWindowRect(explorers[0].hwnd, &actual);
+    assert(EqualRect(&actual, &expected[0]));
+    assert(!IsZoomed(explorers[0].hwnd));
+    /* A disconnected monitor or oversized window must still be reachable. */
+    WritePrivateProfileString("DebugWindows", "PlaneARect", "900000,900000,50000,50000", config_file);
+    planes_restore_visibility(config_file);
+    GetWindowRect(explorers[0].hwnd, &actual);
+    GetMonitorInfo(MonitorFromWindow(explorers[0].hwnd, MONITOR_DEFAULTTONEAREST), &monitor);
+    assert(actual.left >= monitor.rcWork.left && actual.top >= monitor.rcWork.top);
+    assert(actual.right <= monitor.rcWork.right && actual.bottom <= monitor.rcWork.bottom);
+    WritePrivateProfileString("DebugWindows", "PlaneARect", "invalid", config_file);
+    planes_restore_visibility(config_file);
+    GetWindowRect(explorers[0].hwnd, &expected[0]);
+    assert(EqualRect(&actual, &expected[0]));
+    planes_destroy();
+}
+
+static void test_visibility_persistence(void)
+{
+    char temp_dir[MAX_PATH], config_file[MAX_PATH], value[32];
+    int mask, plane;
+    assert(GetTempPath(sizeof(temp_dir), temp_dir));
+    assert(GetTempFileName(temp_dir, "gkp", 0, config_file));
+    WritePrivateProfileString("Debug", "Spy", "123", config_file);
+
+    create_session_windows();
+    planes_restore_visibility(config_file);
+    assert(!IsWindowVisible(explorers[0].hwnd));
+    assert(!IsWindowVisible(explorers[1].hwnd));
+    planes_destroy();
+
+    for (mask = 0; mask < 4; ++mask)
+    {
+        create_session_windows();
+        for (plane = 0; plane < PLANE_COUNT; ++plane)
+        {
+            BOOL visible = (mask & (1 << plane)) != 0;
+            OpenedWindow_KMod[PlaneExplorerMode(plane) - 1] = visible;
+            planes_show(plane, visible);
+        }
+        planes_save_visibility(config_file);
+        planes_destroy();
+        create_session_windows();
+        planes_restore_visibility(config_file);
+        planes_reset(); /* Loading a ROM must preserve restored visibility. */
+        for (plane = 0; plane < PLANE_COUNT; ++plane)
+        {
+            BOOL expected = (mask & (1 << plane)) != 0;
+            assert(IsWindowVisible(explorers[plane].hwnd) == expected);
+            assert(OpenedWindow_KMod[PlaneExplorerMode(plane) - 1] == expected);
+        }
+        planes_destroy();
+    }
+
+    /* Explicitly closing A must replace the previously saved open state. */
+    create_session_windows();
+    planes_restore_visibility(config_file);
+    SendMessage(explorers[0].hwnd, WM_CLOSE, 0, 0);
+    planes_save_visibility(config_file);
+    planes_destroy();
+    create_session_windows();
+    planes_restore_visibility(config_file);
+    assert(!IsWindowVisible(explorers[0].hwnd));
+    assert(IsWindowVisible(explorers[1].hwnd));
+    planes_destroy();
+    GetPrivateProfileString("Debug", "Spy", "", value, sizeof(value), config_file);
+    assert(strcmp(value, "123") == 0);
+    test_geometry_persistence(config_file);
+    assert(DeleteFile(config_file));
+}
+
 int main(void)
 {
     HWND a, b;
@@ -125,6 +238,7 @@ int main(void)
     assert(!HandleWindow_KMod[DMODE_PLANE_B - 1]);
     assert(!PeekMessage(&msg, NULL, WM_QUIT, WM_QUIT, PM_REMOVE));
     SelectObject(dc, previous); DeleteObject(bitmap); DeleteDC(dc);
-    puts("PASS: independent rendering, transparency, tile info, reset, interlace, close/reopen, destruction");
+    test_visibility_persistence();
+    puts("PASS: independent rendering, transparency, tile info, reset, interlace, close/reopen, destruction, visibility persistence");
     return 0;
 }

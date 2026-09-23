@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include "cd_hle.h"
 #include <windows.h>
 #include "cd_aspi.h"		// this include cd_sys.h
 #include "cd_file.h"
@@ -259,7 +260,7 @@ void End_CD_Driver(void)
 }
 
 
-int Reset_CD(const char *buf, char *iso_name)
+int Reset_CD(char *buf, const char *iso_name)
 {
 	memset(CD_Audio_Buffer_L, 0, 4096 * 4);
 	memset(CD_Audio_Buffer_R, 0, 4096 * 4);
@@ -274,7 +275,7 @@ int Reset_CD(const char *buf, char *iso_name)
 	else
 	{
 		CD_Load_System = FILE_ISO;
-		Load_ISO(buf, iso_name);
+		if (Load_ISO((char *)buf, iso_name)) { CD_Present = 0; return -1; }
 		CD_Present = 1;
 		return 0;
 	}
@@ -1007,8 +1008,11 @@ void Update_CD_Audio(int **buf, int lenght)
 	Buf_L = buf[0];
 	Buf_R = buf[1];
 
-	if (CDD.Control & 0x0100) return;
-	if (!(SCD.Status_CDC & 1)) return;
+	if (CD_HLE_Active) { if (!CD_HLE_AudioPlaying()) return; }
+	else {
+		if (CDD.Control & 0x0100) return;
+		if (!(SCD.Status_CDC & 1)) return;
+	}
 	if (CD_Audio_Starting) return;
 
 #ifdef DEBUG_CD

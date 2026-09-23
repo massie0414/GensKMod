@@ -9,12 +9,15 @@ extern "C" {
 #define TYPE_BIN 2
 #define TYPE_MP3 3
 #define TYPE_WAV 4
+#define TYPE_CDDA 5
 
 
 struct _file_track {
 	FILE *F;
 	int Lenght;
 	int Type;
+	int FileOffset;
+	int DiscStart;
 };
 
 extern struct _file_track Tracks[100];
@@ -25,7 +28,7 @@ extern char Track_Played;
 
 int FILE_Init(void);
 void FILE_End(void);
-int Load_ISO(char *buf, char *iso_name);
+int Load_ISO(char *buf, const char *iso_name);
 void Unload_ISO(void);
 //int FILE_Read_One_CD_LBA(int lba);
 int FILE_Read_One_LBA_CDC(void);

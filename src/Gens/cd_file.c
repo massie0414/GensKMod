@@ -2,6 +2,7 @@
 #include <windows.h>
 #include "cd_sys.h"
 #include "cd_file.h"
+#include "cd_cue.h"
 #include "lc89510.h"
 #include "cdda_mp3.h"
 #include "star_68k.h"
@@ -28,7 +29,33 @@ void FILE_End(void)
 }
 
 
-int Load_ISO(char *buf, char *iso_name)
+static int Load_CUE(char *buf, const char *path)
+{
+    CD_Cue cue;
+    unsigned char header[512];
+    int i;
+    if(!CD_Cue_Read(path,&cue))return -2;
+    for(i=0;i<cue.count;i++) {
+        Tracks[i].F=fopen(cue.file,"rb");
+        if(!Tracks[i].F) { Unload_ISO(); return -1; }
+        Tracks[i].Type=i?TYPE_CDDA:TYPE_BIN;
+        Tracks[i].Lenght=cue.track[i].length;
+        Tracks[i].FileOffset=cue.track[i].offset;
+        Tracks[i].DiscStart=cue.track[i].start;
+        SCD.TOC.Tracks[i].Num=i+1; SCD.TOC.Tracks[i].Type=i?0:1;
+        LBA_to_MSF(cue.track[i].start,&SCD.TOC.Tracks[i].MSF);
+    }
+    fseek(Tracks[0].F,16,SEEK_SET);
+    if(fread(header,1,sizeof(header),Tracks[0].F)!=sizeof(header)||memcmp(header,"SEGADISCSYSTEM",14)) { Unload_ISO(); return -2; }
+    fseek(Tracks[0].F,0x110,SEEK_SET);
+    if(fread(buf,1,0x200,Tracks[0].F)!=0x200) { Unload_ISO(); return -1; }
+    SCD.TOC.First_Track=1; SCD.TOC.Last_Track=cue.count;
+    SCD.TOC.Tracks[cue.count].Num=cue.count+1; SCD.TOC.Tracks[cue.count].Type=0;
+    LBA_to_MSF(cue.leadout,&SCD.TOC.Tracks[cue.count].MSF);
+    return 0;
+}
+
+int Load_ISO(char *buf, const char *iso_name)
 {
 	HANDLE File_Size;
 	int i, j, num_track, Cur_LBA;
@@ -41,6 +68,22 @@ int Load_ISO(char *buf, char *iso_name)
 		"%d.wav", " %d.wav", "-%d.wav", "_%d.wav", " - %2d.wav"};
 	
 	Unload_ISO();
+    if(!iso_name || strlen(iso_name)<4 || strlen(iso_name)>=sizeof(tmp_name))return -2;
+    if(!_stricmp(iso_name+strlen(iso_name)-4,".cue"))return Load_CUE(buf,iso_name);
+    if(!_stricmp(iso_name+strlen(iso_name)-4,".bin")) {
+        strcpy(tmp_name,iso_name); strcpy(tmp_name+strlen(tmp_name)-4,".cue");
+        tmp_file=fopen(tmp_name,"r");
+        if(tmp_file) {
+            CD_Cue cue;
+            char requested[1024], referenced[1024];
+            fclose(tmp_file);
+            if(!CD_Cue_Read(tmp_name,&cue))return -2;
+            if(!GetFullPathNameA(iso_name,sizeof(requested),requested,NULL) ||
+               !GetFullPathNameA(cue.file,sizeof(referenced),referenced,NULL) ||
+               _stricmp(requested,referenced))return -2;
+            return Load_CUE(buf,tmp_name);
+        }
+    }
 
 	if (Detect_Format(iso_name) == SEGACD_IMAGE + 1) Tracks[0].Type = TYPE_BIN;
 	else if (Detect_Format(iso_name) == SEGACD_IMAGE) Tracks[0].Type = TYPE_ISO;
@@ -187,6 +230,7 @@ void Unload_ISO(void)
 		Tracks[i].F = NULL;
 		Tracks[i].Lenght = 0;
 		Tracks[i].Type = 0;
+		Tracks[i].FileOffset = Tracks[i].DiscStart = 0;
 	}
 }
 
@@ -218,6 +262,14 @@ int FILE_Read_One_LBA_CDC(void)
 	else										// AUDIO
 	{
 		int rate, channel;
+        int ti=SCD.Cur_Track-SCD.TOC.First_Track;
+        if(ti>=0 && ti<99 && Tracks[ti].Type==TYPE_CDDA) {
+            int rel=SCD.Cur_LBA-Tracks[ti].DiscStart;
+            memset(cp_buf,0,2352);
+            if(rel>=0 && rel<Tracks[ti].Lenght && !fseek(Tracks[ti].F,(Tracks[ti].FileOffset+rel)*2352,SEEK_SET))
+                fread(cp_buf,1,2352,Tracks[ti].F);
+            Write_CD_Audio((short*)cp_buf,44100,2,588);
+        }
 		
 		if (Tracks[SCD.Cur_Track - SCD.TOC.First_Track].Type == TYPE_MP3)
 		{
@@ -354,6 +406,10 @@ int FILE_Play_CD_LBA(void)
 	if (Tracks[SCD.Cur_Track - SCD.TOC.First_Track].Type == TYPE_MP3)
 	{
 		MP3_Play(SCD.Cur_Track - SCD.TOC.First_Track, Track_LBA_Pos);
+	}
+	else if (Tracks[SCD.Cur_Track - SCD.TOC.First_Track].Type == TYPE_CDDA)
+	{
+		return 0;
 	}
 	else if (Tracks[SCD.Cur_Track - SCD.TOC.First_Track].Type == TYPE_WAV)
 	{

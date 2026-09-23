@@ -1,3 +1,5 @@
+#include "cd_hle.h"
+#include "cd_cue.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -161,6 +163,18 @@ void Update_CD_Rom_Name(char *Name)
 
 int Detect_Format(const char *Name)
 {
+    if(!Name || strlen(Name)<3)return -1;
+    if(strlen(Name)>4 && !_stricmp(Name+strlen(Name)-4,".cue")) {
+        CD_Cue cue;
+        if(!CD_Cue_Read(Name,&cue))return -1;
+        unsigned char signature[30];
+        FILE *image = fopen(cue.file, "rb");
+        if (!image) return -1;
+        size_t bytes = fread(signature, 1, sizeof(signature), image);
+        fclose(image);
+        return bytes == sizeof(signature) && !memcmp(signature + 16, "SEGADISCSYSTEM", 14) ? SEGACD_IMAGE + 1 : -1;
+    }
+
 	FILE *f;
 	unzFile zf;
 	unz_file_info zinf;
@@ -436,7 +450,7 @@ int Get_Rom(HWND hWnd)
 	ofn.lpstrFile = Name;
 	ofn.nMaxFile = 1023;
 
-	ofn.lpstrFilter = "Sega CD / 32X / Genesis files\0*.bin;*.smd;*.gen;*.32x;*.iso;*.raw;*.zip;*.zsg\0Genesis roms (*.smd *.bin *.gen *.zip *.zsg)\0*.smd;*.bin;*.gen;*.zip;*.zsg\00032X roms (*.32x *.zip)\0*.32x;*.zip\0Sega CD images (*.iso *.bin *.raw)\0*.iso;*.bin;*.raw\0All Files\0*.*\0\0";
+	ofn.lpstrFilter = "Sega CD / 32X / Genesis files\0*.bin;*.smd;*.gen;*.32x;*.iso;*.cue;*.raw;*.zip;*.zsg\0Genesis roms (*.smd *.bin *.gen *.zip *.zsg)\0*.smd;*.bin;*.gen;*.zip;*.zsg\00032X roms (*.32x *.zip)\0*.32x;*.zip\0Sega CD images (*.cue *.iso *.bin *.raw)\0*.cue;*.iso;*.bin;*.raw\0All Files\0*.*\0\0";
 
 	ofn.nFilterIndex = File_Type_Index;
 	ofn.lpstrInitialDir = Rom_Dir;
@@ -906,6 +920,7 @@ int IPS_Patching(void)
 
 void Free_Rom(Rom *Rom_MD)
 {
+	if (!Game) CD_HLE_Close();
 #ifdef GENS_KMOD
 	kmod_close();
 #endif
@@ -917,6 +932,7 @@ void Free_Rom(Rom *Rom_MD)
 #endif
 
 	if (SegaCD_Started) Save_BRAM();
+	CD_HLE_Close();
 	Save_SRAM();
 	Save_Patch_File();
 	if (WAV_Dumping) Stop_WAV_Dump();

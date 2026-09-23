@@ -3,6 +3,7 @@
 #include <string.h>
 #include <io.h>
 #include "save.h"
+#include "cd_hle.h"
 #include "cpu_68k.h"
 #include "cpu_sh2.h"
 #include "sh2.h"
@@ -171,6 +172,7 @@ void Get_State_File_Name(char *name)
 
 int Load_State(char *Name)
 {
+	if (CD_HLE_Active) { Put_Info("BIOS HLE: use the game save menu; save states are unavailable", 4000); return 0; }
 	FILE *f;
 	unsigned char *buf;
 	int len;
@@ -234,6 +236,7 @@ int Load_State(char *Name)
 
 int Save_State(char *Name)
 {
+	if (CD_HLE_Active) { Put_Info("BIOS HLE: use the game save menu; save states are unavailable", 4000); return 0; }
 	FILE *f;
 	unsigned char *buf;
 	int len;
@@ -1724,6 +1727,7 @@ void Format_Backup_Ram(void)
 
 int Load_BRAM(void)
 {
+	if (CD_HLE_Active) return 1; /* HLE uses a separate .hbr save file. */
 	HANDLE BRAM_File;
 	int bResult;
 	char Name[2048];
@@ -1757,6 +1761,7 @@ int Load_BRAM(void)
 
 int Save_BRAM(void)
 {
+	if (CD_HLE_Active) return 1; /* HLE uses a separate .hbr save file. */
 	HANDLE BRAM_File;
 	int bResult;
 	char Name[2048];

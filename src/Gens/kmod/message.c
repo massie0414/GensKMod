@@ -128,8 +128,11 @@ static void MsgInit_KMod(HWND hwnd)
 	SetDlgItemText(hwnd, IDC_MSG_FILE, szKModLog);
 
 	logMaxSize = (UINT)SendDlgItemMessage(hDMsg, IDC_MSG_EDIT, EM_GETLIMITTEXT, (WPARAM)0, (LPARAM)0);
+	/* EM_GETLIMITTEXT returns zero when the log window is not open. */
+	if (logMaxSize < 1024) logMaxSize = 65536;
+	if (logMessages) LocalFree((HLOCAL)logMessages);
 	logMessages = (CHAR *)LocalAlloc(LPTR, logMaxSize);
-	ZeroMemory(logMessages, logMaxSize);
+	if (!logMessages) return;
 	logSize = 0;
 
 	if (!Game)	return;

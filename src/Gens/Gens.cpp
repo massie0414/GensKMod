@@ -29,6 +29,9 @@
 #include "pwm.h"
 #include "cd_sys.h"
 #include "cd_file.h"
+#include "cd_hle.h"
+#define main68k_exec CD_HLE_MainExec
+#define sub68k_exec CD_HLE_SubExec
 
 #include "kmod/gmv.h"
 
@@ -1787,6 +1790,7 @@ int Do_32X_Frame()
 int Init_SegaCD(const char *iso_name)
 {
 	char Str_Err[256], *Bios_To_Use;
+	Free_Rom(Game);
 
 	SetWindowText(HWnd, "Gens - Sega CD : initialising, please wait ...");
 
@@ -1828,9 +1832,10 @@ int Init_SegaCD(const char *iso_name)
 			break;
 	}
 
-	if (Load_Bios(HWnd, Bios_To_Use) == NULL)
+	CD_HLE_Close();
+	if (Load_Bios(HWnd, Bios_To_Use) == NULL && !CD_HLE_Prepare())
 	{
-		MessageBox(NULL, "Your BIOS files aren't correctly configured, do it with 'Option -> Directories/Files...' menu.", "Warning", MB_OK | MB_ICONEXCLAMATION);
+		MessageBox(NULL, "No configured BIOS could be loaded and this disc could not boot using BIOS HLE.", "Warning", MB_OK | MB_ICONEXCLAMATION);
 		SetWindowText(HWnd, "Gens - Idle");
 		return 0;
 	}
@@ -1917,6 +1922,7 @@ int Init_SegaCD(const char *iso_name)
 		else Play_Sound();
 	}
 
+	if (CD_HLE_Active && !CD_HLE_Boot()) return 0;
 	Load_BRAM();				// Initialise BRAM
 	Load_Patch_File();			// Only used to reset Patch structure
 	Build_Main_Menu();
@@ -1948,6 +1954,7 @@ int Init_SegaCD(const char *iso_name)
 int Reload_SegaCD(const char *iso_name)
 {
 	char Str_Err[256];
+	if (CD_HLE_Active) return SegaCD_Started = Init_SegaCD(iso_name);
 
 	Save_BRAM();
 
@@ -1970,6 +1977,20 @@ int Reload_SegaCD(const char *iso_name)
 void Reset_SegaCD()
 {
 	char *Bios_To_Use;
+	if (CD_HLE_Active)
+	{
+		Paused = 0;
+		M68K_Reset(2);
+		S68K_Reset();
+		Z80_Reset();
+		LC89510_Reset();
+		Reset_VDP();
+		Init_RS_GFX();
+		Reset_PCM();
+		YM2612_Reset();
+		if (!CD_HLE_Boot()) Paused = 1;
+		return;
+	}
 
 	if (CPU_Mode) Bios_To_Use = EU_CD_Bios;
 	else if (Game_Mode) Bios_To_Use = US_CD_Bios;
@@ -2043,6 +2064,7 @@ int Do_SegaCD_Frame_No_VDP(void)
 	main68k_tripOdometer(); // Reads and then clears the odometer
 #endif
 	sub68k_tripOdometer();
+	CD_HLE_Frame();
 	z80_Clear_Odo(&M_Z80);
 
 	VRam_Flag = 1;
@@ -2191,6 +2213,7 @@ int Do_SegaCD_Frame_No_VDP_Cycle_Accurate(void)
 	main68k_tripOdometer(); // Reads and then clears the odometer
 #endif
 	sub68k_tripOdometer();
+	CD_HLE_Frame();
 	z80_Clear_Odo(&M_Z80);
 
 	VRam_Flag = 1;
@@ -2455,6 +2478,7 @@ int Do_SegaCD_Frame(void)
 	main68k_tripOdometer(); // Reads and then clears the odometer
 #endif
 	sub68k_tripOdometer();
+	CD_HLE_Frame();
 	z80_Clear_Odo(&M_Z80);
 
 	VRam_Flag = 1;
@@ -2632,6 +2656,7 @@ int Do_SegaCD_Frame_Cycle_Accurate(void)
 	main68k_tripOdometer(); // Reads and then clears the odometer
 #endif
 	sub68k_tripOdometer();
+	CD_HLE_Frame();
 	z80_Clear_Odo(&M_Z80);
 
 	VRam_Flag = 1;
