@@ -24,19 +24,27 @@ static SIZE minimum32XVDPSize;
 static long palH, palV;
 static WNDPROC paletteWindowProc;
 static int paletteIndex = -1;
+static int hoverBank = -1, hoverX, hoverY;
+static WNDPROC framebufferWindowProc[2];
+static BOOL Sample32XPixel(unsigned bank, int x, int y, int *index, unsigned *color);
 
 static void Update32XPaletteInfo(void)
 {
-    char text[80], old[80];
-    if (paletteIndex < 0)
+    char text[100], old[100], indexText[32];
+    unsigned color = 0;
+    BOOL valid = paletteIndex >= 0;
+    if (hoverBank >= 0)
+        valid = Sample32XPixel(hoverBank, hoverX, hoverY, &paletteIndex, &color);
+    else if (valid) color = _32X_VDP_CRam[paletteIndex];
+    if (!valid)
         strcpy(text, "Index: --\r\nR: --\r\nG: --\r\nB: --\r\nPriority: --");
     else
     {
-        unsigned color = _32X_VDP_CRam[paletteIndex];
-        /* CRAM: priority bit 15, B bits 10-14, G bits 5-9, R bits 0-4. */
-        sprintf(text, "Index: %u (0x%02X)\r\nR: %u\r\nG: %u\r\nB: %u\r\nPriority: %u",
-            (unsigned)paletteIndex, (unsigned)paletteIndex,
-            color & 31, (color >> 5) & 31, (color >> 10) & 31, (color >> 15) & 1);
+        if (paletteIndex >= 0)
+            sprintf(indexText, "%u (0x%02X)", (unsigned)paletteIndex, (unsigned)paletteIndex);
+        else strcpy(indexText, "--");
+        sprintf(text, "Index: %s\r\nR: %u\r\nG: %u\r\nB: %u\r\nPriority: %u",
+            indexText, color & 31, (color >> 5) & 31, (color >> 10) & 31, (color >> 15) & 1);
     }
     GetDlgItemText(h32X_VDP, IDC_32XVDP_PALINFO, old, sizeof(old));
     if (strcmp(text, old)) SetDlgItemText(h32X_VDP, IDC_32XVDP_PALINFO, text);
@@ -55,6 +63,7 @@ static LRESULT CALLBACK Palette32XWindowProc(HWND hwnd, UINT message, WPARAM wPa
         if (cellWidth > 0 && cellHeight > 0 && x >= 0 && y >= 0 &&
             x < cellWidth * PALETTE32X_COLUMNS && y < cellHeight * PALETTE32X_ROWS)
         {
+            hoverBank = -1;
             paletteIndex = (y / cellHeight) * PALETTE32X_COLUMNS + x / cellWidth;
             Update32XPaletteInfo();
         }
@@ -211,6 +220,61 @@ static void Decode32X_KMod(unsigned bank, DWORD *pixels)
     }
 }
 
+/* Match the preview's addressing, including packed-pixel shift and RLE runs. */
+static BOOL Sample32XPixel(unsigned bank, int x, int y, int *index, unsigned *color)
+{
+    const WORD *fb = (const WORD *)(_32X_VDP_Ram + bank * 0x20000);
+    unsigned mode = _32X_VDP.Mode & 3;
+    unsigned address, word, pixel, end = 0;
+    BOOL raw = IsDlgButtonChecked(h32X_VDP, IDC_32XVDP_FB1) == BST_CHECKED;
+    BOOL lineTable = IsDlgButtonChecked(h32X_VDP, IDC_32XVDP_FB2) == BST_CHECKED;
+    *index = -1;
+    if (x < 0 || y < 0 || x >= VDP32X_VIEW_WIDTH || y >= VDP32X_VIEW_HEIGHT) return FALSE;
+    if (raw || lineTable)
+    {
+        address = (lineTable ? fb[y] : 256 + y * VDP32X_VIEW_WIDTH) + x;
+        if (address >= VDP32X_FB_WORDS) return FALSE;
+        *color = fb[address];
+        return TRUE;
+    }
+    if ((!_32X_Started && !CD_32X_Active) || !mode || y >= VDP_Num_Vis_Lines) return FALSE;
+    address = fb[y];
+    if (mode == 3)
+    {
+        do
+        {
+            if (address >= VDP32X_FB_WORDS) return FALSE;
+            word = fb[address++];
+            end += (word >> 8) + 1;
+        } while (end <= (unsigned)x);
+        *index = word & 255;
+    }
+    else
+    {
+        pixel = x + ((mode == 1 && (_32X_VDP.Mode & 0x10000)) ? 1 : 0);
+        address += mode == 1 ? pixel / 2 : x;
+        if (address >= VDP32X_FB_WORDS) return FALSE;
+        word = fb[address];
+        if (mode == 2) { *color = word; return TRUE; }
+        *index = (pixel & 1) ? (word & 255) : (word >> 8);
+    }
+    *color = _32X_VDP_CRam[*index];
+    return TRUE;
+}
+
+static LRESULT CALLBACK Framebuffer32XWindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
+{
+    unsigned bank = GetDlgCtrlID(hwnd) == IDC_32XVDP_TILES2 ? 1 : 0;
+    if (message == WM_MOUSEMOVE)
+    {
+        hoverBank = bank;
+        hoverX = (short)LOWORD(lParam);
+        hoverY = (short)HIWORD(lParam);
+        Update32XPaletteInfo();
+    }
+    return CallWindowProc(framebufferWindowProc[bank], hwnd, message, wParam, lParam);
+}
+
 static void Draw32XBitmap_KMod(LPDRAWITEMSTRUCT item, unsigned bank)
 {
     const WORD *fb = (const WORD *)(_32X_VDP_Ram + bank * 0x20000);
@@ -347,6 +411,11 @@ BOOL CALLBACK _32X_VDPDlgProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lPa
 	case WM_INITDIALOG:
 		h32X_VDP = hwnd;
         paletteIndex = -1;
+        hoverBank = -1;
+        framebufferWindowProc[0] = (WNDPROC)SetWindowLongPtr(
+            GetDlgItem(hwnd, IDC_32XVDP_TILES), GWLP_WNDPROC, (LONG_PTR)Framebuffer32XWindowProc);
+        framebufferWindowProc[1] = (WNDPROC)SetWindowLongPtr(
+            GetDlgItem(hwnd, IDC_32XVDP_TILES2), GWLP_WNDPROC, (LONG_PTR)Framebuffer32XWindowProc);
         paletteWindowProc = (WNDPROC)SetWindowLongPtr(
             GetDlgItem(hwnd, IDC_32XVDP_PAL), GWLP_WNDPROC, (LONG_PTR)Palette32XWindowProc);
         Update32XPaletteInfo();
