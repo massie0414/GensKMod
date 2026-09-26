@@ -392,6 +392,7 @@ BEGIN
     LTEXT           "FB1",IDC_32XVDP_LABEL1,7,174,214,8
     LTEXT           "Color Palette",IDC_STATIC,241,7,41,8
     CONTROL         "tilesVDP",IDC_32XVDP_PAL,"Static",SS_OWNERDRAW | SS_NOTIFY,241,22,98,255
+    LTEXT           "Index: --\r\nR: --\r\nG: --\r\nB: --\r\nPriority: --",IDC_32XVDP_PALINFO,241,287,98,48
     CONTROL         "tilesVDP",IDC_32XVDP_TILES2,"Static",SS_OWNERDRAW | SS_NOTIFY,7,187,214,148
 END
 

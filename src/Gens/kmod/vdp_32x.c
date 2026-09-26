@@ -19,13 +19,55 @@
 
 static HWND h32X_VDP;
 static SIZE minimum32XVDPSize;
+#define PALETTE32X_COLUMNS 8
+#define PALETTE32X_ROWS 32
 static long palH, palV;
+static WNDPROC paletteWindowProc;
+static int paletteIndex = -1;
+
+static void Update32XPaletteInfo(void)
+{
+    char text[80], old[80];
+    if (paletteIndex < 0)
+        strcpy(text, "Index: --\r\nR: --\r\nG: --\r\nB: --\r\nPriority: --");
+    else
+    {
+        unsigned color = _32X_VDP_CRam[paletteIndex];
+        /* CRAM: priority bit 15, B bits 10-14, G bits 5-9, R bits 0-4. */
+        sprintf(text, "Index: %u (0x%02X)\r\nR: %u\r\nG: %u\r\nB: %u\r\nPriority: %u",
+            (unsigned)paletteIndex, (unsigned)paletteIndex,
+            color & 31, (color >> 5) & 31, (color >> 10) & 31, (color >> 15) & 1);
+    }
+    GetDlgItemText(h32X_VDP, IDC_32XVDP_PALINFO, old, sizeof(old));
+    if (strcmp(text, old)) SetDlgItemText(h32X_VDP, IDC_32XVDP_PALINFO, text);
+}
+
+static LRESULT CALLBACK Palette32XWindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
+{
+    if (message == WM_MOUSEMOVE)
+    {
+        RECT rect;
+        int x = (short)LOWORD(lParam), y = (short)HIWORD(lParam);
+        int cellWidth, cellHeight;
+        GetClientRect(hwnd, &rect);
+        cellWidth = rect.right / PALETTE32X_COLUMNS;
+        cellHeight = rect.bottom / PALETTE32X_ROWS;
+        if (cellWidth > 0 && cellHeight > 0 && x >= 0 && y >= 0 &&
+            x < cellWidth * PALETTE32X_COLUMNS && y < cellHeight * PALETTE32X_ROWS)
+        {
+            paletteIndex = (y / cellHeight) * PALETTE32X_COLUMNS + x / cellWidth;
+            Update32XPaletteInfo();
+        }
+    }
+    return CallWindowProc(paletteWindowProc, hwnd, message, wParam, lParam);
+}
 
 void Update32X_VDP_KMod()
 {
     const char *names[] = { "blank", "256-color", "direct color", "RLE" };
     char label[100], old[100];
     unsigned bank;
+    Update32XPaletteInfo();
     for (bank = 0; bank < 2; ++bank)
     {
         int id = bank ? IDC_32XVDP_LABEL1 : IDC_32XVDP_LABEL0;
@@ -50,15 +92,15 @@ void Draw32XPal_KMod(LPDRAWITEMSTRUCT hlDIS)
 	LONG pix, h;
 	COLORREF col;
 
-	palV = (hlDIS->rcItem.bottom - hlDIS->rcItem.top) / 64;
-	palH = (hlDIS->rcItem.right - hlDIS->rcItem.left) / 4;
+	palV = (hlDIS->rcItem.bottom - hlDIS->rcItem.top) / PALETTE32X_ROWS;
+	palH = (hlDIS->rcItem.right - hlDIS->rcItem.left) / PALETTE32X_COLUMNS;
 
-	for (j = 0; j < 64; j++)
+	for (j = 0; j < PALETTE32X_ROWS; j++)
 	{
 		rc.top = j* palV;
 		rc.bottom = rc.top + palV;
 
-		for (i = 0; i < 4; i++)
+		for (i = 0; i < PALETTE32X_COLUMNS; i++)
 		{
 			if (newBrush)	DeleteObject((HGDIOBJ)newBrush);
 			rc.left = i*palH;
@@ -66,7 +108,7 @@ void Draw32XPal_KMod(LPDRAWITEMSTRUCT hlDIS)
 
 			// COLORREF = 0x00bbggrr
 			// pix = bgr (3*5bit)
-			pix = _32X_VDP_CRam[i + j * 4];
+			pix = _32X_VDP_CRam[i + j * PALETTE32X_COLUMNS];
 			col = 0x000000;
 			tone = (pix >> 10) & 0x1F;
 			col |= (tone << 3);
@@ -80,7 +122,7 @@ void Draw32XPal_KMod(LPDRAWITEMSTRUCT hlDIS)
 			newBrush = CreateSolidBrush(col);
 			FillRect(hlDIS->hDC, &rc, newBrush);
 
-			if (pix & 0x80)
+			if (pix & 0x8000) /* Priority bit. */
 			{
 				//FillRect(hlDIS->hDC, &rc, (HBRUSH) (COLOR_WINDOWFRAME+1));
 
@@ -303,6 +345,11 @@ BOOL CALLBACK _32X_VDPDlgProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lPa
 	switch (Message)
 	{
 	case WM_INITDIALOG:
+		h32X_VDP = hwnd;
+        paletteIndex = -1;
+        paletteWindowProc = (WNDPROC)SetWindowLongPtr(
+            GetDlgItem(hwnd, IDC_32XVDP_PAL), GWLP_WNDPROC, (LONG_PTR)Palette32XWindowProc);
+        Update32XPaletteInfo();
 		{
 			RECT rect;
 			GetWindowRect(hwnd, &rect);
@@ -350,6 +397,7 @@ BOOL CALLBACK _32X_VDPDlgProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lPa
 		break;
 
 	case WM_DESTROY:
+        paletteIndex = -1;
 		h32X_VDP = NULL;
 		break;
 	default:

@@ -50,6 +50,33 @@ static void persistence(void)
     puts("PASS: open/closed persistence, position/size, safe window destruction");
 }
 static DWORD decoded[320*240];
+static void palette_hover(void)
+{
+    HWND palette = GetDlgItem(h32X_VDP, IDC_32XVDP_PAL);
+    RECT rect;
+    char text[128], expected[128];
+    unsigned index;
+    GetClientRect(palette, &rect);
+    GetDlgItemText(h32X_VDP, IDC_32XVDP_PALINFO, text, sizeof(text));
+    assert(!strcmp(text, "Index: --\r\nR: --\r\nG: --\r\nB: --\r\nPriority: --"));
+    for (index = 0; index < 256; ++index)
+    {
+        SendMessage(palette, WM_MOUSEMOVE, 0,
+            MAKELPARAM((index % 8) * (rect.right / 8), (index / 8) * (rect.bottom / 32)));
+        sprintf(expected, "Index: %u (0x%02X)\r\nR: %u\r\nG: %u\r\nB: %u\r\nPriority: %u",
+            index, index, _32X_VDP_CRam[index] & 31, (_32X_VDP_CRam[index] >> 5) & 31,
+            (_32X_VDP_CRam[index] >> 10) & 31, (_32X_VDP_CRam[index] >> 15) & 1);
+        GetDlgItemText(h32X_VDP, IDC_32XVDP_PALINFO, text, sizeof(text));
+        assert(!strcmp(text, expected));
+    }
+    _32X_VDP_CRam[255] = 0xFC1F;
+    Update32X_VDP_KMod();
+    GetDlgItemText(h32X_VDP, IDC_32XVDP_PALINFO, text, sizeof(text));
+    assert(!strcmp(text, "Index: 255 (0xFF)\r\nR: 31\r\nG: 0\r\nB: 31\r\nPriority: 1"));
+    SendMessage(palette, WM_MOUSEMOVE, 0, MAKELPARAM(-1, -1));
+    assert(paletteIndex == 255);
+    puts("PASS: fixed palette readout, all 256 hover cells, live color and bounds");
+}
 static void select_view(int id)
 {
     CheckRadioButton(h32X_VDP,IDC_32XVDP_FB0,IDC_32XVDP_FB2,id);
@@ -104,6 +131,7 @@ int main(void)
     bmi.bmiHeader.biPlanes=1;bmi.bmiHeader.biBitCount=32;
     bm=CreateDIBSection(dc,&bmi,DIB_RGB_COLORS,(void **)&output,NULL,0);assert(bm);old=SelectObject(dc,bm);
     vdp32x_create(GetModuleHandle(NULL),NULL);assert(h32X_VDP);
+    palette_hover();
     d.hDC=dc;d.rcItem.left=7;d.rcItem.top=9;d.rcItem.right=327;d.rcItem.bottom=249;
     fb1[256]=0x7c00;
     Draw32XVDPRaw_KMod(&d);GdiFlush();assert(output[9*340+7]==0xff0000);
