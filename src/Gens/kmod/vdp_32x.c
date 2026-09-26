@@ -30,7 +30,7 @@ static BOOL Sample32XPixel(unsigned bank, int x, int y, int *index, unsigned *co
 
 static void Update32XPaletteInfo(void)
 {
-    char text[100], old[100], indexText[32];
+    char text[128], old[128], indexText[32];
     unsigned color = 0;
     BOOL valid = paletteIndex >= 0;
     if (hoverBank >= 0)
@@ -46,6 +46,8 @@ static void Update32XPaletteInfo(void)
         sprintf(text, "Index: %s\r\nR: %u\r\nG: %u\r\nB: %u\r\nPriority: %u",
             indexText, color & 31, (color >> 5) & 31, (color >> 10) & 31, (color >> 15) & 1);
     }
+    if (hoverBank >= 0 && hoverX >= 0 && hoverX < 320 && hoverY >= 0 && hoverY < 240)
+        sprintf(text + strlen(text), "\r\nX: %d   Y: %d", hoverX, hoverY);
     GetDlgItemText(h32X_VDP, IDC_32XVDP_PALINFO, old, sizeof(old));
     if (strcmp(text, old)) SetDlgItemText(h32X_VDP, IDC_32XVDP_PALINFO, text);
 }

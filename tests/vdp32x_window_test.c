@@ -96,6 +96,8 @@ static void framebuffer_hover(void)
     assert(paletteIndex == 1);
     SendMessage(GetDlgItem(h32X_VDP, IDC_32XVDP_TILES2), WM_MOUSEMOVE, 0, MAKELPARAM(1, 0));
     assert(paletteIndex == 4);
+    GetDlgItemText(h32X_VDP, IDC_32XVDP_PALINFO, text, sizeof(text));
+    assert(strstr(text, "\r\nX: 1   Y: 0"));
     fb1[256] = 0x0305;
     Update32X_VDP_KMod(); assert(paletteIndex == 5);
     _32X_VDP.Mode = 0x10001;
@@ -107,7 +109,7 @@ static void framebuffer_hover(void)
     _32X_VDP.Mode = 2; fb0[256] = 0xFC1F;
     SendMessage(GetDlgItem(h32X_VDP, IDC_32XVDP_TILES), WM_MOUSEMOVE, 0, MAKELPARAM(0, 0));
     GetDlgItemText(h32X_VDP, IDC_32XVDP_PALINFO, text, sizeof(text));
-    assert(!strcmp(text, "Index: --\r\nR: 31\r\nG: 0\r\nB: 31\r\nPriority: 1"));
+    assert(!strcmp(text, "Index: --\r\nR: 31\r\nG: 0\r\nB: 31\r\nPriority: 1\r\nX: 0   Y: 0"));
     assert(!Sample32XPixel(0, 320, 0, &index, &color));
     assert(!Sample32XPixel(0, -1, 0, &index, &color));
     assert(!Sample32XPixel(0, 0, 224, &index, &color));
@@ -121,6 +123,8 @@ static void framebuffer_hover(void)
     assert(Sample32XPixel(0, 0, 0, &index, &color) && color == 31);
     SendMessage(GetDlgItem(h32X_VDP, IDC_32XVDP_PAL), WM_MOUSEMOVE, 0, MAKELPARAM(0, 0));
     assert(hoverBank == -1 && paletteIndex == 0);
+    GetDlgItemText(h32X_VDP, IDC_32XVDP_PALINFO, text, sizeof(text));
+    assert(!strstr(text, "X:"));
     vdp32x_destroy();
     puts("PASS: framebuffer hover, both banks, live updates, shift, RLE, direct/raw modes and bounds");
 }
