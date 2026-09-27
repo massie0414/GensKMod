@@ -37,6 +37,7 @@
 #include "kmod\vdp_32x.h"
 #include "kmod\s32x_reg.h"
 #include "kmod\sdram_32x.h"
+#include "kmod\fps_32x.h"
 
 #define TIMER_CYCLES		66480	/* cycles used by timer call */
 
@@ -192,6 +193,7 @@ void Init_KMod( )
 	vdp32x_create(ghInstance, HWnd);
 	s32xreg_create(ghInstance, HWnd);
 	sdram32x_create(ghInstance, HWnd);
+	fps32x_create(ghInstance, HWnd);
 
 	layers_create(ghInstance, HWnd);
 	watchers_create(ghInstance, HWnd);
@@ -205,6 +207,7 @@ void Init_KMod( )
 	vdp32x_restore_window(config_file);
 	s32xreg_restore_window(config_file);
 	sdram32x_restore_window(config_file);
+	fps32x_restore_window(config_file);
 	mSH2_restore_window(config_file);
 	sSH2_restore_window(config_file);
 
@@ -286,13 +289,14 @@ void kmod_close()
 		if (OpenedWindow_KMod[mode] && mode != (DMODE_MSG - 1) &&
 			mode != (DMODE_PLANE_A - 1) && mode != (DMODE_PLANE_B - 1) &&
 			mode != (DMODE_VDP - 1) && mode != (DMODE_SPRITES - 1) &&
-			mode != (DMODE_32_SDRAM - 1) && mode != (DMODE_32_VDP - 1) && mode != (DMODE_32_REG - 1) &&
+			mode != (DMODE_32_FPS - 1) && mode != (DMODE_32_SDRAM - 1) && mode != (DMODE_32_VDP - 1) && mode != (DMODE_32_REG - 1) &&
 			mode != (DMODE_32_MSH2 - 1) && mode != (DMODE_32_SSH2 - 1))
 		{
 			CloseWindow_KMod((UCHAR)(mode + 1));
 		}
 	}
 
+	fps32x_reset();
 	//start_tiles = 0;
 
 	watchers_reset();
@@ -332,6 +336,7 @@ void ResetDebug_KMod(  )
 	vdp32x_reset();
 	s32xreg_reset();
 	sdram32x_reset();
+	fps32x_reset();
 
 	if (KConf.pausedAtStart)
 	{

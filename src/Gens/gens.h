@@ -40,7 +40,8 @@ extern "C" {
 #define DMODE_PLANE_B 20
 
 #define DMODE_32_SDRAM 21
-#define WIN_NUMBER	DMODE_32_SDRAM
+#define DMODE_32_FPS 22
+#define WIN_NUMBER	DMODE_32_FPS
 
 extern int Debug;
 extern int Frame_Skip;

@@ -459,6 +459,8 @@
     <ClInclude Include="kmod\s32x_reg.h" />
     <ClInclude Include="kmod\sdram_32x.h" />
     <ClCompile Include="kmod\sdram_32x.c" />
+    <ClInclude Include="kmod\fps_32x.h" />
+    <ClCompile Include="kmod\fps_32x.c" />
     <ClInclude Include="kmod\s68k.h" />
     <ClInclude Include="kmod\sprites.h" />
     <ClInclude Include="kmod\spy.h" />

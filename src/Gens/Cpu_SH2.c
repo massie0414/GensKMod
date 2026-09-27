@@ -1,3 +1,4 @@
+#include "kmod/fps_32x.h"
 #include <memory.h>
 #include "SH2.h"
 #include "Cpu_SH2.h"
@@ -198,6 +199,7 @@ void SSH2_Reset_CPU()
 
 void _32X_Set_FB()
 {
+	fps32x_framebuffer_changed();
 	if (_32X_VDP.State & 0x1)		// Frame Buffer 1 displayed
 	{
 		if (_32X_FM)

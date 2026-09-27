@@ -1099,3 +1099,11 @@ old data may remain after release. This is not allocated memory usage.",-1,10,84
     LTEXT "",IDC_32XSDRAM_BLOCKS,16,128,298,145
     LTEXT "Shared by Master / Slave SH2. Refreshes every 250 ms.",-1,10,287,310,10
 END
+
+IDD_DEBUG32X_FPS DIALOGEX 0, 0, 260, 62
+STYLE DS_SETFONT | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "32X - Frame Rate"
+FONT 10, "MS Shell Dlg"
+BEGIN
+    LTEXT "Measuring FPS...",IDC_32XFPS_SUMMARY,12,10,236,46
+END

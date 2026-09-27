@@ -28,6 +28,7 @@
 #include "vdp_32x.h"
 #include "s32x_reg.h"
 #include "sdram_32x.h"
+#include "fps_32x.h"
 
 
 ULONG	timer_KMod;
@@ -110,6 +111,9 @@ void CloseWindow_KMod(UCHAR mode)
 	case DMODE_32_VDP:
 		vdp32x_show(FALSE);
 		break;
+	case DMODE_32_FPS:
+		fps32x_show(FALSE);
+		break;
 	case DMODE_32_SDRAM:
 		sdram32x_show(FALSE);
 		break;
@@ -186,6 +190,9 @@ void OpenWindow_KMod(UCHAR mode)
 		break;
 	case DMODE_32_VDP:
 		vdp32x_show(TRUE);
+		break;
+	case DMODE_32_FPS:
+		fps32x_show(TRUE);
 		break;
 	case DMODE_32_SDRAM:
 		sdram32x_show(TRUE);
