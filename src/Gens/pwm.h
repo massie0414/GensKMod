@@ -19,6 +19,8 @@ extern unsigned int PWM_Cycle_Cnt;
 extern unsigned int PWM_Int;
 extern unsigned int PWM_Int_Cnt;
 extern unsigned int PWM_Mode;
+extern unsigned int PWM_Cycle_Tmp;
+extern unsigned char PWM_FULL_TAB[16]; /* Four-entry FIFO status table. */
 extern unsigned int PWM_Enable;
 extern unsigned int PWM_Out_R;
 extern unsigned int PWM_Out_L;

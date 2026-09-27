@@ -11,6 +11,8 @@ void s32xreg_show(BOOL visibility);
 void s32xreg_update();
 void s32xreg_reset();
 void s32xreg_destroy();
+void s32xreg_save_window(const char *config_file);
+void s32xreg_restore_window(const char *config_file);
 
 #ifdef __cplusplus
 };
