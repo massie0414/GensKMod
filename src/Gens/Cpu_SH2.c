@@ -64,6 +64,7 @@ int MSH2_Init()
 	SH2_Map_Cache_Trough(&M_SH2);
 
 	SH2_Reset(&M_SH2, 0);
+	SH2_Usage_ClearHistory(&M_SH2);
 
 	return 0;
 }
@@ -132,6 +133,7 @@ int SSH2_Init()
 	SH2_Map_Cache_Trough(&S_SH2);
 
 	SH2_Reset(&S_SH2, 0);
+	SH2_Usage_ClearHistory(&S_SH2);
 
 	return 0;
 }
@@ -142,6 +144,7 @@ int SSH2_Init()
 void MSH2_Reset()
 {
 	SH2_Reset(&M_SH2, 0);
+	SH2_Usage_ClearHistory(&M_SH2);
 
 	memset(_32X_Comm, 0, 0x10);
 	memset(_32X_FIFO_A, 0, 4 * 2);
@@ -167,6 +170,7 @@ void MSH2_Reset()
 void SSH2_Reset()
 {
 	SH2_Reset(&S_SH2, 0);
+	SH2_Usage_ClearHistory(&S_SH2);
 
 	_32X_SINT = 0;
 }
@@ -177,6 +181,7 @@ void SSH2_Reset()
 void MSH2_Reset_CPU()
 {
 	SH2_Reset(&M_SH2, 1);
+	SH2_Usage_ClearHistory(&M_SH2);
 }
 
 
@@ -185,6 +190,7 @@ void MSH2_Reset_CPU()
 void SSH2_Reset_CPU()
 {
 	SH2_Reset(&S_SH2, 1);
+	SH2_Usage_ClearHistory(&S_SH2);
 }
 
 

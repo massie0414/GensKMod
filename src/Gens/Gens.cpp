@@ -1247,6 +1247,7 @@ int Do_32X_Frame_No_VDP()
 	main68k_tripOdometer(); // Reads and then clears the odometer
 #endif
 	z80_Clear_Odo(&M_Z80);
+	M_SH2.Idle_Cycles = S_SH2.Idle_Cycles = 0;
 	SH2_Clear_Odo(&M_SH2);
 	SH2_Clear_Odo(&S_SH2);
 	PWM_Clear_Timer();
@@ -1299,8 +1300,8 @@ int Do_32X_Frame_No_VDP()
             main68k_exec(i - p_i);
         if(CD_32X_Active && S68K_State==1) sub68k_exec(Cycles_S68K-(Cycles_M68K-(i-p_i))*CPL_S68K/CPL_M68K);
         }
-		SH2_Exec(&M_SH2, j - p_j);
-		SH2_Exec(&S_SH2, k - p_k);
+		SH2_Exec_Profiled(&M_SH2, j - p_j);
+		SH2_Exec_Profiled(&S_SH2, k - p_k);
 		PWM_Update_Timer(l - p_l);
 
 		VDP_Status &= ~0x0004;			// HBlank = 0
@@ -1326,8 +1327,8 @@ int Do_32X_Frame_No_VDP()
 		{
 			main68k_exec(i);
         if(CD_32X_Active && S68K_State==1) sub68k_exec(Cycles_S68K-(Cycles_M68K-i)*CPL_S68K/CPL_M68K);
-			SH2_Exec(&M_SH2, j);
-			SH2_Exec(&S_SH2, k);
+			SH2_Exec_Profiled(&M_SH2, j);
+			SH2_Exec_Profiled(&S_SH2, k);
 			PWM_Update_Timer(l);
 			i += p_i;
 			j += p_j;
@@ -1337,8 +1338,8 @@ int Do_32X_Frame_No_VDP()
 
 		main68k_exec(Cycles_M68K);
         if(CD_32X_Active && S68K_State==1) sub68k_exec(Cycles_S68K);
-		SH2_Exec(&M_SH2, Cycles_MSH2);
-		SH2_Exec(&S_SH2, Cycles_SSH2);
+		SH2_Exec_Profiled(&M_SH2, Cycles_MSH2);
+		SH2_Exec_Profiled(&S_SH2, Cycles_SSH2);
 		PWM_Update_Timer(PWM_Cycles);
 		if (Z80_State == 3) z80_Exec(&M_Z80, Cycles_Z80);
 		else z80_Set_Odo(&M_Z80, Cycles_Z80);
@@ -1391,8 +1392,8 @@ int Do_32X_Frame_No_VDP()
 	{
 		main68k_exec(i);
         if(CD_32X_Active && S68K_State==1) sub68k_exec(Cycles_S68K-(Cycles_M68K-i)*CPL_S68K/CPL_M68K);
-		SH2_Exec(&M_SH2, j);
-		SH2_Exec(&S_SH2, k);
+		SH2_Exec_Profiled(&M_SH2, j);
+		SH2_Exec_Profiled(&S_SH2, k);
 		PWM_Update_Timer(l);
 		i += p_i;
 		j += p_j;
@@ -1419,8 +1420,8 @@ int Do_32X_Frame_No_VDP()
 	{
 		main68k_exec(i);
         if(CD_32X_Active && S68K_State==1) sub68k_exec(Cycles_S68K-(Cycles_M68K-i)*CPL_S68K/CPL_M68K);
-		SH2_Exec(&M_SH2, j);
-		SH2_Exec(&S_SH2, k);
+		SH2_Exec_Profiled(&M_SH2, j);
+		SH2_Exec_Profiled(&S_SH2, k);
 		PWM_Update_Timer(l);
 		i += p_i;
 		j += p_j;
@@ -1430,8 +1431,8 @@ int Do_32X_Frame_No_VDP()
 
 	main68k_exec(Cycles_M68K);
         if(CD_32X_Active && S68K_State==1) sub68k_exec(Cycles_S68K);
-	SH2_Exec(&M_SH2, Cycles_MSH2);
-	SH2_Exec(&S_SH2, Cycles_SSH2);
+	SH2_Exec_Profiled(&M_SH2, Cycles_MSH2);
+	SH2_Exec_Profiled(&S_SH2, Cycles_SSH2);
 	PWM_Update_Timer(PWM_Cycles);
 	if (Z80_State == 3) z80_Exec(&M_Z80, Cycles_Z80);
 	else z80_Set_Odo(&M_Z80, Cycles_Z80);
@@ -1465,8 +1466,8 @@ int Do_32X_Frame_No_VDP()
 
 		main68k_exec(i - p_i);
         if(CD_32X_Active && S68K_State==1) sub68k_exec(Cycles_S68K-(Cycles_M68K-(i-p_i))*CPL_S68K/CPL_M68K);
-		SH2_Exec(&M_SH2, j - p_j);
-		SH2_Exec(&S_SH2, k - p_k);
+		SH2_Exec_Profiled(&M_SH2, j - p_j);
+		SH2_Exec_Profiled(&S_SH2, k - p_k);
 		PWM_Update_Timer(l - p_l);
 
 		VDP_Status &= ~0x0004;			// HBlank = 0
@@ -1485,8 +1486,8 @@ int Do_32X_Frame_No_VDP()
 		{
 			main68k_exec(i);
         if(CD_32X_Active && S68K_State==1) sub68k_exec(Cycles_S68K-(Cycles_M68K-i)*CPL_S68K/CPL_M68K);
-			SH2_Exec(&M_SH2, j);
-			SH2_Exec(&S_SH2, k);
+			SH2_Exec_Profiled(&M_SH2, j);
+			SH2_Exec_Profiled(&S_SH2, k);
 			PWM_Update_Timer(l);
 			i += p_i;
 			j += p_j;
@@ -1496,14 +1497,16 @@ int Do_32X_Frame_No_VDP()
 
 		main68k_exec(Cycles_M68K);
         if(CD_32X_Active && S68K_State==1) sub68k_exec(Cycles_S68K);
-		SH2_Exec(&M_SH2, Cycles_MSH2);
-		SH2_Exec(&S_SH2, Cycles_SSH2);
+		SH2_Exec_Profiled(&M_SH2, Cycles_MSH2);
+		SH2_Exec_Profiled(&S_SH2, Cycles_SSH2);
 		PWM_Update_Timer(PWM_Cycles);
 		if (Z80_State == 3) z80_Exec(&M_Z80, Cycles_Z80);
 		else z80_Set_Odo(&M_Z80, Cycles_Z80);
         if(CD_32X_Active) Update_SegaCD_Timer();
 	}
 
+	SH2_Usage_End_Frame(&M_SH2);
+	SH2_Usage_End_Frame(&S_SH2);
 	PSG_Special_Update();
 	YM2612_Special_Update();
     if(CD_32X_Active) { buf[0]=Seg_L; buf[1]=Seg_R; Update_CD_Audio(buf,Seg_Lenght); }
@@ -1540,6 +1543,7 @@ int Do_32X_Frame()
 	main68k_tripOdometer(); // Reads and then clears the odometer
 #endif
 	z80_Clear_Odo(&M_Z80);
+	M_SH2.Idle_Cycles = S_SH2.Idle_Cycles = 0;
 	SH2_Clear_Odo(&M_SH2);
 	SH2_Clear_Odo(&S_SH2);
 	PWM_Clear_Timer();
@@ -1589,8 +1593,8 @@ int Do_32X_Frame()
 
 		main68k_exec(i - p_i);
         if(CD_32X_Active && S68K_State==1) sub68k_exec(Cycles_S68K-(Cycles_M68K-(i-p_i))*CPL_S68K/CPL_M68K);
-		SH2_Exec(&M_SH2, j - p_j);
-		SH2_Exec(&S_SH2, k - p_k);
+		SH2_Exec_Profiled(&M_SH2, j - p_j);
+		SH2_Exec_Profiled(&S_SH2, k - p_k);
 		PWM_Update_Timer(l - p_l);
 
 		VDP_Status &= ~0x0004;			// HBlank = 0
@@ -1618,8 +1622,8 @@ int Do_32X_Frame()
 		{
 			main68k_exec(i);
         if(CD_32X_Active && S68K_State==1) sub68k_exec(Cycles_S68K-(Cycles_M68K-i)*CPL_S68K/CPL_M68K);
-			SH2_Exec(&M_SH2, j);
-			SH2_Exec(&S_SH2, k);
+			SH2_Exec_Profiled(&M_SH2, j);
+			SH2_Exec_Profiled(&S_SH2, k);
 			PWM_Update_Timer(l);
 			i += p_i;
 			j += p_j;
@@ -1629,8 +1633,8 @@ int Do_32X_Frame()
 
 		main68k_exec(Cycles_M68K);
         if(CD_32X_Active && S68K_State==1) sub68k_exec(Cycles_S68K);
-		SH2_Exec(&M_SH2, Cycles_MSH2);
-		SH2_Exec(&S_SH2, Cycles_SSH2);
+		SH2_Exec_Profiled(&M_SH2, Cycles_MSH2);
+		SH2_Exec_Profiled(&S_SH2, Cycles_SSH2);
 		PWM_Update_Timer(PWM_Cycles);
 		if (Z80_State == 3) z80_Exec(&M_Z80, Cycles_Z80);
 		else z80_Set_Odo(&M_Z80, Cycles_Z80);
@@ -1683,8 +1687,8 @@ int Do_32X_Frame()
 	{
 		main68k_exec(i);
         if(CD_32X_Active && S68K_State==1) sub68k_exec(Cycles_S68K-(Cycles_M68K-i)*CPL_S68K/CPL_M68K);
-		SH2_Exec(&M_SH2, j);
-		SH2_Exec(&S_SH2, k);
+		SH2_Exec_Profiled(&M_SH2, j);
+		SH2_Exec_Profiled(&S_SH2, k);
 		PWM_Update_Timer(l);
 		i += p_i;
 		j += p_j;
@@ -1711,8 +1715,8 @@ int Do_32X_Frame()
 	{
 		main68k_exec(i);
         if(CD_32X_Active && S68K_State==1) sub68k_exec(Cycles_S68K-(Cycles_M68K-i)*CPL_S68K/CPL_M68K);
-		SH2_Exec(&M_SH2, j);
-		SH2_Exec(&S_SH2, k);
+		SH2_Exec_Profiled(&M_SH2, j);
+		SH2_Exec_Profiled(&S_SH2, k);
 		PWM_Update_Timer(l);
 		i += p_i;
 		j += p_j;
@@ -1722,8 +1726,8 @@ int Do_32X_Frame()
 
 	main68k_exec(Cycles_M68K);
         if(CD_32X_Active && S68K_State==1) sub68k_exec(Cycles_S68K);
-	SH2_Exec(&M_SH2, Cycles_MSH2);
-	SH2_Exec(&S_SH2, Cycles_SSH2);
+	SH2_Exec_Profiled(&M_SH2, Cycles_MSH2);
+	SH2_Exec_Profiled(&S_SH2, Cycles_SSH2);
 	PWM_Update_Timer(PWM_Cycles);
 	if (Z80_State == 3) z80_Exec(&M_Z80, Cycles_Z80);
 	else z80_Set_Odo(&M_Z80, Cycles_Z80);
@@ -1757,8 +1761,8 @@ int Do_32X_Frame()
 
 		main68k_exec(i - p_i);
         if(CD_32X_Active && S68K_State==1) sub68k_exec(Cycles_S68K-(Cycles_M68K-(i-p_i))*CPL_S68K/CPL_M68K);
-		SH2_Exec(&M_SH2, j - p_j);
-		SH2_Exec(&S_SH2, k - p_k);
+		SH2_Exec_Profiled(&M_SH2, j - p_j);
+		SH2_Exec_Profiled(&S_SH2, k - p_k);
 		PWM_Update_Timer(l - p_l);
 
 		VDP_Status &= ~0x0004;			// HBlank = 0
@@ -1777,8 +1781,8 @@ int Do_32X_Frame()
 		{
 			main68k_exec(i);
         if(CD_32X_Active && S68K_State==1) sub68k_exec(Cycles_S68K-(Cycles_M68K-i)*CPL_S68K/CPL_M68K);
-			SH2_Exec(&M_SH2, j);
-			SH2_Exec(&S_SH2, k);
+			SH2_Exec_Profiled(&M_SH2, j);
+			SH2_Exec_Profiled(&S_SH2, k);
 			PWM_Update_Timer(l);
 			i += p_i;
 			j += p_j;
@@ -1788,14 +1792,16 @@ int Do_32X_Frame()
 
 		main68k_exec(Cycles_M68K);
         if(CD_32X_Active && S68K_State==1) sub68k_exec(Cycles_S68K);
-		SH2_Exec(&M_SH2, Cycles_MSH2);
-		SH2_Exec(&S_SH2, Cycles_SSH2);
+		SH2_Exec_Profiled(&M_SH2, Cycles_MSH2);
+		SH2_Exec_Profiled(&S_SH2, Cycles_SSH2);
 		PWM_Update_Timer(PWM_Cycles);
 		if (Z80_State == 3) z80_Exec(&M_Z80, Cycles_Z80);
 		else z80_Set_Odo(&M_Z80, Cycles_Z80);
         if(CD_32X_Active) Update_SegaCD_Timer();
 	}
 
+	SH2_Usage_End_Frame(&M_SH2);
+	SH2_Usage_End_Frame(&S_SH2);
 	PSG_Special_Update();
 	YM2612_Special_Update();
     if(CD_32X_Active) { buf[0]=Seg_L; buf[1]=Seg_R; Update_CD_Audio(buf,Seg_Lenght); }

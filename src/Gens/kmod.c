@@ -202,6 +202,8 @@ void Init_KMod( )
 	sprites_restore_window(config_file);
 	vdp32x_restore_window(config_file);
 	s32xreg_restore_window(config_file);
+	mSH2_restore_window(config_file);
+	sSH2_restore_window(config_file);
 
    
 	//HandleWindow_KMod[0] = hM68K;
@@ -281,7 +283,8 @@ void kmod_close()
 		if (OpenedWindow_KMod[mode] && mode != (DMODE_MSG - 1) &&
 			mode != (DMODE_PLANE_A - 1) && mode != (DMODE_PLANE_B - 1) &&
 			mode != (DMODE_VDP - 1) && mode != (DMODE_SPRITES - 1) &&
-			mode != (DMODE_32_VDP - 1) && mode != (DMODE_32_REG - 1))
+			mode != (DMODE_32_VDP - 1) && mode != (DMODE_32_REG - 1) &&
+			mode != (DMODE_32_MSH2 - 1) && mode != (DMODE_32_SSH2 - 1))
 		{
 			CloseWindow_KMod((UCHAR)(mode + 1));
 		}

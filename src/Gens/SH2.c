@@ -696,3 +696,135 @@ void SH2_Init(SH2_CONTEXT *SH2, UINT32 slave)
 	SH2->BCR1 = 0x03F0;
 	if (slave) SH2->BCR1 |= 0x8000;
 }
+/* Publish only complete frames, so debugger refreshes and pause do not
+ * consume samples. Recognized polling/spin waits and stopped time are idle.
+ * The two counters occupy previously reserved context slots (save-state ABI).
+ */
+static struct {
+    UINT32 values[SH2_USAGE_HISTORY];
+    unsigned int next, count;
+} usageHistory[2];
+static int SH2_Usage_Index(SH2_CONTEXT *sh2)
+{
+    return sh2 == &M_SH2 ? 0 : sh2 == &S_SH2 ? 1 : -1;
+}
+void SH2_Usage_ClearHistory(SH2_CONTEXT *sh2)
+{
+    int index = SH2_Usage_Index(sh2);
+    if (index >= 0) memset(&usageHistory[index], 0, sizeof(usageHistory[index]));
+}
+unsigned int SH2_Usage_GetHistory(SH2_CONTEXT *sh2, UINT32 *values)
+{
+    int index = SH2_Usage_Index(sh2);
+    unsigned int i, count;
+    if (index < 0) return 0;
+    count = usageHistory[index].count;
+    for (i = 0; i < count; ++i)
+        values[i] = usageHistory[index].values[
+            (usageHistory[index].next + SH2_USAGE_HISTORY - count + i) % SH2_USAGE_HISTORY];
+    return count;
+}
+void SH2_Usage_End_Frame(SH2_CONTEXT *sh2)
+{
+    int index = SH2_Usage_Index(sh2);
+    UINT32 total = sh2->Odometer;
+    UINT32 idle = sh2->Idle_Cycles;
+    if (!total) sh2->Usage_PerMille = 0;
+    else
+    {
+        if (idle > total) idle = total;
+        sh2->Usage_PerMille = 1 + (UINT32)
+            (((double)(total - idle) * 1000.0 / total) + 0.5);
+    }
+    if (index >= 0 && total) {
+        usageHistory[index].values[usageHistory[index].next] = sh2->Usage_PerMille - 1;
+        usageHistory[index].next = (usageHistory[index].next + 1) % SH2_USAGE_HISTORY;
+        if (usageHistory[index].count < SH2_USAGE_HISTORY) ++usageHistory[index].count;
+    }
+}
+
+/* Inspect instruction fetch memory only: debug sampling must never read MMIO.
+ * Return loop address + 1 (zero means unknown). Deliberately conservative:
+ * fixed-address loads, tests/comparisons and a backward conditional branch;
+ * no stores, postincrements, arithmetic, calls, or useful delay-slot work.
+ */
+static int SH2_Profile_Opcode(SH2_CONTEXT *sh2, UINT32 pc, UINT32 *op)
+{
+    unsigned int i;
+    for (i = 0; i < 256; ++i) {
+        FETCHREG *f = &sh2->Fetch_Region[i];
+        UINT16 raw;
+        if (f->Fetch_Reg == (UINT16 *)-1) break;
+        if (!f->Fetch_Reg || pc < f->Low_Adr || pc >= f->High_Adr) continue;
+        raw = f->Fetch_Reg[pc / 2];
+        *op = ((raw & 255) << 8) | (raw >> 8);
+        return 1;
+    }
+    return 0;
+}
+UINT32 SH2_Polling_Loop(SH2_CONTEXT *sh2)
+{
+    UINT32 pc = sh2->PC - sh2->Base_PC - 4;
+    UINT32 branch, op, start, end, at, dest, sources, writes;
+    int displacement, loaded, tested, valid;
+    if (sh2->Status & 0x17) return 0;
+    for (branch = pc; branch <= pc + 14; branch += 2) {
+        if (!SH2_Profile_Opcode(sh2, branch, &op)) break;
+        /* BRA to itself, with NOP delay slot, is an explicit spin wait. */
+        if (op == 0xaffe && branch == pc) {
+            if (SH2_Profile_Opcode(sh2, branch + 2, &op) && op == 9)
+                return branch + 1;
+            continue;
+        }
+        if ((op & 0xff00) != 0x8900 && (op & 0xff00) != 0x8b00 &&
+            (op & 0xff00) != 0x8d00 && (op & 0xff00) != 0x8f00) continue;
+        displacement = (signed char)(op & 255);
+        if (displacement >= -1 || displacement < -8) continue;
+        start = branch + 4 + displacement * 2;
+        end = branch;
+        if (op & 0x0400) {
+            if (!SH2_Profile_Opcode(sh2, branch + 2, &op) || op != 9) continue;
+            end += 2;
+        }
+        if (pc < start || pc > end) continue;
+        loaded = tested = 0; valid = 1; sources = writes = 0;
+        for (at = start; at < branch; at += 2) {
+            if (!SH2_Profile_Opcode(sh2, at, &op)) { valid = 0; break; }
+            dest = (op >> 8) & 15;
+            if ((op & 0xf00f) >= 0x6000 && (op & 0xf00f) <= 0x6002) {
+                sources |= 1UL << ((op >> 4) & 15);
+                writes |= 1UL << dest; loaded = 1;
+            } else if ((op & 0xf000) == 0x5000) {
+                sources |= 1UL << ((op >> 4) & 15);
+                writes |= 1UL << dest; loaded = 1;
+            } else if ((op & 0xf00f) == 0x2008 || /* TST Rm,Rn */
+                       (op & 0xf00f) == 0x3000 || /* CMP/EQ Rm,Rn */
+                       (op & 0xff00) == 0x8800 || /* CMP/EQ #imm,R0 */
+                       (op & 0xff00) == 0xc800) { /* TST #imm,R0 */
+                tested = 1;
+            } else if (op != 9) { valid = 0; break; }
+        }
+        if (valid && loaded && tested && !(sources & writes)) return start + 1;
+    }
+    return 0;
+}
+UINT32 SH2_Exec_Profiled(SH2_CONTEXT *sh2, UINT32 target)
+{
+    UINT32 loop, before, idle, result, elapsed, sleeping;
+    UINT32 registers[16];
+    if (target <= sh2->Odometer) return SH2_Exec(sh2, target);
+    loop = SH2_Polling_Loop(sh2);
+    before = sh2->Odometer; idle = sh2->Idle_Cycles;
+    if (loop) memcpy(registers, sh2->R, sizeof(registers));
+    result = SH2_Exec(sh2, target);
+    /* Both ends must remain in the same wait loop with unchanged registers.
+     * Sampling changes statistics only, never execution or interrupt timing.
+     */
+    if (loop && loop == SH2_Polling_Loop(sh2) &&
+        !memcmp(registers, sh2->R, sizeof(registers))) {
+        elapsed = sh2->Odometer - before;
+        sleeping = sh2->Idle_Cycles - idle;
+        if (elapsed > sleeping) sh2->Idle_Cycles += elapsed - sleeping;
+    }
+    return result;
+}

@@ -126,8 +126,8 @@ struct __SH2_context
 
 	UINT32     DS_Inst;
 	UINT32     DS_PC;
-	UINT32     Unused1;
-	UINT32     Unused2;
+	UINT32     Idle_Cycles; /* Current frame; reuses reserved ABI slot. */
+	UINT32     Usage_PerMille; /* Last frame: permille + 1; zero = no sample. */
 
 	UINT32     Odometer;
 	UINT32     Cycle_TD;
@@ -250,6 +250,13 @@ DECL_FASTCALL(void,	Def_WRITEL(UINT32, UINT32));
 DECL_FASTCALL(UINT32,	SH2_Reset(SH2_CONTEXT *, UINT32));			/* SH2, manual */
 DECL_FASTCALL(void,	SH2_Enable(SH2_CONTEXT *));				/* SH2 */
 DECL_FASTCALL(void,	SH2_Disable(SH2_CONTEXT *));				/* SH2 */
+#define SH2_USAGE_HISTORY 256
+void SH2_Usage_ClearHistory(SH2_CONTEXT *sh2);
+unsigned int SH2_Usage_GetHistory(SH2_CONTEXT *sh2, UINT32 *values);
+void SH2_Usage_End_Frame(SH2_CONTEXT *sh2);
+UINT32 SH2_Exec_Profiled(SH2_CONTEXT *sh2, UINT32 target);
+UINT32 SH2_Polling_Loop(SH2_CONTEXT *sh2);
+
 DECL_FASTCALL(UINT32,	SH2_Exec(SH2_CONTEXT *, UINT32));			/* SH2, odo */
 DECL_FASTCALL(void,	SH2_Interrupt(SH2_CONTEXT *, UINT32));		/* SH2, level */
 DECL_FASTCALL(void,	SH2_Interrupt_Internal(SH2_CONTEXT *, UINT32));	/* SH2, level_vector */

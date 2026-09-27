@@ -201,8 +201,8 @@ bits 32
 
 		.DS_Inst		resd 1
 		.DS_PC			resd 1
-		.Unused1		resd 1
-		.Unused2		resd 1
+		.Idle_Cycles		resd 1
+		.Usage_PerMille		resd 1
 
 		.Odometer		resd 1
 		.Cycle_TD		resd 1
@@ -1294,6 +1294,11 @@ DECLF SH2I_BRAfast1
 	mov eax, [ebp + SH2.Status]
 	jne short .not_waiting
 
+	; Recognized NOP spin loop: unused remainder of this timeslice.
+	test edi, edi
+	jle short .usage_done
+	add [ebp + SH2.Idle_Cycles], edi
+.usage_done:
 	or eax, SH2_HALTED
 	or edi, byte -1
 	mov [ebp + SH2.Status], eax
@@ -1324,6 +1329,11 @@ DECLF SH2I_BRAfast2
 	mov eax, [ebp + SH2.Status]
 	jne short .not_waiting
 
+	; Recognized NOP spin loop: unused remainder of this timeslice.
+	test edi, edi
+	jle short .usage_done
+	add [ebp + SH2.Idle_Cycles], edi
+.usage_done:
 	or eax, SH2_HALTED
 	or edi, byte -1
 	mov [ebp + SH2.Status], eax
@@ -2909,6 +2919,12 @@ DECLF SH2I_SHLR16
 ALIGN32
 
 DECLF SH2I_SLEEP 
+
+	; EDI remaining cycles are idle; retain one cycle for SLEEP itself.
+	test edi, edi
+	jle short .usage_done
+	add [ebp + SH2.Idle_Cycles], edi
+.usage_done:
 
 	mov al, [ebp + SH2.Status]
 	or edi, byte -1
@@ -4774,6 +4790,11 @@ ALIGN32
 
 DECLF SH2I_SLEEP_DS
 
+	test edi, edi
+	jle short .usage_done
+	add [ebp + SH2.Idle_Cycles], edi
+.usage_done:
+
 	mov al, [ebp + SH2.Status]
 	or edi, byte -1
 	or al, SH2_HALTED
@@ -5291,6 +5312,8 @@ ALIGN32
 
 SH2_Exec_Halted:
 
+	add [ebp + SH2.Idle_Cycles], edi
+
 	mov [ebp + SH2.Cycle_TD], edi
 	mov eax, [ebp + SH2.Odometer]
 	mov dl, [ebp + SH2.WDTSR]
@@ -5306,6 +5329,8 @@ SH2_Exec_Halted:
 ALIGN32
 
 SH2_Exec_Disable:
+
+	add [ebp + SH2.Idle_Cycles], edi
 
 	mov eax, [ebp + SH2.Odometer]
 	add eax, edi

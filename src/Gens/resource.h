@@ -635,3 +635,9 @@
 #endif
 #endif
 
+
+#define IDC_MSH2_USAGE 54006
+#define IDC_SSH2_USAGE 54007
+
+#define IDC_SH2_USAGE_GROUP 54008
+#define IDC_SH2_USAGE_NOTE 54009

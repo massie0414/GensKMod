@@ -52,6 +52,8 @@
 #include "kmod/sprites.h"
 #include "kmod/vdp_32x.h"
 #include "kmod/s32x_reg.h"
+#include "kmod/mSH2.h"
+#include "kmod/sSH2.h"
 
 static gdbServerThread * g_gdb_main68k_server;
 static gdbServerThread * g_gdb_sub68k_server;
@@ -1884,6 +1886,8 @@ int PASCAL WinMain(HINSTANCE hInst,	HINSTANCE hPrevInst, LPSTR lpCmdLine, int nC
 	sprites_save_window(Str_Tmp);
 	vdp32x_save_window(Str_Tmp);
 	s32xreg_save_window(Str_Tmp);
+	mSH2_save_window(Str_Tmp);
+	sSH2_save_window(Str_Tmp);
 #endif
 
 	End_All();

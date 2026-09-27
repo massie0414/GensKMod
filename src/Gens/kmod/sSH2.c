@@ -3,6 +3,7 @@
 #include <stdio.h>
 
 #include "../gens.h"
+#include "../vdp_io.h"
 #include "../resource.h"
 #include "../Mem_SH2.h"
 #include "../SH2.h"
@@ -14,17 +15,30 @@
 
 #include "common.h"
 #include "utils.h"
+#include "window_geometry.h"
+#include "sh2_window_layout.h"
+#include "sh2_usage_graph.h"
 #include "sSH2.h"
 
 static HWND hSSH2;
+static SH2WindowLayout windowLayout;
 static unsigned char SSH2_ViewMode;
 static unsigned int  SSH2_StartLineROMDisasm, SSH2_StartLineRAMDisasm, SSH2_StartLineRAM, SSH2_StartLineROM, SSH2_StartLineCache;
 static CHAR debug_string[1024];
 
 void UpdateSSH2_KMod()
 {
-	unsigned int i, PC;
+	unsigned int i, PC, usage;
+	unsigned int rows = SH2Window_Rows(hSSH2, IDC_SSH2_DISAM);
 	unsigned char tmp_string[256];
+
+	usage = S_SH2.Usage_PerMille;
+	if (_32X_Started && usage >= 1 && usage <= 1001)
+		wsprintf(debug_string, "%u.%u %%", (usage - 1) / 10, (usage - 1) % 10);
+	else
+		lstrcpy(debug_string, "--");
+	SetDlgItemText(hSSH2, IDC_SSH2_USAGE, debug_string);
+	InvalidateRect(GetDlgItem(hSSH2, IDC_SSH2_USAGE), NULL, FALSE);
 
 	SendDlgItemMessage(hSSH2, IDC_SSH2_DISAM, LB_RESETCONTENT, (WPARAM)0, (LPARAM)0);
 
@@ -36,7 +50,7 @@ void UpdateSSH2_KMod()
 			//PC = (sh->PC - sh->Base_PC) - 4;
 			SSH2_StartLineROMDisasm = GetScrollPos(GetDlgItem(hSSH2, IDC_SSH2_SCROLL), SB_CTL);
 			PC = 0x02000000 + SSH2_StartLineROMDisasm * 2;
-			for (i = 0; i < 13; PC += 2, i++)
+			for (i = 0; i < rows && SSH2_StartLineROMDisasm + i < (4 * 1024 * 1024 / 2); PC += 2, i++)
 			{
 				SH2Disasm(tmp_string, PC, SH2_Read_Word(&S_SH2, PC), 0);
 				SendDlgItemMessage(hSSH2, IDC_SSH2_DISAM, LB_INSERTSTRING, i, (LPARAM)tmp_string);
@@ -46,7 +60,7 @@ void UpdateSSH2_KMod()
 		{
 			// ROM view
 			SSH2_StartLineROM = GetScrollPos(GetDlgItem(hSSH2, IDC_SSH2_SCROLL), SB_CTL);
-			for (i = 0; i < 13; i++)
+			for (i = 0; i < rows && SSH2_StartLineROM + i < (4 * 1024 * 1024 / 8); i++)
 			{
 				wsprintf(tmp_string, "%.8X ", 0x02000000 + SSH2_StartLineROM * 8 + i * 8);
 				tmp_string[8] = 0x20;
@@ -66,7 +80,7 @@ void UpdateSSH2_KMod()
 			//PC = (sh->PC - sh->Base_PC) - 4;
 			SSH2_StartLineRAMDisasm = GetScrollPos(GetDlgItem(hSSH2, IDC_SSH2_SCROLL), SB_CTL);
 			PC = 0x06000000 + SSH2_StartLineRAMDisasm * 2;
-			for (i = 0; i < 13; PC += 2, i++)
+			for (i = 0; i < rows && SSH2_StartLineRAMDisasm + i < (256 * 1024 / 2); PC += 2, i++)
 			{
 				SH2Disasm(tmp_string, PC, SH2_Read_Word(&S_SH2, PC), 0);
 				SendDlgItemMessage(hSSH2, IDC_SSH2_DISAM, LB_INSERTSTRING, i, (LPARAM)tmp_string);
@@ -76,7 +90,7 @@ void UpdateSSH2_KMod()
 		{
 			// RAM view
 			SSH2_StartLineRAM = GetScrollPos(GetDlgItem(hSSH2, IDC_SSH2_SCROLL), SB_CTL);
-			for (i = 0; i < 13; i++)
+			for (i = 0; i < rows && SSH2_StartLineRAM + i < (256 * 1024 / 8); i++)
 			{
 				wsprintf(tmp_string, "%.8X ", 0x06000000 + SSH2_StartLineRAM * 8 + i * 8);
 				tmp_string[8] = 0x20;
@@ -106,7 +120,7 @@ void UpdateSSH2_KMod()
 		{*/
 		// Cache view
 		SSH2_StartLineCache = GetScrollPos(GetDlgItem(hSSH2, IDC_SSH2_SCROLL), SB_CTL);
-		for (i = 0; i < 13; i++)
+		for (i = 0; i < rows && SSH2_StartLineCache + i < (0x1000 / 8); i++)
 		{
 			wsprintf(tmp_string, "%.8X ", 0xC0000000 + SSH2_StartLineCache * 8 + i * 8);
 			tmp_string[8] = 0x20;
@@ -245,15 +259,37 @@ BOOL CALLBACK SSH2DlgProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam)
 	switch (Message)
 	{
 	case WM_INITDIALOG:
+		hSSH2 = hwnd;
+		HandleWindow_KMod[DMODE_32_SSH2 - 1] = hwnd;
 		hFont = (HFONT)GetStockObject(OEM_FIXED_FONT);
 		SendDlgItemMessage(hwnd, IDC_SSH2_DISAM, WM_SETFONT, (WPARAM)hFont, TRUE);
 		SendDlgItemMessage(hwnd, IDC_SSH2_STATUS_SR, WM_SETFONT, (WPARAM)hFont, TRUE);
 		SendDlgItemMessage(hwnd, IDC_SSH2_STATUS_ADR, WM_SETFONT, (WPARAM)hFont, TRUE);
 		SendDlgItemMessage(hwnd, IDC_SSH2_STATUS_DATA, WM_SETFONT, (WPARAM)hFont, TRUE);
+		SH2Window_FitStatus(hwnd, IDC_SSH2_STATUS_SR, IDC_SSH2_STATUS_ADR, IDC_SSH2_STATUS_DATA, IDC_SSH2_USAGE);
+		SH2Window_InitLayout(hwnd, &windowLayout, IDC_SSH2_DISAM, IDC_SSH2_SCROLL);
 		sSH2_reset();
 		
 		break;
 
+    case WM_DRAWITEM:
+        if (wParam == IDC_SSH2_USAGE) {
+            SH2Usage_DrawGraph((DRAWITEMSTRUCT *)lParam, &S_SH2, _32X_Started);
+            return TRUE;
+        }
+        return FALSE;
+	case WM_SIZE:
+        if (wParam != SIZE_MINIMIZED) {
+            SH2Window_Resize(hwnd, &windowLayout);
+            if (windowLayout.count && _32X_Started) UpdateSSH2_KMod();
+        }
+        break;
+    case WM_GETMINMAXINFO:
+        if (windowLayout.minimum.cx) {
+            ((MINMAXINFO *)lParam)->ptMinTrackSize.x = windowLayout.minimum.cx;
+            ((MINMAXINFO *)lParam)->ptMinTrackSize.y = windowLayout.minimum.cy;
+        }
+        break;
 	case WM_SHOWWINDOW:
 		SwitchSSH2ViewMode_KMod();
 		break;
@@ -362,10 +398,11 @@ BOOL CALLBACK SSH2DlgProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam)
 		break;
 
 	case WM_DESTROY:
-		DeleteObject((HGDIOBJ)hFont);
-		sSH2_destroy( );
-		PostQuitMessage(0);
-		break;
+        hSSH2 = NULL;
+        ZeroMemory(&windowLayout, sizeof(windowLayout));
+        HandleWindow_KMod[DMODE_32_SSH2 - 1] = NULL;
+        OpenedWindow_KMod[DMODE_32_SSH2 - 1] = FALSE;
+        break;
 
 	default:
 		return FALSE;
@@ -398,6 +435,20 @@ void sSH2_reset()
 }
 void sSH2_destroy()
 {
-	DestroyWindow(hSSH2);
+	if (hSSH2) DestroyWindow(hSSH2);
 }
 
+
+void sSH2_save_window(const char *config_file)
+{
+    WritePrivateProfileString("DebugWindows", "SSH2Open",
+        OpenedWindow_KMod[DMODE_32_SSH2 - 1] ? "1" : "0", config_file);
+    DebugWindow_SaveGeometry(hSSH2, "SSH2Rect", config_file);
+}
+void sSH2_restore_window(const char *config_file)
+{
+    BOOL visible = GetPrivateProfileInt("DebugWindows", "SSH2Open", 0, config_file) != 0;
+    DebugWindow_RestoreGeometry(hSSH2, "SSH2Rect", config_file);
+    OpenedWindow_KMod[DMODE_32_SSH2 - 1] = visible && hSSH2 != NULL;
+    sSH2_show(visible);
+}
