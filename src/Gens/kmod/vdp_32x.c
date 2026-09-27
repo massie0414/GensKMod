@@ -37,14 +37,14 @@ static void Update32XPaletteInfo(void)
         valid = Sample32XPixel(hoverBank, hoverX, hoverY, &paletteIndex, &color);
     else if (valid) color = _32X_VDP_CRam[paletteIndex];
     if (!valid)
-        strcpy(text, "Index: --\r\nR: --\r\nG: --\r\nB: --\r\nPriority: --");
+        strcpy(text, "Data: --\r\nIndex: --\r\nR: --\r\nG: --\r\nB: --\r\nPriority: --");
     else
     {
         if (paletteIndex >= 0)
             sprintf(indexText, "%u (0x%02X)", (unsigned)paletteIndex, (unsigned)paletteIndex);
         else strcpy(indexText, "--");
-        sprintf(text, "Index: %s\r\nR: %u\r\nG: %u\r\nB: %u\r\nPriority: %u",
-            indexText, color & 31, (color >> 5) & 31, (color >> 10) & 31, (color >> 15) & 1);
+        sprintf(text, "Data: 0x%04X\r\nIndex: %s\r\nR: %u\r\nG: %u\r\nB: %u\r\nPriority: %u",
+            color & 0xFFFF, indexText, color & 31, (color >> 5) & 31, (color >> 10) & 31, (color >> 15) & 1);
     }
     if (hoverBank >= 0 && hoverX >= 0 && hoverX < 320 && hoverY >= 0 && hoverY < 240)
         sprintf(text + strlen(text), "\r\nX: %d   Y: %d", hoverX, hoverY);

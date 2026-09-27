@@ -58,13 +58,13 @@ static void palette_hover(void)
     unsigned index;
     GetClientRect(palette, &rect);
     GetDlgItemText(h32X_VDP, IDC_32XVDP_PALINFO, text, sizeof(text));
-    assert(!strcmp(text, "Index: --\r\nR: --\r\nG: --\r\nB: --\r\nPriority: --"));
+    assert(!strcmp(text, "Data: --\r\nIndex: --\r\nR: --\r\nG: --\r\nB: --\r\nPriority: --"));
     for (index = 0; index < 256; ++index)
     {
         SendMessage(palette, WM_MOUSEMOVE, 0,
             MAKELPARAM((index % 8) * (rect.right / 8), (index / 8) * (rect.bottom / 32)));
-        sprintf(expected, "Index: %u (0x%02X)\r\nR: %u\r\nG: %u\r\nB: %u\r\nPriority: %u",
-            index, index, _32X_VDP_CRam[index] & 31, (_32X_VDP_CRam[index] >> 5) & 31,
+        sprintf(expected, "Data: 0x%04X\r\nIndex: %u (0x%02X)\r\nR: %u\r\nG: %u\r\nB: %u\r\nPriority: %u",
+            (unsigned)_32X_VDP_CRam[index], index, index, _32X_VDP_CRam[index] & 31, (_32X_VDP_CRam[index] >> 5) & 31,
             (_32X_VDP_CRam[index] >> 10) & 31, (_32X_VDP_CRam[index] >> 15) & 1);
         GetDlgItemText(h32X_VDP, IDC_32XVDP_PALINFO, text, sizeof(text));
         assert(!strcmp(text, expected));
@@ -72,7 +72,7 @@ static void palette_hover(void)
     _32X_VDP_CRam[255] = 0xFC1F;
     Update32X_VDP_KMod();
     GetDlgItemText(h32X_VDP, IDC_32XVDP_PALINFO, text, sizeof(text));
-    assert(!strcmp(text, "Index: 255 (0xFF)\r\nR: 31\r\nG: 0\r\nB: 31\r\nPriority: 1"));
+    assert(!strcmp(text, "Data: 0xFC1F\r\nIndex: 255 (0xFF)\r\nR: 31\r\nG: 0\r\nB: 31\r\nPriority: 1"));
     SendMessage(palette, WM_MOUSEMOVE, 0, MAKELPARAM(-1, -1));
     assert(paletteIndex == 255);
     puts("PASS: fixed palette readout, all 256 hover cells, live color and bounds");
@@ -109,7 +109,7 @@ static void framebuffer_hover(void)
     _32X_VDP.Mode = 2; fb0[256] = 0xFC1F;
     SendMessage(GetDlgItem(h32X_VDP, IDC_32XVDP_TILES), WM_MOUSEMOVE, 0, MAKELPARAM(0, 0));
     GetDlgItemText(h32X_VDP, IDC_32XVDP_PALINFO, text, sizeof(text));
-    assert(!strcmp(text, "Index: --\r\nR: 31\r\nG: 0\r\nB: 31\r\nPriority: 1\r\nX: 0   Y: 0"));
+    assert(!strcmp(text, "Data: 0xFC1F\r\nIndex: --\r\nR: 31\r\nG: 0\r\nB: 31\r\nPriority: 1\r\nX: 0   Y: 0"));
     assert(!Sample32XPixel(0, 320, 0, &index, &color));
     assert(!Sample32XPixel(0, -1, 0, &index, &color));
     assert(!Sample32XPixel(0, 0, 224, &index, &color));
