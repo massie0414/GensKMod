@@ -54,6 +54,7 @@
 #include "kmod/s32x_reg.h"
 #include "kmod/sdram_32x.h"
 #include "kmod/fps_32x.h"
+#include "kmod/sound_32x.h"
 #include "kmod/mSH2.h"
 #include "kmod/sSH2.h"
 
@@ -1890,6 +1891,7 @@ int PASCAL WinMain(HINSTANCE hInst,	HINSTANCE hPrevInst, LPSTR lpCmdLine, int nC
 	s32xreg_save_window(Str_Tmp);
 	sdram32x_save_window(Str_Tmp);
 	fps32x_save_window(Str_Tmp);
+	sound32x_save_window(Str_Tmp);
 	mSH2_save_window(Str_Tmp);
 	sSH2_save_window(Str_Tmp);
 #endif
@@ -2378,7 +2380,12 @@ long PASCAL WinProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 					return 0;
 #endif
 
-				case ID_CPU_DEBUG_32X_FPS:
+				case ID_CPU_DEBUG_32X_SOUND:
+                    MINIMIZE
+                    Change_Debug(hWnd, DMODE_32_SOUND);
+                    return 0;
+
+                case ID_CPU_DEBUG_32X_FPS:
 					MINIMIZE
 					Change_Debug(hWnd, DMODE_32_FPS);
 					return 0;
@@ -3605,6 +3612,7 @@ HMENU Build_Main_Menu(void)
 		MENU_L(Debug32X, 2, Flags, ID_CPU_DEBUG_32X_REG, "32X Registers", "", "32X Registers");
 		MENU_L(Debug32X, 4, Flags, ID_CPU_DEBUG_32X_SDRAM, "32X - SDRAM", "", "32X - SDRAM");
 		MENU_L(Debug32X, 5, Flags, ID_CPU_DEBUG_32X_FPS, "32X - Frame Rate", "", "32X - Frame Rate");
+        MENU_L(Debug32X, 6, Flags, ID_CPU_DEBUG_32X_SOUND, "32X - Sound", "", "32X - Sound");
 #else
 /* KANEDA_BUG
 	this won't work :

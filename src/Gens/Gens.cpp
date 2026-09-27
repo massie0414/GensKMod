@@ -27,6 +27,7 @@
 #include "wave.h"
 #include "pcm.h"
 #include "pwm.h"
+#include "kmod/sound_32x.h"
 #include "cd_sys.h"
 #include "cd_file.h"
 #include "cd_hle.h"
@@ -1275,6 +1276,7 @@ int Do_32X_Frame_No_VDP()
 		buf[1] = Seg_R + Sound_Extrapol[VDP_Current_Line][0];
 		YM2612_DacAndTimers_Update(buf, Sound_Extrapol[VDP_Current_Line][1]);
         if(CD_32X_Active) { if(PCM_Enable) Update_PCM(buf,Sound_Extrapol[VDP_Current_Line][1]); Update_CDC_TRansfert(); if(S68K_State==1) Cycles_S68K+=CPL_S68K; }
+		sound32x_sample(Sound_Extrapol[VDP_Current_Line][1]);
 		PWM_Update(buf, Sound_Extrapol[VDP_Current_Line][1]);
 		YM_Len += Sound_Extrapol[VDP_Current_Line][1];
 		PSG_Len += Sound_Extrapol[VDP_Current_Line][1];
@@ -1350,6 +1352,7 @@ int Do_32X_Frame_No_VDP()
 	buf[1] = Seg_R + Sound_Extrapol[VDP_Current_Line][0];
 	YM2612_DacAndTimers_Update(buf, Sound_Extrapol[VDP_Current_Line][1]);
         if(CD_32X_Active) { if(PCM_Enable) Update_PCM(buf,Sound_Extrapol[VDP_Current_Line][1]); Update_CDC_TRansfert(); if(S68K_State==1) Cycles_S68K+=CPL_S68K; }
+	sound32x_sample(Sound_Extrapol[VDP_Current_Line][1]);
 	PWM_Update(buf, Sound_Extrapol[VDP_Current_Line][1]);
 	YM_Len += Sound_Extrapol[VDP_Current_Line][1];
 	PSG_Len += Sound_Extrapol[VDP_Current_Line][1];
@@ -1444,6 +1447,7 @@ int Do_32X_Frame_No_VDP()
 		buf[1] = Seg_R + Sound_Extrapol[VDP_Current_Line][0];
 		YM2612_DacAndTimers_Update(buf, Sound_Extrapol[VDP_Current_Line][1]);
         if(CD_32X_Active) { if(PCM_Enable) Update_PCM(buf,Sound_Extrapol[VDP_Current_Line][1]); Update_CDC_TRansfert(); if(S68K_State==1) Cycles_S68K+=CPL_S68K; }
+		sound32x_sample(Sound_Extrapol[VDP_Current_Line][1]);
 		PWM_Update(buf, Sound_Extrapol[VDP_Current_Line][1]);
 		YM_Len += Sound_Extrapol[VDP_Current_Line][1];
 		PSG_Len += Sound_Extrapol[VDP_Current_Line][1];
@@ -1571,6 +1575,7 @@ int Do_32X_Frame()
 		buf[1] = Seg_R + Sound_Extrapol[VDP_Current_Line][0];
 		YM2612_DacAndTimers_Update(buf, Sound_Extrapol[VDP_Current_Line][1]);
         if(CD_32X_Active) { if(PCM_Enable) Update_PCM(buf,Sound_Extrapol[VDP_Current_Line][1]); Update_CDC_TRansfert(); if(S68K_State==1) Cycles_S68K+=CPL_S68K; }
+		sound32x_sample(Sound_Extrapol[VDP_Current_Line][1]);
 		PWM_Update(buf, Sound_Extrapol[VDP_Current_Line][1]);
 		YM_Len += Sound_Extrapol[VDP_Current_Line][1];
 		PSG_Len += Sound_Extrapol[VDP_Current_Line][1];
@@ -1645,6 +1650,7 @@ int Do_32X_Frame()
 	buf[1] = Seg_R + Sound_Extrapol[VDP_Current_Line][0];
 	YM2612_DacAndTimers_Update(buf, Sound_Extrapol[VDP_Current_Line][1]);
         if(CD_32X_Active) { if(PCM_Enable) Update_PCM(buf,Sound_Extrapol[VDP_Current_Line][1]); Update_CDC_TRansfert(); if(S68K_State==1) Cycles_S68K+=CPL_S68K; }
+	sound32x_sample(Sound_Extrapol[VDP_Current_Line][1]);
 	PWM_Update(buf, Sound_Extrapol[VDP_Current_Line][1]);
 	YM_Len += Sound_Extrapol[VDP_Current_Line][1];
 	PSG_Len += Sound_Extrapol[VDP_Current_Line][1];
@@ -1739,6 +1745,7 @@ int Do_32X_Frame()
 		buf[1] = Seg_R + Sound_Extrapol[VDP_Current_Line][0];
 		YM2612_DacAndTimers_Update(buf, Sound_Extrapol[VDP_Current_Line][1]);
         if(CD_32X_Active) { if(PCM_Enable) Update_PCM(buf,Sound_Extrapol[VDP_Current_Line][1]); Update_CDC_TRansfert(); if(S68K_State==1) Cycles_S68K+=CPL_S68K; }
+		sound32x_sample(Sound_Extrapol[VDP_Current_Line][1]);
 		PWM_Update(buf, Sound_Extrapol[VDP_Current_Line][1]);
 		YM_Len += Sound_Extrapol[VDP_Current_Line][1];
 		PSG_Len += Sound_Extrapol[VDP_Current_Line][1];
