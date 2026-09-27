@@ -52,6 +52,7 @@
 #include "kmod/sprites.h"
 #include "kmod/vdp_32x.h"
 #include "kmod/s32x_reg.h"
+#include "kmod/sdram_32x.h"
 #include "kmod/mSH2.h"
 #include "kmod/sSH2.h"
 
@@ -1886,6 +1887,7 @@ int PASCAL WinMain(HINSTANCE hInst,	HINSTANCE hPrevInst, LPSTR lpCmdLine, int nC
 	sprites_save_window(Str_Tmp);
 	vdp32x_save_window(Str_Tmp);
 	s32xreg_save_window(Str_Tmp);
+	sdram32x_save_window(Str_Tmp);
 	mSH2_save_window(Str_Tmp);
 	sSH2_save_window(Str_Tmp);
 #endif
@@ -2373,6 +2375,11 @@ long PASCAL WinProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 					Change_Debug(hWnd, DMODE_32_VDP);
 					return 0;
 #endif
+
+				case ID_CPU_DEBUG_32X_SDRAM:
+					MINIMIZE
+					Change_Debug(hWnd, DMODE_32_SDRAM);
+					return 0;
 
 				case ID_CPU_DEBUG_32X_REG:
 					MINIMIZE
@@ -3589,6 +3596,7 @@ HMENU Build_Main_Menu(void)
 		MENU_L(Debug32X, 1, Flags, ID_CPU_DEBUG_32X_SUBSH2, "Slave SH2", "", "Slave SH2");
 		MENU_L(Debug32X, 2, Flags, ID_CPU_DEBUG_32X_VDP, "32X - VDP", "", "32X - VDP");
 		MENU_L(Debug32X, 2, Flags, ID_CPU_DEBUG_32X_REG, "32X Registers", "", "32X Registers");
+		MENU_L(Debug32X, 4, Flags, ID_CPU_DEBUG_32X_SDRAM, "32X - SDRAM", "", "32X - SDRAM");
 #else
 /* KANEDA_BUG
 	this won't work :

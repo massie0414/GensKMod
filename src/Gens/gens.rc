@@ -1085,3 +1085,17 @@ END
 /////////////////////////////////////////////////////////////////////////////
 #endif    // not APSTUDIO_INVOKED
 
+
+IDD_DEBUG32X_SDRAM DIALOGEX 0, 0, 330, 305
+STYLE DS_SETFONT | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "32X - SDRAM"
+FONT 8, "MS Shell Dlg"
+BEGIN
+    LTEXT "",IDC_32XSDRAM_SUMMARY,10,10,310,54
+    CONTROL "",IDC_32XSDRAM_USAGE,"msctls_progress32",WS_BORDER,10,66,310,12
+    LTEXT "Estimate: non-zero bytes / total bytes. Zero-filled data may be in use;
+old data may remain after release. This is not allocated memory usage.",-1,10,84,310,25
+    GROUPBOX "16 KiB blocks - non-zero bytes",-1,7,115,316,163
+    LTEXT "",IDC_32XSDRAM_BLOCKS,16,128,298,145
+    LTEXT "Shared by Master / Slave SH2. Refreshes every 250 ms.",-1,10,287,310,10
+END
