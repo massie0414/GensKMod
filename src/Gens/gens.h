@@ -42,7 +42,8 @@ extern "C" {
 #define DMODE_32_SDRAM 21
 #define DMODE_32_FPS 22
 #define DMODE_32_SOUND 23
-#define WIN_NUMBER	DMODE_32_SOUND
+#define DMODE_32_MEMORY 24
+#define WIN_NUMBER	DMODE_32_MEMORY
 
 extern int Debug;
 extern int Frame_Skip;

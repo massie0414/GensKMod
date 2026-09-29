@@ -30,6 +30,7 @@
 #include "sdram_32x.h"
 #include "fps_32x.h"
 #include "sound_32x.h"
+#include "memory_32x.h"
 
 
 ULONG	timer_KMod;
@@ -112,6 +113,9 @@ void CloseWindow_KMod(UCHAR mode)
 	case DMODE_32_VDP:
 		vdp32x_show(FALSE);
 		break;
+	case DMODE_32_MEMORY:
+        memory32x_show(FALSE);
+        break;
 	case DMODE_32_SOUND:
         sound32x_show(FALSE);
         break;
@@ -195,6 +199,9 @@ void OpenWindow_KMod(UCHAR mode)
 	case DMODE_32_VDP:
 		vdp32x_show(TRUE);
 		break;
+	case DMODE_32_MEMORY:
+        memory32x_show(TRUE);
+        break;
 	case DMODE_32_SOUND:
         sound32x_show(TRUE);
         break;
