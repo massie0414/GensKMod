@@ -26,16 +26,21 @@ static WNDPROC paletteWindowProc;
 static int paletteIndex = -1;
 static int hoverBank = -1, hoverX, hoverY;
 static WNDPROC framebufferWindowProc[2];
-static BOOL Sample32XPixel(unsigned bank, int x, int y, int *index, unsigned *color);
+static BOOL Sample32XPixel(unsigned bank, int x, int y, int *index, unsigned *color, unsigned *offset);
 
 static void Update32XPaletteInfo(void)
 {
     char text[128], old[128], indexText[32];
-    unsigned color = 0;
+    unsigned color = 0, offset = 0;
     BOOL valid = paletteIndex >= 0;
     if (hoverBank >= 0)
-        valid = Sample32XPixel(hoverBank, hoverX, hoverY, &paletteIndex, &color);
+        valid = Sample32XPixel(hoverBank, hoverX, hoverY, &paletteIndex, &color, &offset);
     else if (valid) color = _32X_VDP_CRam[paletteIndex];
+    if (hoverBank >= 0 && valid)
+        sprintf(text, "FB%d +0x%05X", hoverBank, offset);
+    else strcpy(text, "Address: --");
+    GetDlgItemText(h32X_VDP, IDC_32XVDP_ADDRESS, old, sizeof(old));
+    if (strcmp(text, old)) SetDlgItemText(h32X_VDP, IDC_32XVDP_ADDRESS, text);
     if (!valid)
         strcpy(text, "Data: --\r\nIndex: --\r\nR: --\r\nG: --\r\nB: --\r\nPriority: --");
     else
@@ -223,7 +228,7 @@ static void Decode32X_KMod(unsigned bank, DWORD *pixels)
 }
 
 /* Match the preview's addressing, including packed-pixel shift and RLE runs. */
-static BOOL Sample32XPixel(unsigned bank, int x, int y, int *index, unsigned *color)
+static BOOL Sample32XPixel(unsigned bank, int x, int y, int *index, unsigned *color, unsigned *offset)
 {
     const WORD *fb = (const WORD *)(_32X_VDP_Ram + bank * 0x20000);
     unsigned mode = _32X_VDP.Mode & 3;
@@ -231,12 +236,14 @@ static BOOL Sample32XPixel(unsigned bank, int x, int y, int *index, unsigned *co
     BOOL raw = IsDlgButtonChecked(h32X_VDP, IDC_32XVDP_FB1) == BST_CHECKED;
     BOOL lineTable = IsDlgButtonChecked(h32X_VDP, IDC_32XVDP_FB2) == BST_CHECKED;
     *index = -1;
+    *offset = 0;
     if (x < 0 || y < 0 || x >= VDP32X_VIEW_WIDTH || y >= VDP32X_VIEW_HEIGHT) return FALSE;
     if (raw || lineTable)
     {
         address = (lineTable ? fb[y] : 256 + y * VDP32X_VIEW_WIDTH) + x;
         if (address >= VDP32X_FB_WORDS) return FALSE;
         *color = fb[address];
+        *offset = address * 2;
         return TRUE;
     }
     if ((!_32X_Started && !CD_32X_Active) || !mode || y >= VDP_Num_Vis_Lines) return FALSE;
@@ -250,6 +257,7 @@ static BOOL Sample32XPixel(unsigned bank, int x, int y, int *index, unsigned *co
             end += (word >> 8) + 1;
         } while (end <= (unsigned)x);
         *index = word & 255;
+        *offset = (address - 1) * 2; /* Address of the run descriptor. */
     }
     else
     {
@@ -257,6 +265,8 @@ static BOOL Sample32XPixel(unsigned bank, int x, int y, int *index, unsigned *co
         address += mode == 1 ? pixel / 2 : x;
         if (address >= VDP32X_FB_WORDS) return FALSE;
         word = fb[address];
+        /* Logical big-endian byte order, independent of host word storage. */
+        *offset = address * 2 + (mode == 1 ? (pixel & 1) : 0);
         if (mode == 2) { *color = word; return TRUE; }
         *index = (pixel & 1) ? (word & 255) : (word >> 8);
     }
