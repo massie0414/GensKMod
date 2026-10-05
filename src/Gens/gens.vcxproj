@@ -462,6 +462,8 @@
     <ClInclude Include="kmod\fps_32x.h" />
     <ClCompile Include="kmod\fps_32x.c" />
     <ClCompile Include="kmod\memory_32x.c" />
+    <ClCompile Include="kmod\disassembly.c" />
+    <ClInclude Include="kmod\disassembly.h" />
     <ClInclude Include="kmod\memory_32x.h" />
     <ClCompile Include="kmod\sound_32x.c" />
     <ClInclude Include="kmod\sound_32x.h" />

@@ -40,6 +40,7 @@
 #include "kmod\fps_32x.h"
 #include "kmod/memory_32x.h"
 #include "kmod/sound_32x.h"
+#include "kmod/disassembly.h"
 
 #define TIMER_CYCLES		66480	/* cycles used by timer call */
 
@@ -198,6 +199,7 @@ void Init_KMod( )
 	fps32x_create(ghInstance, HWnd);
 	sound32x_create(ghInstance, HWnd);
 	memory32x_create(ghInstance, HWnd);
+    disassembly_create(ghInstance, HWnd);
 
 	layers_create(ghInstance, HWnd);
 	watchers_create(ghInstance, HWnd);
@@ -293,7 +295,7 @@ void kmod_close()
 	{
 		// Restored windows stay open when loading another ROM.
 		if (OpenedWindow_KMod[mode] && mode != (DMODE_MSG - 1) &&
-			mode != (DMODE_PLANE_A - 1) && mode != (DMODE_PLANE_B - 1) &&
+			mode != (DMODE_DISASSEMBLY - 1) && mode != (DMODE_PLANE_A - 1) && mode != (DMODE_PLANE_B - 1) &&
 			mode != (DMODE_VDP - 1) && mode != (DMODE_SPRITES - 1) &&
 			mode != (DMODE_32_MEMORY - 1) && mode != (DMODE_32_SOUND - 1) && mode != (DMODE_32_FPS - 1) && mode != (DMODE_32_SDRAM - 1) && mode != (DMODE_32_VDP - 1) && mode != (DMODE_32_REG - 1) &&
 			mode != (DMODE_32_MSH2 - 1) && mode != (DMODE_32_SSH2 - 1))
@@ -303,6 +305,7 @@ void kmod_close()
 	}
 
 	fps32x_reset();
+    disassembly_clear();
 	sound32x_reset();
 	//start_tiles = 0;
 
@@ -324,6 +327,7 @@ void ResetDebug_KMod(  )
 	watchers_reset();
 	layers_reset();
 	planes_reset();
+    disassembly_reset();
 
 	m68kdebug_reset();
 	z80debug_reset();

@@ -43,7 +43,8 @@ extern "C" {
 #define DMODE_32_FPS 22
 #define DMODE_32_SOUND 23
 #define DMODE_32_MEMORY 24
-#define WIN_NUMBER	DMODE_32_MEMORY
+#define DMODE_DISASSEMBLY 25
+#define WIN_NUMBER DMODE_DISASSEMBLY
 
 extern int Debug;
 extern int Frame_Skip;

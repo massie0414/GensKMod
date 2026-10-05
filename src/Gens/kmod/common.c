@@ -9,6 +9,7 @@
 #include "watchers.h"
 #include "layers.h"
 #include "planes.h"
+#include "disassembly.h"
 
 #include "m68k.h"
 #include "z80.h"
@@ -56,7 +57,10 @@ void CloseWindow_KMod(UCHAR mode)
 
 	switch (mode)
 	{
-	case DMODE_MSG:
+	case DMODE_DISASSEMBLY:
+        disassembly_show(OpenedWindow_KMod[mode - 1]);
+        break;
+    case DMODE_MSG:
 		message_show(FALSE);
 		break;
 	case DMODE_WATCHERS:
@@ -142,7 +146,10 @@ void OpenWindow_KMod(UCHAR mode)
 
 	switch (mode)
 	{
-	case DMODE_MSG:
+	case DMODE_DISASSEMBLY:
+        disassembly_show(OpenedWindow_KMod[mode - 1]);
+        break;
+    case DMODE_MSG:
 		message_show(TRUE);
 		break;
 	case DMODE_WATCHERS:
