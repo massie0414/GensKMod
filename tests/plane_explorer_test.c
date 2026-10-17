@@ -100,7 +100,14 @@ static void test_visibility_persistence(void)
     WritePrivateProfileString("Debug", "Spy", "123", config_file);
 
     create_session_windows();
+    for (plane = 0; plane < PLANE_COUNT; ++plane)
+        explorers[plane].show_transparence = TRUE;
     planes_restore_visibility(config_file);
+    for (plane = 0; plane < PLANE_COUNT; ++plane)
+    {
+        assert(!explorers[plane].show_transparence);
+        assert(IsDlgButtonChecked(explorers[plane].hwnd, IDC_PLANEEXPLORER_TRANS) == BST_UNCHECKED);
+    }
     assert(!IsWindowVisible(explorers[0].hwnd));
     assert(!IsWindowVisible(explorers[1].hwnd));
     planes_destroy();
@@ -113,9 +120,15 @@ static void test_visibility_persistence(void)
             BOOL visible = (mask & (1 << plane)) != 0;
             OpenedWindow_KMod[PlaneExplorerMode(plane) - 1] = visible;
             planes_show(plane, visible);
+            /* Exercise checkbox commands, including options on hidden windows. */
+            CheckDlgButton(explorers[plane].hwnd, IDC_PLANEEXPLORER_TRANS,
+                visible ? BST_UNCHECKED : BST_CHECKED);
+            SendMessage(explorers[plane].hwnd, WM_COMMAND,
+                MAKEWPARAM(IDC_PLANEEXPLORER_TRANS, BN_CLICKED), 0);
         }
         planes_save_visibility(config_file);
         planes_destroy();
+        memset(explorers, 0, sizeof(explorers)); /* Simulate a fresh process. */
         create_session_windows();
         planes_restore_visibility(config_file);
         planes_reset(); /* Loading a ROM must preserve restored visibility. */
@@ -124,6 +137,9 @@ static void test_visibility_persistence(void)
             BOOL expected = (mask & (1 << plane)) != 0;
             assert(IsWindowVisible(explorers[plane].hwnd) == expected);
             assert(OpenedWindow_KMod[PlaneExplorerMode(plane) - 1] == expected);
+            assert(explorers[plane].show_transparence == !expected);
+            assert(IsDlgButtonChecked(explorers[plane].hwnd, IDC_PLANEEXPLORER_TRANS) ==
+                (expected ? BST_UNCHECKED : BST_CHECKED));
         }
         planes_destroy();
     }

@@ -32,6 +32,10 @@ typedef struct PlaneExplorer
 } PlaneExplorer;
 
 static PlaneExplorer explorers[PLANE_COUNT];
+static const char *plane_option_keys[PLANE_COUNT] = {
+	"PlaneATransparency", "PlaneBTransparency", "SpriteScreenTransparency",
+	"WindowTransparency", "ShadowMaskOnly", "HighlightMaskOnly"
+};
 static COLORREF plane_explorer_palette[256];
 static int selected_screen_sprite = -1;
 
@@ -739,6 +743,10 @@ void planes_destroy()
 /* Keep session state separate from the debug options dialog's Apply/Cancel. */
 void planes_save_visibility(const char *config_file)
 {
+	int plane;
+	for (plane = 0; plane < PLANE_COUNT; ++plane)
+		WritePrivateProfileString("DebugWindows", plane_option_keys[plane],
+			explorers[plane].show_transparence ? "1" : "0", config_file);
  WritePrivateProfileString("DebugWindows", "ShadowOpen", OpenedWindow_KMod[DMODE_SHADOW - 1] ? "1" : "0", config_file);
  WritePrivateProfileString("DebugWindows", "HighlightOpen", OpenedWindow_KMod[DMODE_HIGHLIGHT - 1] ? "1" : "0", config_file);
  DebugWindow_SaveGeometry(explorers[4].hwnd, "ShadowRect", config_file);
@@ -763,6 +771,11 @@ void planes_restore_visibility(const char *config_file)
 	{
 		BOOL visible = GetPrivateProfileInt("DebugWindows",
 			plane == 4 ? "ShadowOpen" : plane == 5 ? "HighlightOpen" : plane == 3 ? "WindowOpen" : plane == 2 ? "SpriteScreenOpen" : plane == 0 ? "PlaneAOpen" : "PlaneBOpen", 0, config_file) != 0;
+		explorers[plane].show_transparence = GetPrivateProfileInt("DebugWindows",
+			plane_option_keys[plane], 0, config_file) != 0;
+		CheckDlgButton(explorers[plane].hwnd, IDC_PLANEEXPLORER_TRANS,
+			explorers[plane].show_transparence ? BST_CHECKED : BST_UNCHECKED);
+		InvalidateRect(explorers[plane].hwnd, NULL, FALSE);
 		DebugWindow_RestoreGeometry(explorers[plane].hwnd,
 			plane == 4 ? "ShadowRect" : plane == 5 ? "HighlightRect" : plane == 3 ? "WindowRect" : plane == 2 ? "SpriteScreenRect" : plane == 0 ? "PlaneARect" : "PlaneBRect", config_file);
 		OpenedWindow_KMod[PlaneExplorerMode(plane) - 1] =
