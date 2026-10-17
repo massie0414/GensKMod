@@ -10,6 +10,8 @@ void cdcdebug_show(BOOL visibility);
 void cdcdebug_update();
 void cdcdebug_reset();
 void cdcdebug_destroy();
+void cdcdebug_save_window(const char *config_file);
+void cdcdebug_restore_window(const char *config_file);
 
 #ifdef __cplusplus
 };

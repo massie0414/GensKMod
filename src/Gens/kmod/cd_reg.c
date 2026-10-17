@@ -13,8 +13,31 @@
 #include "common.h"
 #include "utils.h"
 #include "cd_reg.h"
+#include "window_geometry.h"
 
 static HWND hCD_Reg, hCDRegList;
+
+static void CDRegFitList_KMod(HWND hwnd)
+{
+	RECT listRect, clientRect, rowRect, dialogRect;
+	int width, height, column;
+	GetWindowRect(hCDRegList, &listRect);
+	GetClientRect(hCDRegList, &clientRect);
+	if (!ListView_GetItemRect(hCDRegList, 0, &rowRect, LVIR_BOUNDS)) return;
+	width = (listRect.right - listRect.left) - clientRect.right;
+	for (column = 0; column < 3; column++)
+		width += ListView_GetColumnWidth(hCDRegList, column);
+	height = rowRect.top +
+		(rowRect.bottom - rowRect.top) * ListView_GetItemCount(hCDRegList) +
+		(listRect.bottom - listRect.top) - clientRect.bottom;
+	GetWindowRect(hwnd, &dialogRect);
+	SetWindowPos(hCDRegList, NULL, 0, 0, width, height,
+		SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+	SetWindowPos(hwnd, NULL, 0, 0,
+		dialogRect.right - dialogRect.left + width - (listRect.right - listRect.left),
+		dialogRect.bottom - dialogRect.top + height - (listRect.bottom - listRect.top),
+		SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+}
 
 void CDRegInit_KMod(HWND hwnd)
 {
@@ -22,25 +45,27 @@ void CDRegInit_KMod(HWND hwnd)
 	LVITEM		lvItem;
 	int         i;
 	char		buf[64];
-	RECT		rSize;
 	TCHAR       szString[3][20] = { "Address (hex)", "MainCPU (0xA12000)", "SubCPU (0xFF8000)" };
 
 	hCDRegList = GetDlgItem(hwnd, IDC_CD_REG_LIST);
 	ListView_DeleteAllItems(hCDRegList);
 
-	GetWindowRect(hCDRegList, &rSize);
+	while (ListView_DeleteColumn(hCDRegList, 0)) {}
 
 	lvColumn.mask = LVCF_FMT | LVCF_WIDTH | LVCF_TEXT /*| LVCF_SUBITEM*/;
 	lvColumn.fmt = LVCFMT_LEFT;
-	lvColumn.cx = 80; // ((rSize.right - rSize.left -5)/3);
+	lvColumn.cx = ListView_GetStringWidth(hCDRegList, szString[0]) +
+		ListView_GetStringWidth(hCDRegList, "    ");
 	lvColumn.pszText = szString[0];
 	ListView_InsertColumn(hCDRegList, 0, &lvColumn);
 
-	lvColumn.cx = 0x75;
+	lvColumn.cx = ListView_GetStringWidth(hCDRegList, szString[1]) +
+		ListView_GetStringWidth(hCDRegList, "    ");
 	lvColumn.pszText = szString[1];
 	ListView_InsertColumn(hCDRegList, 1, &lvColumn);
 
-	lvColumn.cx = 0x75;
+	lvColumn.cx = ListView_GetStringWidth(hCDRegList, szString[2]) +
+		ListView_GetStringWidth(hCDRegList, "    ");
 	lvColumn.pszText = szString[2];
 	ListView_InsertColumn(hCDRegList, 2, &lvColumn);
 
@@ -52,7 +77,7 @@ void CDRegInit_KMod(HWND hwnd)
 		lvItem.iSubItem = 0;
 		wsprintf(buf, "%0.2X", i);
 		lvItem.pszText = buf;
-		lvItem.iItem = i;
+		lvItem.iItem = i / 2;
 		ListView_InsertItem(hCDRegList, &lvItem);
 
 		lvItem.iSubItem = 1;
@@ -103,16 +128,21 @@ BOOL CALLBACK CD_RegDlgProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lPara
 	switch (Message)
 	{
 	case WM_INITDIALOG:
+		HandleWindow_KMod[DMODE_CD_REG - 1] = hwnd;
 		CDRegInit_KMod(hwnd);
+		CDRegFitList_KMod(hwnd);
 		break;
 
+	case WM_COMMAND:
+		if (LOWORD(wParam) != IDCANCEL) return FALSE;
 	case WM_CLOSE:
 		CloseWindow_KMod(DMODE_CD_REG);
 		break;
 
 	case WM_DESTROY:
-		DestroyWindow(hCD_Reg);
-		PostQuitMessage(0);
+		hCD_Reg = hCDRegList = NULL;
+		HandleWindow_KMod[DMODE_CD_REG - 1] = NULL;
+		OpenedWindow_KMod[DMODE_CD_REG - 1] = FALSE;
 		break;
 
 	default:
@@ -145,6 +175,27 @@ void cdreg_reset()
 }
 void cdreg_destroy()
 {
-	DestroyWindow(hCD_Reg);
+	if (hCD_Reg) DestroyWindow(hCD_Reg);
+}
+
+void cdreg_save_window(const char *config_file)
+{
+	WritePrivateProfileString("DebugWindows", "CDRegOpen",
+		OpenedWindow_KMod[DMODE_CD_REG - 1] ? "1" : "0", config_file);
+	DebugWindow_SaveGeometry(hCD_Reg, "CDRegRect", config_file);
+}
+
+void cdreg_restore_window(const char *config_file)
+{
+	RECT rect;
+	BOOL visible = GetPrivateProfileInt("DebugWindows", "CDRegOpen", 0, config_file) != 0;
+	if (!hCD_Reg) return;
+	GetWindowRect(hCD_Reg, &rect);
+	DebugWindow_RestoreGeometry(hCD_Reg, "CDRegRect", config_file);
+	/* Keep the size measured for all registers at the current font size. */
+	SetWindowPos(hCD_Reg, NULL, 0, 0, rect.right - rect.left, rect.bottom - rect.top,
+		SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+	OpenedWindow_KMod[DMODE_CD_REG - 1] = visible;
+	cdreg_show(visible);
 }
 

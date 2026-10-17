@@ -12,23 +12,51 @@
 #include "common.h"
 #include "utils.h"
 #include "cdc.h"
+#include "window_geometry.h"
 
 static HWND hCD_CDC;
 HWND hCDCDCList;
+
+static void CD_CDCFitList(HWND hwnd)
+{
+	RECT listRect, clientRect, rowRect, dialogRect;
+	int width, height, column;
+
+	/* Use actual font metrics so all registers fit at the current DPI. */
+	for (column = 0; column < 2; column++)
+		ListView_SetColumnWidth(hCDCDCList, column, LVSCW_AUTOSIZE);
+	GetWindowRect(hCDCDCList, &listRect);
+	GetClientRect(hCDCDCList, &clientRect);
+	if (!ListView_GetItemRect(hCDCDCList, 0, &rowRect, LVIR_BOUNDS)) return;
+	width = ListView_GetColumnWidth(hCDCDCList, 0) +
+		ListView_GetColumnWidth(hCDCDCList, 1) +
+		(listRect.right - listRect.left) - clientRect.right;
+	height = rowRect.top +
+		(rowRect.bottom - rowRect.top) * ListView_GetItemCount(hCDCDCList) +
+		(listRect.bottom - listRect.top) - clientRect.bottom;
+	GetWindowRect(hwnd, &dialogRect);
+	SetWindowPos(hCDCDCList, NULL, 0, 0, width, height,
+		SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+	SetWindowPos(hwnd, NULL, 0, 0,
+		dialogRect.right - dialogRect.left + width - (listRect.right - listRect.left),
+		dialogRect.bottom - dialogRect.top + height - (listRect.bottom - listRect.top),
+		SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+}
 
 void CD_CDCInit_KMod(HWND hwnd)
 {
 	LV_COLUMN   lvColumn;
 	LVITEM		lvItem;
+	int column;
 	//	int         i;
 	char		buf[64];
-	RECT		rSize;
 	TCHAR       szString[2][20] = { "Name", "Value" };
 
 	hCDCDCList = GetDlgItem(hwnd, IDC_CDC_LIST);
 	ListView_DeleteAllItems(hCDCDCList);
 
-	GetWindowRect(hCDCDCList, &rSize);
+	/* Reset reinitializes this list too; avoid accumulating duplicate columns. */
+	while (ListView_DeleteColumn(hCDCDCList, 0)) {}
 
 	lvColumn.mask = LVCF_FMT | LVCF_WIDTH | LVCF_TEXT /*| LVCF_SUBITEM*/;
 	lvColumn.fmt = LVCFMT_LEFT;
@@ -153,6 +181,8 @@ void CD_CDCInit_KMod(HWND hwnd)
 	wsprintf(buf, "0x%0.2X", CDC.IFCTRL);
 	lvItem.pszText = buf;
 	ListView_SetItem(hCDCDCList, &lvItem);
+	for (column = 0; column < 2; column++)
+		ListView_SetColumnWidth(hCDCDCList, column, LVSCW_AUTOSIZE);
 }
 
 void UpdateCD_CDC_KMod()
@@ -243,17 +273,22 @@ BOOL CALLBACK CD_CDCDlgProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lPara
 	switch (Message)
 	{
 	case WM_INITDIALOG:
+		HandleWindow_KMod[DMODE_CD_CDC - 1] = hwnd;
 		CD_CDCInit_KMod(hwnd);
+		CD_CDCFitList(hwnd);
 		break;
 
+	case WM_COMMAND:
+		if (LOWORD(wParam) != IDCANCEL) return FALSE;
 	case WM_CLOSE:
 		CloseWindow_KMod(DMODE_CD_CDC);
 		break;
 
 	case WM_DESTROY:
-		cdcdebug_destroy();
-
-		PostQuitMessage(0);
+		hCD_CDC = NULL;
+		hCDCDCList = NULL;
+		HandleWindow_KMod[DMODE_CD_CDC - 1] = NULL;
+		OpenedWindow_KMod[DMODE_CD_CDC - 1] = FALSE;
 		break;
 
 	default:
@@ -286,6 +321,27 @@ void cdcdebug_reset()
 }
 void cdcdebug_destroy()
 {
-	DestroyWindow(hCD_CDC);
+	if (hCD_CDC) DestroyWindow(hCD_CDC);
+}
+
+void cdcdebug_save_window(const char *config_file)
+{
+	WritePrivateProfileString("DebugWindows", "CDCOpen",
+		OpenedWindow_KMod[DMODE_CD_CDC - 1] ? "1" : "0", config_file);
+	DebugWindow_SaveGeometry(hCD_CDC, "CDCRect", config_file);
+}
+
+void cdcdebug_restore_window(const char *config_file)
+{
+	RECT rect;
+	BOOL visible = GetPrivateProfileInt("DebugWindows", "CDCOpen", 0, config_file) != 0;
+	if (!hCD_CDC) return;
+	GetWindowRect(hCD_CDC, &rect);
+	DebugWindow_RestoreGeometry(hCD_CDC, "CDCRect", config_file);
+	/* Retain the fixed size calculated for the current font and all ten rows. */
+	SetWindowPos(hCD_CDC, NULL, 0, 0, rect.right - rect.left, rect.bottom - rect.top,
+		SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+	OpenedWindow_KMod[DMODE_CD_CDC - 1] = visible;
+	cdcdebug_show(visible);
 }
 
