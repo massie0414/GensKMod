@@ -62,6 +62,7 @@ section .bss align=64
 	extern CRam_Flag
 	extern VSRam
 	extern VDP_Reg
+	extern _planes_capture_intensity
 	extern VDP_Current_Line
 	extern VDP_Status
 	extern H_Cell
@@ -1868,6 +1869,12 @@ ALIGN4
 	ALIGN32
 	
 	.VDP_OK
+		; Preserve the composed intensity before palette conversion destroys it.
+		pushad
+		push dword [esp + 32]
+		call _planes_capture_intensity
+		add esp, byte 4
+		popad
 		test byte [CRam_Flag], 1		; teste si la palette a etait modifiee
 		jz near .Palette_OK				; si oui
 

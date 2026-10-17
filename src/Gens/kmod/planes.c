@@ -5,6 +5,7 @@
 #include "../gens.h"
 #include "../resource.h"
 #include "../vdp_io.h"
+#include "../vdp_rend.h"
 
 //TODO remove to use right header(s)
 //#include "../kmod.h"
@@ -13,7 +14,7 @@
 #include "planes.h"
 #include "window_geometry.h"
 
-#define PLANE_COUNT 3
+#define PLANE_COUNT 6
 #define PLANE_BITMAP_WIDTH 1024
 #define PLANE_BITMAP_HEIGHT 2048
 
@@ -43,7 +44,7 @@ void planes_select_sprite(int index)
 
 static UCHAR PlaneExplorerMode(int plane)
 {
-	return plane == 2 ? DMODE_SPRITE_SCREEN : plane == 0 ? DMODE_PLANE_A : DMODE_PLANE_B;
+	return plane == 4 ? DMODE_SHADOW : plane == 5 ? DMODE_HIGHLIGHT : plane == 3 ? DMODE_WINDOW : plane == 2 ? DMODE_SPRITE_SCREEN : plane == 0 ? DMODE_PLANE_A : DMODE_PLANE_B;
 }
 
 static void PlaneExplorerInit_KMod(PlaneExplorer *explorer)
@@ -51,7 +52,10 @@ static void PlaneExplorerInit_KMod(PlaneExplorer *explorer)
 	HWND hexplorer = GetDlgItem(explorer->hwnd, IDC_PLANEXPLEORER_MAIN);
 	RECT rc;
 
-	SetWindowText(explorer->hwnd, explorer->plane == 2 ? "Sprite Screen" : explorer->plane == 0 ? "Plane A" : "Plane B");
+	SetWindowText(explorer->hwnd, explorer->plane == 3 ? "Window" : explorer->plane == 2 ? "Sprite Screen" : explorer->plane == 0 ? "Plane A" : "Plane B");
+    if (explorer->plane == 4) SetWindowTextW(explorer->hwnd, L"\x30b7\x30e3\x30c9\x30a6");
+    if (explorer->plane == 5) SetWindowTextW(explorer->hwnd, L"\x30cf\x30a4\x30e9\x30a4\x30c8");
+    if (explorer->plane >= 4) SetDlgItemText(explorer->hwnd, IDC_PLANEEXPLORER_TRANS, "Mask only");
 	CheckDlgButton(explorer->hwnd, IDC_PLANEEXPLORER_TRANS,
 		explorer->show_transparence ? BST_CHECKED : BST_UNCHECKED);
 	explorer->old_width = 0;
@@ -251,15 +255,27 @@ static void SpriteScreen_UpdateBitmap(PlaneExplorer *explorer)
     SetDlgItemText(explorer->hwnd, IDC_PLANEEXPLORER_PROPS, text);
 }
 
+/* Window maps have fixed dimensions, independent of the scrolling planes. */
+static unsigned int PlaneWidth(int plane) {
+ return plane == 3 ? ((VDP_Reg.Set4 & 1) ? 64 : 32) : 32 + (VDP_Reg.Scr_Size & 3) * 32;
+}
+static unsigned int PlaneHeight(int plane) {
+ return plane == 3 ? 32 : 32 + ((VDP_Reg.Scr_Size >> 4) & 3) * 32;
+}
+static unsigned int PlaneBase(int plane) {
+ if (plane == 3) return (VDP_Reg.Pat_Win_Adr & ((VDP_Reg.Set4 & 1) ? 0x3c : 0x3e)) << 10;
+ return plane == 0 ? (VDP_Reg.Pat_ScrA_Adr & 0x38) << 10 : (VDP_Reg.Pat_ScrB_Adr & 7) << 13;
+}
+
 static void PlaneExplorer_UpdateBitmap(PlaneExplorer *explorer)
 {
 	unsigned int i, j;
 
-	unsigned int plane_width = 32 + (VDP_Reg.Scr_Size & 0x3) * 32;
-	unsigned int plane_height = 32 + ((VDP_Reg.Scr_Size >> 4) & 0x3) * 32;
+	unsigned int plane_width = PlaneWidth(explorer->plane);
+	unsigned int plane_height = PlaneHeight(explorer->plane);
 	unsigned int plane_a_base = (VDP_Reg.Pat_ScrA_Adr & 0x38) << 10;
 	unsigned int plane_b_base = (VDP_Reg.Pat_ScrB_Adr & 0x7) << 13;
-	unsigned int plane_base = explorer->plane == 0 ? plane_a_base : plane_b_base;
+	unsigned int plane_base = PlaneBase(explorer->plane);
 	unsigned int tile_height = ((VDP_Reg.Set4 & 0x6) == 6) ? 16 : 8;
 
 	if (plane_width != explorer->old_width ||
@@ -287,6 +303,69 @@ static void PlaneExplorer_UpdateBitmap(PlaneExplorer *explorer)
 			PlaneExplorer_DrawTile(explorer, *(unsigned short *)&VRam[address], i, j, trans_color);
 		}
 	}
+}
+
+/* 0x40 = shadow, 0x80 = highlight, 0x00/0xc0 = normal.
+ * These are final composition flags, not colors of the operator sprites. */
+static unsigned char intensity_map[320 * 240];
+static unsigned int intensity_width, intensity_height;
+static BOOL intensity_valid, intensity_enabled;
+
+void planes_capture_intensity(unsigned int line_offset)
+{
+    unsigned int y = line_offset / 336, x;
+    unsigned int width = (VDP_Reg.Set4 & 1) ? 320 : 256;
+    unsigned int height = (VDP_Reg.Set2 & 8) ? 240 : 224;
+    /* H32 and H40 both start at pixel 8 in the renderer buffer. */
+    unsigned int left = 8;
+    BOOL enabled = (VDP_Reg.Set4 & 8) && (VDP_Reg.Set2 & 0x40);
+    if (y >= height || line_offset != y * 336) return;
+    if (y == 0) {
+        memset(intensity_map, 0, sizeof(intensity_map));
+        intensity_enabled = FALSE;
+        intensity_width = width; intensity_height = height;
+        intensity_valid = TRUE;
+    }
+    intensity_enabled |= enabled;
+    for (x = 0; x < width; x++)
+        intensity_map[y * 320 + x] = enabled ? (MD_Screen[line_offset + left + x] & 0xc0) : 0;
+}
+
+static void IntensityPaint(PlaneExplorer *explorer, LPDRAWITEMSTRUCT item)
+{
+    unsigned int pixels[320 * 240], x, y, count = 0;
+    unsigned int width = intensity_valid ? intensity_width : 320;
+    unsigned int height = intensity_valid ? intensity_height : 224;
+    unsigned int target = explorer->plane == 4 ? 0x40 : 0x80;
+    unsigned int color = explorer->plane == 4 ? 0x00ffff : 0xffc040;
+    int aw = item->rcItem.right - item->rcItem.left, ah = item->rcItem.bottom - item->rcItem.top;
+    int dw = min(aw, MulDiv(ah, width, height)), dh = MulDiv(dw, height, width);
+    BITMAPINFO bmi = {0};
+    char text[256];
+    for (y = 0; y < height; y++) for (x = 0; x < width; x++) {
+        BOOL match = intensity_valid && intensity_map[y * 320 + x] == target;
+        unsigned int v = MD_Screen[y * 336 + 8 + x];
+        unsigned int r = (v >> ((Mode_555 & 1) ? 10 : 11)) & 31;
+        unsigned int g = (v >> 5) & ((Mode_555 & 1) ? 31 : 63);
+        unsigned int b = v & 31;
+        unsigned int gray = (r * 255 / 31 + g * 255 / ((Mode_555 & 1) ? 31 : 63) + b * 255 / 31) / 12;
+        pixels[y * width + x] = match ? color : (!intensity_valid || explorer->show_transparence) ? 0 : gray * 0x010101;
+        if (match) count++;
+    }
+    bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    bmi.bmiHeader.biWidth = width; bmi.bmiHeader.biHeight = -(int)height;
+    bmi.bmiHeader.biPlanes = 1; bmi.bmiHeader.biBitCount = 32;
+    FillRect(item->hDC, &item->rcItem, GetSysColorBrush(COLOR_3DFACE));
+    SetStretchBltMode(item->hDC, COLORONCOLOR);
+    if (dw > 0 && dh > 0) StretchDIBits(item->hDC,
+        item->rcItem.left + (aw-dw)/2, item->rcItem.top + (ah-dh)/2, dw, dh,
+        0, 0, width, height, pixels, &bmi, DIB_RGB_COLORS, SRCCOPY);
+    wsprintf(text, "%s = %s | %u pixels (%u.%u%%) | %s",
+        explorer->plane == 4 ? "Cyan" : "Orange", explorer->plane == 4 ? "Shadow" : "Highlight",
+        count, count * 100 / (width * height), (count * 1000 / (width * height)) % 10,
+        !intensity_valid ? "No rendered frame" : intensity_enabled ? "S/H enabled" : "S/H disabled");
+    SetDlgItemText(explorer->hwnd, IDC_PLANEEXPLORER_PROPS, text);
+    SetDlgItemText(explorer->hwnd, IDC_PLANEEXPLORER_TILEINFO, "Dim image: other pixels. Mask only: colored areas on black.");
 }
 
 static void PlaneExplorerPaint_KMod(PlaneExplorer *explorer, LPDRAWITEMSTRUCT lpdi)
@@ -321,6 +400,7 @@ static void PlaneExplorerPaint_KMod(PlaneExplorer *explorer, LPDRAWITEMSTRUCT lp
 	unsigned int plane_b_base = (VDP_Reg.Pat_ScrB_Adr & 0x7) << 13;
 
 	char buffer[1024];
+    if (explorer->plane >= 4) { IntensityPaint(explorer, lpdi); return; }
 	PlaneExplorer_UpdatePalette();
 	if (explorer->plane == 2) SpriteScreen_UpdateBitmap(explorer);
 	else PlaneExplorer_UpdateBitmap(explorer);
@@ -379,6 +459,12 @@ static void PlaneExplorerPaint_KMod(PlaneExplorer *explorer, LPDRAWITEMSTRUCT lp
 		DIB_RGB_COLORS);
 
 	if (explorer->plane == 2) return;
+ if (explorer->plane == 3) {
+  wsprintf(buffer, "Width: %d Height: %d  Window Base: 0x%04X  H: 0x%02X V: 0x%02X",
+   PlaneWidth(3), PlaneHeight(3), PlaneBase(3), VDP_Reg.Win_H_Pos, VDP_Reg.Win_V_Pos);
+  SetDlgItemText(explorer->hwnd, IDC_PLANEEXPLORER_PROPS, buffer);
+  return;
+ }
 	wsprintf(buffer, "Width: %d Height: %d  Plane A Base: 0x%04X  Plane B Base: 0x%04X  Mode: %s",
 		32 + (VDP_Reg.Scr_Size & 0x3) * 32,
 		32 + ((VDP_Reg.Scr_Size >> 4) & 0x3) * 32,
@@ -390,14 +476,14 @@ static void PlaneExplorerPaint_KMod(PlaneExplorer *explorer, LPDRAWITEMSTRUCT lp
 
 static void PlaneExplorer_GetTipText(PlaneExplorer *explorer, int x, int y, char * buffer)
 {
-	int plane_size_x = 32 + (VDP_Reg.Scr_Size & 0x3) * 32;
-	int plane_size_y = 32 + ((VDP_Reg.Scr_Size >> 4) & 0x3) * 32;
+	int plane_size_x = PlaneWidth(explorer->plane);
+	int plane_size_y = PlaneHeight(explorer->plane);
 
 
 	unsigned int plane_a_base = (VDP_Reg.Pat_ScrA_Adr & 0x38) << 10;
 	unsigned int plane_b_base = (VDP_Reg.Pat_ScrB_Adr & 0x7) << 13;
-	unsigned int base = explorer->plane ? plane_b_base : plane_a_base;
-	char plane_char = explorer->plane ? 'B' : 'A';
+	unsigned int base = PlaneBase(explorer->plane);
+	const char *plane_name = explorer->plane == 3 ? "Window" : explorer->plane ? "B" : "A";
 	unsigned int tile_height = ((VDP_Reg.Set4 & 0x6) == 6) ? 16 : 8;
 	unsigned int tile_addr = (base + ((y / tile_height) * plane_size_x + (x >> 3)) * 2) & 0xFFFF;
 	union PATTERN_NAME name;
@@ -417,10 +503,10 @@ static void PlaneExplorer_GetTipText(PlaneExplorer *explorer, int x, int y, char
 	}
 	name.word = *(unsigned short *)(&VRam[tile_addr]);
 
-	wsprintf(buffer, "%d, %d in plane %c @ 0x%04X is @ 0x%04X = 0x%04X [tile %d, pal %d,%s%s prior %d]",
+	wsprintf(buffer, "%d, %d in plane %s @ 0x%04X is @ 0x%04X = 0x%04X [tile %d, pal %d,%s%s prior %d]",
 		x >> 3,
 		y / tile_height,
-		plane_char,
+		plane_name,
 		base,
 		tile_addr,
 		name.word,
@@ -487,11 +573,13 @@ static INT_PTR CALLBACK PlaneExplorerDialogProc(HWND hwnd, UINT Message, WPARAM 
 		break;
 
 	case WM_MOUSELEAVE:
+        if (explorer->plane >= 4) return FALSE;
 		SetDlgItemText(hwnd, IDC_PLANEEXPLORER_TILEINFO, "TILE: ");
 		return FALSE;
 
 	case WM_MOUSEMOVE:
 	{
+        if (explorer->plane >= 4) return FALSE;
 		HWND hexplorer = GetDlgItem(hwnd, IDC_PLANEXPLEORER_MAIN);
 		int x = (short)(lParam);
 		int y = (short)(lParam >> 16);
@@ -554,6 +642,7 @@ void planes_update()
 
 void planes_reset()
 {
+    intensity_valid = FALSE;
 	int plane;
 	for (plane = 0; plane < PLANE_COUNT; ++plane)
 		if (explorers[plane].hwnd) PlaneExplorerInit_KMod(&explorers[plane]);
@@ -569,6 +658,12 @@ void planes_destroy()
 /* Keep session state separate from the debug options dialog's Apply/Cancel. */
 void planes_save_visibility(const char *config_file)
 {
+ WritePrivateProfileString("DebugWindows", "ShadowOpen", OpenedWindow_KMod[DMODE_SHADOW - 1] ? "1" : "0", config_file);
+ WritePrivateProfileString("DebugWindows", "HighlightOpen", OpenedWindow_KMod[DMODE_HIGHLIGHT - 1] ? "1" : "0", config_file);
+ DebugWindow_SaveGeometry(explorers[4].hwnd, "ShadowRect", config_file);
+ DebugWindow_SaveGeometry(explorers[5].hwnd, "HighlightRect", config_file);
+ WritePrivateProfileString("DebugWindows", "WindowOpen", OpenedWindow_KMod[DMODE_WINDOW - 1] ? "1" : "0", config_file);
+ DebugWindow_SaveGeometry(explorers[3].hwnd, "WindowRect", config_file);
 	WritePrivateProfileString("DebugWindows", "PlaneAOpen",
 		OpenedWindow_KMod[DMODE_PLANE_A - 1] ? "1" : "0", config_file);
 	WritePrivateProfileString("DebugWindows", "PlaneBOpen",
@@ -586,9 +681,9 @@ void planes_restore_visibility(const char *config_file)
 	for (plane = 0; plane < PLANE_COUNT; ++plane)
 	{
 		BOOL visible = GetPrivateProfileInt("DebugWindows",
-			plane == 2 ? "SpriteScreenOpen" : plane == 0 ? "PlaneAOpen" : "PlaneBOpen", 0, config_file) != 0;
+			plane == 4 ? "ShadowOpen" : plane == 5 ? "HighlightOpen" : plane == 3 ? "WindowOpen" : plane == 2 ? "SpriteScreenOpen" : plane == 0 ? "PlaneAOpen" : "PlaneBOpen", 0, config_file) != 0;
 		DebugWindow_RestoreGeometry(explorers[plane].hwnd,
-			plane == 2 ? "SpriteScreenRect" : plane == 0 ? "PlaneARect" : "PlaneBRect", config_file);
+			plane == 4 ? "ShadowRect" : plane == 5 ? "HighlightRect" : plane == 3 ? "WindowRect" : plane == 2 ? "SpriteScreenRect" : plane == 0 ? "PlaneARect" : "PlaneBRect", config_file);
 		OpenedWindow_KMod[PlaneExplorerMode(plane) - 1] =
 			visible && explorers[plane].hwnd != NULL;
 		planes_show(plane, visible);

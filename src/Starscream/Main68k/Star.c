@@ -3680,30 +3680,12 @@ static void i_move_to_usp(void){
 }
 
 static void i_trap(void){
-    int myline = linenum; linenum++;
-    //*
-    emit("mov ecx,[__resethandler]\n");
-    emit("or ecx,ecx\n");
-    emit("jz short ln%d\n", myline);
-    airlock_exit();
-    emit("call ecx\n");
-    airlock_enter();
-    ret_timing((cputype == 68010) ? 38 : 34);
-    emit("ln%d:\n", myline);
-    //**/
+    /* TRAP always takes vector 32+n; resethandler belongs to RESET only. */
     emit("and ebx,byte 0Fh\n");
     emit("lea edx,[80h+ebx*4]\n");
     emit("call group_2_exception\n");
     perform_cached_rebase();
     ret_timing((cputype == 68010) ? 38 : 34);
-}
-
-static void i_trap_old(void){
-	emit("and ebx,byte 0Fh\n");
-	emit("lea edx,[80h+ebx*4]\n");
-	emit("call group_2_exception\n");
-	perform_cached_rebase();
-	ret_timing((cputype==68010)?38:34);
 }
 
 static void i_trapv(void){

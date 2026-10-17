@@ -10,13 +10,15 @@
 unsigned char VRam[65536];
 unsigned char CRam[256];
 struct Reg_VDP_Type VDP_Reg;
+unsigned short MD_Screen[336 * 240];
+int Mode_555;
 UCHAR OpenedWindow_KMod[WIN_NUMBER];
 HWND HandleWindow_KMod[WIN_NUMBER];
 
 void CloseWindow_KMod(UCHAR mode)
 {
     OpenedWindow_KMod[mode - 1] = FALSE;
-    planes_show(mode == DMODE_SPRITE_SCREEN ? 2 : mode == DMODE_PLANE_A ? 0 : 1, FALSE);
+    planes_show(mode == DMODE_SHADOW ? 4 : mode == DMODE_HIGHLIGHT ? 5 : mode == DMODE_WINDOW ? 3 : mode == DMODE_SPRITE_SCREEN ? 2 : mode == DMODE_PLANE_A ? 0 : 1, FALSE);
 }
 
 static void paint(HWND hwnd, HDC dc)
@@ -43,12 +45,12 @@ static void create_session_windows(void)
 
 static void test_geometry_persistence(const char *config_file)
 {
-    RECT expected[2], actual;
+    RECT expected[PLANE_COUNT], actual;
     MONITORINFO monitor = { sizeof(monitor) };
     int plane;
     assert(GetMonitorInfo(MonitorFromPoint((POINT){0, 0}, MONITOR_DEFAULTTOPRIMARY), &monitor));
     create_session_windows();
-    for (plane = 0; plane < 2; ++plane)
+    for (plane = 0; plane < PLANE_COUNT; ++plane)
     {
         SetWindowPos(explorers[plane].hwnd, NULL,
             monitor.rcWork.left + 30 + plane * 40, monitor.rcWork.top + 30 + plane * 40,
@@ -59,7 +61,7 @@ static void test_geometry_persistence(const char *config_file)
     planes_destroy();
     create_session_windows();
     planes_restore_visibility(config_file);
-    for (plane = 0; plane < 2; ++plane)
+    for (plane = 0; plane < PLANE_COUNT; ++plane)
     {
         GetWindowRect(explorers[plane].hwnd, &actual);
         assert(EqualRect(&actual, &expected[plane]));
@@ -102,7 +104,7 @@ static void test_visibility_persistence(void)
     assert(!IsWindowVisible(explorers[1].hwnd));
     planes_destroy();
 
-    for (mask = 0; mask < 4; ++mask)
+    for (mask = 0; mask < (1 << PLANE_COUNT); ++mask)
     {
         create_session_windows();
         for (plane = 0; plane < PLANE_COUNT; ++plane)
@@ -197,6 +199,62 @@ int main(void)
     assert(strstr(text, "plane A") && strstr(text, "tile 1,"));
     PlaneExplorer_GetTipText(&explorers[1], 0, 0, text);
     assert(strstr(text, "plane B") && strstr(text, "tile 2,"));
+
+    /* Window has its own map, fixed height and H32/H40 address alignment. */
+    {
+        HWND w = HandleWindow_KMod[DMODE_WINDOW - 1];
+        assert(w && w != a && w != b);
+        GetWindowText(w, text, sizeof(text)); assert(strcmp(text, "Window") == 0);
+        VDP_Reg.Pat_Win_Adr = 0x2e;
+        VDP_Reg.Scr_Size = 0x11;
+        *(unsigned short *)&VRam[0xb800] = 1;
+        paint(w, dc); assert(GetPixel(dc, 0, 0) == RGB(238, 0, 0));
+        assert(explorers[3].old_width == 32 && explorers[3].old_height == 32);
+        PlaneExplorer_GetTipText(&explorers[3], 0, 0, text);
+        assert(strstr(text, "Window") && strstr(text, "0xB800"));
+        VDP_Reg.Set4 = 1;
+        *(unsigned short *)&VRam[0xb000] = 2;
+        paint(w, dc); assert(GetPixel(dc, 0, 0) == RGB(0, 238, 0));
+        assert(explorers[3].old_width == 64 && explorers[3].old_height == 32);
+        planes_show(3, TRUE); SendMessage(w, WM_CLOSE, 0, 0);
+        assert(!IsWindowVisible(w));
+        VDP_Reg.Set4 = 0; VDP_Reg.Scr_Size = 0;
+    }
+
+    /* Classify composed palette indices, including normal 0xc0, then
+     * verify the two independent masks use the H32 viewport starts at pixel 8, just like H40. */
+    {
+        DRAWITEMSTRUCT item = {0};
+        void *effect_pixels;
+        BITMAPINFO info = {0};
+        HDC effect_dc = CreateCompatibleDC(NULL);
+        HBITMAP effect_bitmap, old_bitmap;
+        info.bmiHeader.biSize = 40; info.bmiHeader.biWidth = 256;
+        info.bmiHeader.biHeight = -224; info.bmiHeader.biPlanes = 1; info.bmiHeader.biBitCount = 32;
+        effect_bitmap = CreateDIBSection(effect_dc, &info, DIB_RGB_COLORS, &effect_pixels, NULL, 0);
+        old_bitmap = SelectObject(effect_dc, effect_bitmap);
+        VDP_Reg.Set2 = 0x40; VDP_Reg.Set4 = 8;
+        MD_Screen[8] = 0x40; MD_Screen[9] = 0x80; MD_Screen[10] = 0xc0;
+        MD_Screen[263] = 0x80; MD_Screen[264] = 0x40;
+        planes_capture_intensity(0);
+        assert(intensity_map[0] == 0x40 && intensity_map[1] == 0x80 && intensity_map[2] == 0xc0 && intensity_map[255] == 0x80);
+        item.hDC = effect_dc; item.rcItem.right = 256; item.rcItem.bottom = 224;
+        IntensityPaint(&explorers[4], &item);
+        assert(GetPixel(effect_dc, 0, 0) == RGB(0,255,255));
+        assert(GetPixel(effect_dc, 1, 0) != RGB(0,255,255));
+        GetDlgItemText(explorers[4].hwnd, IDC_PLANEEXPLORER_PROPS, text, sizeof(text));
+        assert(strstr(text, "1 pixels") && strstr(text, "S/H enabled"));
+        IntensityPaint(&explorers[5], &item);
+        assert(GetPixel(effect_dc, 1, 0) == RGB(255,192,64));
+        assert(GetPixel(effect_dc, 2, 0) != RGB(255,192,64));
+        VDP_Reg.Set4 = 0; planes_capture_intensity(0);
+        assert(intensity_map[0] == 0 && !intensity_enabled);
+        VDP_Reg.Set4 = 9; MD_Screen[8] = 0x40; planes_capture_intensity(0);
+        assert(intensity_width == 320 && intensity_map[0] == 0x40);
+        VDP_Reg.Set2 = 0; planes_capture_intensity(0); assert(intensity_map[0] == 0);
+        VDP_Reg.Set4 = 0;
+        SelectObject(effect_dc, old_bitmap); DeleteObject(effect_bitmap); DeleteDC(effect_dc);
+    }
 
     CheckDlgButton(a, IDC_PLANEEXPLORER_TRANS, BST_CHECKED);
     SendMessage(a, WM_COMMAND, MAKEWPARAM(IDC_PLANEEXPLORER_TRANS, BN_CLICKED),

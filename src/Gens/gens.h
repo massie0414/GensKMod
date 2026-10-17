@@ -45,7 +45,10 @@ extern "C" {
 #define DMODE_32_MEMORY 24
 #define DMODE_DISASSEMBLY 25
 #define DMODE_SPRITE_SCREEN 26
-#define WIN_NUMBER DMODE_SPRITE_SCREEN
+#define DMODE_WINDOW 27
+#define DMODE_SHADOW 28
+#define DMODE_HIGHLIGHT 29
+#define WIN_NUMBER DMODE_HIGHLIGHT
 
 extern int Debug;
 extern int Frame_Skip;

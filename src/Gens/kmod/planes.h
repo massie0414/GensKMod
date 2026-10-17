@@ -10,6 +10,7 @@ extern "C" {
 void planes_create(HINSTANCE hInstance, HWND hWndParent);
 void planes_show(int plane, BOOL visibility);
 void planes_update();
+void planes_capture_intensity(unsigned int line_offset);
 void planes_select_sprite(int index);
 void planes_reset();
 void planes_destroy();
