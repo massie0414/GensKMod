@@ -700,6 +700,7 @@ int Do_Genesis_Frame_No_VDP(void)
 #else
 	main68k_tripOdometer(); // Reads and then clears the odometer
 #endif
+	M68K_Usage_Begin_Frame();
 
 	z80_Clear_Odo(&M_Z80);
 
@@ -821,6 +822,7 @@ int Do_Genesis_Frame_No_VDP(void)
 	if (WAV_Dumping) Update_WAV_Dump();
 	if (GYM_Dumping) Update_GYM_Dump((unsigned char) 0, (unsigned char) 0, (unsigned char) 0);
 
+	M68K_Usage_End_Frame(CPL_M68K * VDP_Num_Lines);
 	return(1);
 }
 
@@ -846,6 +848,7 @@ int Do_Genesis_Frame()
 #else
 	main68k_tripOdometer(); // Reads and then clears the odometer
 #endif
+	M68K_Usage_Begin_Frame();
 	z80_Clear_Odo(&M_Z80);
 
 	Patch_Codes();
@@ -968,6 +971,7 @@ int Do_Genesis_Frame()
 	if (WAV_Dumping) Update_WAV_Dump();
 	if (GYM_Dumping) Update_GYM_Dump((unsigned char) 0, (unsigned char) 0, (unsigned char) 0);
 
+	M68K_Usage_End_Frame(CPL_M68K * VDP_Num_Lines);
 	return(1);
 }
 
@@ -1248,12 +1252,13 @@ int Do_32X_Frame_No_VDP()
 #else
 	main68k_tripOdometer(); // Reads and then clears the odometer
 #endif
+	M68K_Usage_Begin_Frame();
 	z80_Clear_Odo(&M_Z80);
 	M_SH2.Idle_Cycles = S_SH2.Idle_Cycles = 0;
 	SH2_Clear_Odo(&M_SH2);
 	SH2_Clear_Odo(&S_SH2);
 	PWM_Clear_Timer();
-    if(CD_32X_Active) { CPL_S68K=795; Cycles_S68K=0; sub68k_tripOdometer(); CD_HLE_Frame(); }
+    if(CD_32X_Active) { CPL_S68K=795; Cycles_S68K=0; sub68k_tripOdometer(); S68K_Usage_Begin_Frame(); CD_HLE_Frame(); }
 
 	Patch_Codes();
 
@@ -1510,6 +1515,7 @@ int Do_32X_Frame_No_VDP()
         if(CD_32X_Active) Update_SegaCD_Timer();
 	}
 
+	if (CD_32X_Active) S68K_Usage_End_Frame(CPL_S68K * VDP_Num_Lines);
 	SH2_Usage_End_Frame(&M_SH2);
 	SH2_Usage_End_Frame(&S_SH2);
 	PSG_Special_Update();
@@ -1519,6 +1525,7 @@ int Do_32X_Frame_No_VDP()
 	if (WAV_Dumping) Update_WAV_Dump();
 	if (GYM_Dumping) Update_GYM_Dump((unsigned char) 0, (unsigned char) 0, (unsigned char) 0);
 
+	M68K_Usage_End_Frame(CPL_M68K * VDP_Num_Lines);
 	return 1;
 }
 
@@ -1547,12 +1554,13 @@ int Do_32X_Frame()
 #else
 	main68k_tripOdometer(); // Reads and then clears the odometer
 #endif
+	M68K_Usage_Begin_Frame();
 	z80_Clear_Odo(&M_Z80);
 	M_SH2.Idle_Cycles = S_SH2.Idle_Cycles = 0;
 	SH2_Clear_Odo(&M_SH2);
 	SH2_Clear_Odo(&S_SH2);
 	PWM_Clear_Timer();
-    if(CD_32X_Active) { CPL_S68K=795; Cycles_S68K=0; sub68k_tripOdometer(); CD_HLE_Frame(); }
+    if(CD_32X_Active) { CPL_S68K=795; Cycles_S68K=0; sub68k_tripOdometer(); S68K_Usage_Begin_Frame(); CD_HLE_Frame(); }
 
 	Patch_Codes();
 
@@ -1808,6 +1816,7 @@ int Do_32X_Frame()
         if(CD_32X_Active) Update_SegaCD_Timer();
 	}
 
+	if (CD_32X_Active) S68K_Usage_End_Frame(CPL_S68K * VDP_Num_Lines);
 	SH2_Usage_End_Frame(&M_SH2);
 	SH2_Usage_End_Frame(&S_SH2);
 	PSG_Special_Update();
@@ -1817,6 +1826,7 @@ int Do_32X_Frame()
 	if (WAV_Dumping) Update_WAV_Dump();
 	if (GYM_Dumping) Update_GYM_Dump((unsigned char) 0, (unsigned char) 0, (unsigned char) 0);
 
+	M68K_Usage_End_Frame(CPL_M68K * VDP_Num_Lines);
 	return 1;
 }
 
@@ -2106,7 +2116,8 @@ int Do_SegaCD_Frame_No_VDP(void)
 #else
 	main68k_tripOdometer(); // Reads and then clears the odometer
 #endif
-	sub68k_tripOdometer();
+	M68K_Usage_Begin_Frame();
+	sub68k_tripOdometer(); S68K_Usage_Begin_Frame();
 	CD_HLE_Frame();
 	z80_Clear_Odo(&M_Z80);
 
@@ -2229,6 +2240,8 @@ int Do_SegaCD_Frame_No_VDP(void)
 	if (WAV_Dumping) Update_WAV_Dump();
 	if (GYM_Dumping) Update_GYM_Dump((unsigned char) 0, (unsigned char) 0, (unsigned char) 0);
 
+	S68K_Usage_End_Frame(CPL_S68K * VDP_Num_Lines);
+	M68K_Usage_End_Frame(CPL_M68K * VDP_Num_Lines);
 	return(1);
 }
 
@@ -2256,7 +2269,8 @@ int Do_SegaCD_Frame_No_VDP_Cycle_Accurate(void)
 #else
 	main68k_tripOdometer(); // Reads and then clears the odometer
 #endif
-	sub68k_tripOdometer();
+	M68K_Usage_Begin_Frame();
+	sub68k_tripOdometer(); S68K_Usage_Begin_Frame();
 	CD_HLE_Frame();
 	z80_Clear_Odo(&M_Z80);
 
@@ -2495,6 +2509,8 @@ int Do_SegaCD_Frame_No_VDP_Cycle_Accurate(void)
 	if (WAV_Dumping) Update_WAV_Dump();
 	if (GYM_Dumping) Update_GYM_Dump((unsigned char) 0, (unsigned char) 0, (unsigned char) 0);
 
+	S68K_Usage_End_Frame(CPL_S68K * VDP_Num_Lines);
+	M68K_Usage_End_Frame(CPL_M68K * VDP_Num_Lines);
 	return(1);
 }
 
@@ -2524,7 +2540,8 @@ int Do_SegaCD_Frame(void)
 #else
 	main68k_tripOdometer(); // Reads and then clears the odometer
 #endif
-	sub68k_tripOdometer();
+	M68K_Usage_Begin_Frame();
+	sub68k_tripOdometer(); S68K_Usage_Begin_Frame();
 	CD_HLE_Frame();
 	z80_Clear_Odo(&M_Z80);
 
@@ -2676,6 +2693,8 @@ int Do_SegaCD_Frame(void)
 		}
 	}
 
+	S68K_Usage_End_Frame(CPL_S68K * VDP_Num_Lines);
+	M68K_Usage_End_Frame(CPL_M68K * VDP_Num_Lines);
 	return(1);
 }
 
@@ -2703,7 +2722,8 @@ int Do_SegaCD_Frame_Cycle_Accurate(void)
 #else
 	main68k_tripOdometer(); // Reads and then clears the odometer
 #endif
-	sub68k_tripOdometer();
+	M68K_Usage_Begin_Frame();
+	sub68k_tripOdometer(); S68K_Usage_Begin_Frame();
 	CD_HLE_Frame();
 	z80_Clear_Odo(&M_Z80);
 
@@ -2971,5 +2991,7 @@ int Do_SegaCD_Frame_Cycle_Accurate(void)
 		}
 	}
 
+	S68K_Usage_End_Frame(CPL_S68K * VDP_Num_Lines);
+	M68K_Usage_End_Frame(CPL_M68K * VDP_Num_Lines);
 	return 1;
 }

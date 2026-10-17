@@ -12,6 +12,8 @@ void m68kdebug_show(BOOL visibility);
 void m68kdebug_update();
 void m68kdebug_reset();
 void m68kdebug_destroy();
+void m68kdebug_save_window(const char *config_file);
+void m68kdebug_restore_window(const char *config_file);
 
 
 void m68kdebug_dump();//TODO remove

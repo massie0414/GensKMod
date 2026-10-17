@@ -12,6 +12,8 @@ void s68kdebug_show(BOOL visibility);
 void s68kdebug_update();
 void s68kdebug_reset();
 void s68kdebug_destroy();
+void s68kdebug_save_window(const char *config_file);
+void s68kdebug_restore_window(const char *config_file);
 
 void s68kdebug_dump();//TODO remove
 

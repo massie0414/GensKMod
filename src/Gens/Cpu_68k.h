@@ -9,8 +9,24 @@ extern "C" {
 
 extern struct S68000CONTEXT Context_68K;
 	
+unsigned M68K_Polling_Loop(struct S68000CONTEXT *cpu);
+unsigned M68K_Exec_Profiled(int cycles);
+unsigned S68K_Exec_Profiled(int cycles);
 int M68K_Init();
+#define M68K_USAGE_HISTORY 256
+extern unsigned main68k_idleCycles;
+void M68K_Usage_ClearHistory(void);
+void M68K_Usage_Begin_Frame(void);
+void M68K_Usage_End_Frame(unsigned budget);
+unsigned M68K_Usage_GetHistory(unsigned long *values);
+
 int S68K_Init();
+#define S68K_USAGE_HISTORY 256
+extern unsigned sub68k_idleCycles;
+void S68K_Usage_ClearHistory(void);
+void S68K_Usage_Begin_Frame(void);
+void S68K_Usage_End_Frame(unsigned budget);
+unsigned S68K_Usage_GetHistory(unsigned long *values);
 void M68K_Reset(int System_ID);
 void S68K_Reset();
 void M68K_Reset_CPU();

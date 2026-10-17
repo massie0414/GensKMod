@@ -190,6 +190,8 @@ int Load_State(char *Name)
 	memset(buf, 0, len);
 	if (fread(buf, 1, len, f))
 	{
+		S68K_Usage_ClearHistory();
+		M68K_Usage_ClearHistory();
 		z80_Reset(&M_Z80);
 //		main68k_reset();
 //		YM2612ResetChip(0);

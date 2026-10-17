@@ -42,6 +42,7 @@ def main():
     if not objects:
         parser.error("Release objects are missing; omit --skip-build")
     compile_test("m68k_trap_test", ["tests/m68k_trap_test.cpp"], objects, [
+        str(root / "src/Gens/bin/obj/Release/Gens.res"),
         "/LIBPATH:" + str(root / "src/dx70_min/lib"),
         str(root / "src/Gens/libs/zlib.lib"), str(root / "src/Gens/libs/htmlhelp.lib"),
         "wsock32.lib", "comctl32.lib", "ddraw.lib", "dsound.lib", "dinput.lib",

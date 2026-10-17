@@ -490,9 +490,9 @@ static void maincall(unsigned fn) {
 unsigned CD_HLE_MainExec(int cycles) {
     unsigned result, previous_irq=sub68k_context.interrupts[0]&4;
     unsigned in_vblank=(main68k_context.sr&0x700)==0x600;
-    if(!CD_HLE_Active)return main68k_exec(cycles);
+    if(!CD_HLE_Active)return M68K_Exec_Profiled(cycles);
     if(Paused)return 0x80000004;
-    result=main68k_exec(cycles);
+    result=M68K_Exec_Profiled(cycles);
     if(in_vblank && !previous_irq && (sub68k_context.interrupts[0]&4))native_irq2=1;
     if((main68k_context.interrupts[0]&0x10) && main68k_context.pc>=0x2006 && main68k_context.pc<0x2400 && (main68k_context.pc&7)==6) {
         unsigned fn=0x200+(main68k_context.pc-0x2006)/2;
@@ -503,7 +503,7 @@ unsigned CD_HLE_MainExec(int cycles) {
 unsigned CD_HLE_SubExec(int cycles) {
     unsigned result;
     if(CD_HLE_Active && Paused)return 0x80000004;
-    result=sub68k_exec(cycles);
+    result=S68K_Exec_Profiled(cycles);
     if(CD_HLE_Active && (sub68k_context.interrupts[0]&1) && sub68k_context.pc==0x1206) { restore_sr(1); subcall(); }
     else if(CD_HLE_Active && (sub68k_context.interrupts[0]&1) && sub68k_context.pc==0x1216) { restore_sr(1); bramcall(); }
     return result;

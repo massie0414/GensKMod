@@ -16,6 +16,10 @@
 #include "common.h"
 #include "utils.h"
 #include "m68k.h"
+#include "../Cpu_68k.h"
+#include "../vdp_io.h"
+#include "cpu_usage_graph.h"
+#include "window_geometry.h"
 
 static HWND hM68K;
 static int Current_PC_M68K;
@@ -90,6 +94,7 @@ static void UpdateM68k_KMod()
 {
 	unsigned int i, PC;
 	unsigned char tmp_string[256];
+	InvalidateRect(GetDlgItem(hM68K, IDC_68K_USAGE), NULL, FALSE);
 
 	
 
@@ -254,6 +259,55 @@ void Dump68K_KMod(HWND hwnd)
 	Put_Info("68K RAM dumped", 1500);
 }
 
+/* Fit the actual fixed font before placing the graph beside the registers. */
+static void M68K_FitStatus(HWND hwnd)
+{
+    const int ids[3] = {IDC_68K_STATUS_SR, IDC_68K_STATUS_ADR, IDC_68K_STATUS_DATA};
+    const char *samples[3] = {
+        "X=0 N=0 Z=0 V=0 C=0  SR=FFFF Cycles=4294967295",
+        "A0=FFFFFFFF A1=FFFFFFFF A2=FFFFFFFF A3=FFFFFFFF",
+        "D0=FFFFFFFF D1=FFFFFFFF D2=FFFFFFFF D3=FFFFFFFF"
+    };
+    RECT r, group, client, outer;
+    HDC dc = GetDC(hwnd);
+    int i, top, right = 0, dx, dy;
+    GetWindowRect(GetDlgItem(hwnd, ids[0]), &r);
+    MapWindowPoints(NULL, hwnd, (POINT *)&r, 2);
+    top = r.top;
+    for (i = 0; i < 3; ++i) {
+        TEXTMETRIC metrics;
+        SIZE extent;
+        HFONT previous = (HFONT)SelectObject(dc,
+            (HFONT)SendDlgItemMessage(hwnd, ids[i], WM_GETFONT, 0, 0));
+        GetTextMetrics(dc, &metrics);
+        GetTextExtentPoint32(dc, samples[i], lstrlen(samples[i]), &extent);
+        SelectObject(dc, previous);
+        GetWindowRect(GetDlgItem(hwnd, ids[i]), &r);
+        MapWindowPoints(NULL, hwnd, (POINT *)&r, 2);
+        MoveWindow(GetDlgItem(hwnd, ids[i]), r.left, top, extent.cx + 4,
+            metrics.tmHeight * (i ? 2 : 1) + 2, FALSE);
+        right = max(right, r.left + extent.cx + 4);
+        top += metrics.tmHeight * (i ? 2 : 1) + 6;
+    }
+    ReleaseDC(hwnd, dc);
+    GetWindowRect(GetDlgItem(hwnd, IDC_68K_USAGE_GROUP), &group);
+    MapWindowPoints(NULL, hwnd, (POINT *)&group, 2);
+    dx = max(0, right + 8 - group.left);
+    dy = max(0, top + 4 - group.bottom);
+    for (i = IDC_68K_USAGE; i <= IDC_68K_USAGE_NOTE; ++i) {
+        GetWindowRect(GetDlgItem(hwnd, i), &r);
+        MapWindowPoints(NULL, hwnd, (POINT *)&r, 2);
+        MoveWindow(GetDlgItem(hwnd, i), r.left + dx, r.top,
+            r.right - r.left, r.bottom - r.top + (i == IDC_68K_USAGE_GROUP ? dy : 0), FALSE);
+    }
+    GetClientRect(hwnd, &client);
+    GetWindowRect(hwnd, &outer);
+    SetWindowPos(hwnd, NULL, 0, 0,
+        outer.right - outer.left + max(0, group.right + dx + 8 - client.right),
+        outer.bottom - outer.top + max(0, group.bottom + dy + 8 - client.bottom),
+        SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+}
+
 BOOL CALLBACK M68KDlgProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam)
 {
 	
@@ -262,14 +316,26 @@ BOOL CALLBACK M68KDlgProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam)
 	switch (Message)
 	{
 	case WM_INITDIALOG:
+		hM68K = hwnd;
+		HandleWindow_KMod[DMODE_68K - 1] = hwnd;
 		hFont = (HFONT)GetStockObject(OEM_FIXED_FONT);
 		SendDlgItemMessage(hM68K, IDC_68K_DISAM, WM_SETFONT, (WPARAM)hFont, TRUE);
 		SendDlgItemMessage(hM68K, IDC_68K_STATUS_SR, WM_SETFONT, (WPARAM)hFont, TRUE);
 		SendDlgItemMessage(hM68K, IDC_68K_STATUS_ADR, WM_SETFONT, (WPARAM)hFont, TRUE);
 		SendDlgItemMessage(hM68K, IDC_68K_STATUS_DATA, WM_SETFONT, (WPARAM)hFont, TRUE);
 
+		M68K_FitStatus(hwnd);
 		m68kdebug_reset();
 		break;
+
+    case WM_DRAWITEM:
+        if (wParam == IDC_68K_USAGE) {
+            unsigned long values[M68K_USAGE_HISTORY];
+            unsigned count = (Genesis_Started || SegaCD_Started || _32X_Started) ? M68K_Usage_GetHistory(values) : 0;
+            CPUUsage_DrawGraph((DRAWITEMSTRUCT *)lParam, values, count);
+            return TRUE;
+        }
+        return FALSE;
 
 	case WM_SHOWWINDOW:
 		SwitchM68kViewMode_KMod();
@@ -359,8 +425,9 @@ BOOL CALLBACK M68KDlgProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam)
 		break;
 
 	case WM_DESTROY:
-		m68kdebug_destroy();
-		PostQuitMessage(0);
+		hM68K = NULL;
+		HandleWindow_KMod[DMODE_68K - 1] = NULL;
+		OpenedWindow_KMod[DMODE_68K - 1] = FALSE;
 		break;
 
 	default:
@@ -396,8 +463,7 @@ void m68kdebug_reset()
 }
 void m68kdebug_destroy()
 {
-	DeleteObject((HGDIOBJ)hFont);
-	DestroyWindow(hM68K);
+	if (hM68K) DestroyWindow(hM68K);
 }
 
 void m68kdebug_dump()
@@ -409,4 +475,24 @@ void m68kdebug_jumpRAM(DWORD adr)
 	M68_ViewMode = 2; //RAM
 	M68k_StartLineRAM = adr / 8;
 	SwitchM68kViewMode_KMod();
+}
+void m68kdebug_save_window(const char *config_file)
+{
+    WritePrivateProfileString("DebugWindows", "M68KOpen",
+        OpenedWindow_KMod[DMODE_68K - 1] ? "1" : "0", config_file);
+    DebugWindow_SaveGeometry(hM68K, "M68KRect", config_file);
+}
+
+void m68kdebug_restore_window(const char *config_file)
+{
+    RECT rect;
+    BOOL visible = GetPrivateProfileInt("DebugWindows", "M68KOpen", 0, config_file) != 0;
+    if (!hM68K) return;
+    GetWindowRect(hM68K, &rect);
+    DebugWindow_RestoreGeometry(hM68K, "M68KRect", config_file);
+    /* Keep the size measured from the current font and graph layout. */
+    SetWindowPos(hM68K, NULL, 0, 0, rect.right - rect.left, rect.bottom - rect.top,
+        SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+    OpenedWindow_KMod[DMODE_68K - 1] = visible;
+    m68kdebug_show(visible);
 }

@@ -391,6 +391,9 @@ static void gen_variables(void) {
 	}
 /*	align(4);*/
 	emit("contextend:\n");
+	/* Debug telemetry stays outside the serialized CPU context. */
+	emit("global _%sidleCycles\n", sourcename);
+	emit("_%sidleCycles: dd 0\n", sourcename);
 	emit("__cycles_needed        dd 0\n");
 	emit("__cycles_leftover      dd 0\n");
 	emit("__fetch_region_start   dd 0\n");/* Fetch region cache */
@@ -607,6 +610,7 @@ emit("jbe .already_done\n");
 	emit("or eax,byte -1\n");
 	emit("ret\n");
 	emit(".notfaulted:\n");
+	emit("add [_%sidleCycles],eax\n", sourcename);
 	emit("add [__odometer],eax\n");
 	emit("mov eax,80000004h\n");
 	emit("ret\n");
@@ -3675,6 +3679,7 @@ static void i_stop(void){
 	/* Forfeit all remaining cycles */
 	emit("sub edi,byte 4\n");
 	emit("js short ln%d\n",myline);
+	emit("add [_%sidleCycles],edi\n", sourcename);
 	emit("xor edi,edi\n");
 	emit("dec edi\n");
 	emit("ln%d:\n",myline);

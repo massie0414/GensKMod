@@ -156,6 +156,7 @@ int S68K_Init(void)
 
 void M68K_Reset(int System_ID)
 {
+	M68K_Usage_ClearHistory();
 	memset(Ram_68k, 0, 64 * 1024);
 
 	M68K_Fetch[0].lowaddr = 0x000000;
@@ -231,6 +232,7 @@ void M68K_Reset(int System_ID)
 
 void S68K_Reset(void)
 {
+	S68K_Usage_ClearHistory();
 	memset(Ram_Prg, 0, 512 * 1024);
 	memset(Ram_Word_2M, 0, 256 * 1024);
 	memset(Ram_Word_1M, 0, 256 * 1024);
@@ -444,6 +446,7 @@ void MS68K_Set_Word_Ram(void)
 
 void M68K_Reset_CPU()
 {
+	M68K_Usage_ClearHistory();
 	main68k_reset();
 }
 
@@ -452,5 +455,191 @@ void M68K_Reset_CPU()
 
 void S68K_Reset_CPU()
 {
+	S68K_Usage_ClearHistory();
 	sub68k_reset();
+}
+
+/* Complete emulated frames only. STOP cycles and time held in reset/bus
+ * request and recognized polling loops are idle. No host timing. */
+static struct {
+    unsigned long values[S68K_USAGE_HISTORY];
+    unsigned next, count;
+} s68kUsage;
+void S68K_Usage_ClearHistory(void)
+{
+    memset(&s68kUsage, 0, sizeof(s68kUsage));
+    sub68k_idleCycles = 0;
+}
+void S68K_Usage_Begin_Frame(void)
+{
+    sub68k_idleCycles = 0;
+}
+void S68K_Usage_End_Frame(unsigned budget)
+{
+    unsigned total = sub68k_readOdometer();
+    unsigned busy = total > sub68k_idleCycles ? total - sub68k_idleCycles : 0;
+    if (!budget) return;
+    if (busy > budget) busy = budget;
+    s68kUsage.values[s68kUsage.next] = (unsigned long)((double)busy * 1000.0 / budget + 0.5);
+    s68kUsage.next = (s68kUsage.next + 1) % S68K_USAGE_HISTORY;
+    if (s68kUsage.count < S68K_USAGE_HISTORY) ++s68kUsage.count;
+}
+unsigned S68K_Usage_GetHistory(unsigned long *values)
+{
+    unsigned i;
+    for (i = 0; i < s68kUsage.count; ++i)
+        values[i] = s68kUsage.values[(s68kUsage.next + S68K_USAGE_HISTORY - s68kUsage.count + i) % S68K_USAGE_HISTORY];
+    return s68kUsage.count;
+}
+/* Complete emulated frames only. STOP cycles and time held in reset/bus
+ * request and recognized polling loops are idle. No host timing. */
+static struct {
+    unsigned long values[M68K_USAGE_HISTORY];
+    unsigned next, count;
+} m68kUsage;
+void M68K_Usage_ClearHistory(void)
+{
+    memset(&m68kUsage, 0, sizeof(m68kUsage));
+    main68k_idleCycles = 0;
+}
+void M68K_Usage_Begin_Frame(void)
+{
+    main68k_idleCycles = 0;
+}
+void M68K_Usage_End_Frame(unsigned budget)
+{
+    unsigned total = main68k_readOdometer();
+    unsigned busy = total > main68k_idleCycles ? total - main68k_idleCycles : 0;
+    if (!budget) return;
+    if (busy > budget) busy = budget;
+    m68kUsage.values[m68kUsage.next] = (unsigned long)((double)busy * 1000.0 / budget + 0.5);
+    m68kUsage.next = (m68kUsage.next + 1) % M68K_USAGE_HISTORY;
+    if (m68kUsage.count < M68K_USAGE_HISTORY) ++m68kUsage.count;
+}
+unsigned M68K_Usage_GetHistory(unsigned long *values)
+{
+    unsigned i;
+    for (i = 0; i < m68kUsage.count; ++i)
+        values[i] = m68kUsage.values[(m68kUsage.next + M68K_USAGE_HISTORY - m68kUsage.count + i) % M68K_USAGE_HISTORY];
+    return m68kUsage.count;
+}
+
+/* Read only instruction-fetch mappings: profiling must not read MMIO or
+ * acknowledge a device. Starscream's instruction memory is word-swapped. */
+static int Usage68K_Word(struct S68000CONTEXT *cpu, unsigned pc, unsigned *op)
+{
+    unsigned i;
+    if ((pc & 1) || pc > 0xfffffe || !cpu->fetch) return 0;
+    for (i = 0; i < 64; ++i) {
+        struct STARSCREAM_PROGRAMREGION *f = &cpu->fetch[i];
+        unsigned short raw;
+        if (f->lowaddr == (unsigned)-1) break;
+        if (pc < f->lowaddr || pc >= f->highaddr) continue;
+        memcpy(&raw, (const void *)(f->offset + pc), sizeof(raw));
+        *op = raw;
+        return 1;
+    }
+    return 0;
+}
+/* Stable memory addresses only: no postincrement/predecrement or indexed
+ * traversal. The only register writes accepted below are data loads/masks. */
+static int Usage68K_MemoryEA(unsigned ea)
+{
+    unsigned mode = ea >> 3, reg = ea & 7;
+    if (mode == 2) return 0;
+    if (mode == 5) return 2;
+    if (mode == 7 && (reg == 0 || reg == 2)) return 2;
+    if (mode == 7 && reg == 1) return 4;
+    return -1;
+}
+unsigned M68K_Polling_Loop(struct S68000CONTEXT *cpu)
+{
+    unsigned pc = cpu->pc, branch, op, start, at, word, offset;
+    if (pc & 1) return 0;
+    for (branch = pc; branch <= pc + 32 && branch <= 0xfffffc; branch += 2) {
+        int disp, length, loaded = 0, tested = 0, valid = 1;
+        if (!Usage68K_Word(cpu, branch, &op)) break;
+        if ((op & 0xf000) != 0x6000) continue;
+        disp = (signed char)op;
+        if (!(op & 255)) {
+            if (!Usage68K_Word(cpu, branch + 2, &word)) continue;
+            disp = (short)word;
+        }
+        start = branch + 2 + disp;
+        /* BRA to itself is an explicit spin wait. */
+        if ((op & 0xff00) == 0x6000 && start == branch && pc == branch) return start + 1;
+        /* Conditional backward branches only; never BSR or DBRA counters. */
+        if ((op & 0xff00) < 0x6200 || disp >= -2 || disp < -32 ||
+            start > pc || pc > branch || (start & 1)) continue;
+        for (at = start; at < branch; at += length) {
+            unsigned ea, size;
+            int extra;
+            if (!Usage68K_Word(cpu, at, &op)) { valid = 0; break; }
+            ea = op & 63; size = (op >> 6) & 3;
+            extra = Usage68K_MemoryEA(ea);
+            length = 2;
+            if ((op & 0xc1c0) == 0 && (op & 0x3000) && extra >= 0) {
+                /* MOVE.B/W/L memory,Dn. MOVEA and stores are excluded. */
+                length += extra; loaded = 1; tested = 1;
+            } else if ((op & 0xff00) == 0x4a00 && size < 3 &&
+                       ((ea >> 3) == 0 || extra >= 0)) {
+                /* TST.B/W/L Dn or memory. */
+                length += extra < 0 ? 0 : extra;
+                tested = 1; if (extra >= 0) loaded = 1;
+            } else if ((op & 0xffc0) == 0x0800 &&
+                       ((ea >> 3) == 0 || extra >= 0)) {
+                /* BTST #bit,Dn or memory (no bit writes). */
+                length += 2 + (extra < 0 ? 0 : extra);
+                tested = 1; if (extra >= 0) loaded = 1;
+            } else if (((op & 0xff00) == 0x0200 || (op & 0xff00) == 0x0c00) &&
+                       size < 3 && ((ea >> 3) == 0 || ((op & 0xff00) == 0x0c00 && extra >= 0))) {
+                /* ANDI Dn or read-only CMPI Dn/memory. */
+                length += (size == 2 ? 4 : 2) + (extra < 0 ? 0 : extra);
+                tested = 1; if (extra >= 0) loaded = 1;
+            } else if (op != 0x4e71) { valid = 0; break; }
+            /* Ensure extension words exist, and the sampled PC is an opcode. */
+            if (at < pc && at + length > pc) { valid = 0; break; }
+            if (at + length > branch) { valid = 0; break; }
+            for (offset = 2; offset < (unsigned)length; offset += 2)
+                if (!Usage68K_Word(cpu, at + offset, &word)) valid = 0;
+            if (!valid) break;
+        }
+        if (valid && at == branch && loaded && tested) return start + 1;
+    }
+    return 0;
+}
+static unsigned Usage68K_Exec(struct S68000CONTEXT *cpu, unsigned *idle,
+    unsigned (*execute)(int), int cycles)
+{
+    unsigned loop, before, oldIdle, result, elapsed, sleeping;
+    unsigned registers[16];
+    unsigned short sr = cpu->sr;
+    unsigned pending = cpu->interrupts[0];
+    loop = M68K_Polling_Loop(cpu);
+    before = cpu->odometer; oldIdle = *idle;
+    if (loop) {
+        memcpy(registers, cpu->dreg, sizeof(cpu->dreg));
+        memcpy(registers + 8, cpu->areg, sizeof(cpu->areg));
+    }
+    result = execute(cycles);
+    /* Statistics only: execute every instruction and retain IRQ timing.
+     * Both ends must be in the same wait with stable registers/flags and no
+     * pending interrupt, to avoid classifying computation or traversal idle. */
+    if (loop && !pending && !cpu->interrupts[0] && sr == cpu->sr &&
+        loop == M68K_Polling_Loop(cpu) &&
+        !memcmp(registers, cpu->dreg, sizeof(cpu->dreg)) &&
+        !memcmp(registers + 8, cpu->areg, sizeof(cpu->areg))) {
+        elapsed = cpu->odometer - before;
+        sleeping = *idle - oldIdle;
+        if (elapsed > sleeping) *idle += elapsed - sleeping;
+    }
+    return result;
+}
+unsigned M68K_Exec_Profiled(int cycles)
+{
+    return Usage68K_Exec(&main68k_context, &main68k_idleCycles, main68k_exec, cycles);
+}
+unsigned S68K_Exec_Profiled(int cycles)
+{
+    return Usage68K_Exec(&sub68k_context, &sub68k_idleCycles, sub68k_exec, cycles);
 }
