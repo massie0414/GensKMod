@@ -22,7 +22,7 @@ static HWND hVDP;
 static SIZE minimumVDPSize;
 
 static long palH, palV;
-static UCHAR zoomTile_KMod, TileCurDraw; //, tileBank_KMod;
+static UCHAR zoomTile_KMod;
 static USHORT tile_KMod;
 static CHAR debug_string[1024];
 
@@ -44,6 +44,9 @@ static const COLORREF monoPal[16] = {
 	RGB(0xCC, 0xCC, 0xCC), RGB(0xDD, 0xDD, 0xDD), RGB(0xEE, 0xEE, 0xEE), RGB(0xFF, 0xFF, 0xFF),
 };
 
+#define VDP_TILE_COLUMNS 64
+#define VDP_TILE_ROWS 32
+
 #define VDP_PALETTES 6
 #define VDP_PALETTE_CGA 4
 #define VDP_PALETTE_MONO 5
@@ -54,8 +57,6 @@ void UpdateVDP_KMod()
 	RedrawWindow(GetDlgItem(hVDP, IDC_VDP_TILES), NULL, NULL, RDW_INVALIDATE);
 	RedrawWindow(GetDlgItem(hVDP, IDC_VDP_PREVIEW), NULL, NULL, RDW_INVALIDATE);
 
-	TileCurDraw++;
-	if (TileCurDraw > 3)	TileCurDraw = 0;
 }
 
 void DrawVDP_Pal_KMod(LPDRAWITEMSTRUCT hlDIS)
@@ -92,7 +93,6 @@ void DrawVDP_Tiles_KMod(LPDRAWITEMSTRUCT hlDIS)
 
 	WORD posX, posY, maxY, maxX;
 	unsigned short int numTile = 0;
-	SCROLLINFO si;
 
 	HDC hDC;
 	HBITMAP hBitmap, hOldBitmap;
@@ -101,14 +101,8 @@ void DrawVDP_Tiles_KMod(LPDRAWITEMSTRUCT hlDIS)
 	hBitmap = CreateCompatibleBitmap(hlDIS->hDC, hlDIS->rcItem.right - hlDIS->rcItem.left, hlDIS->rcItem.bottom - hlDIS->rcItem.top);
 	hOldBitmap = SelectObject(hDC, hBitmap);
 
-	ZeroMemory(&si, sizeof(SCROLLINFO));
-	si.cbSize = sizeof(si);
-	si.fMask = SIF_POS;
-	GetScrollInfo((HWND)GetDlgItem(hVDP, IDC_VDP_SCROLL), SB_CTL, &si);
-
-	numTile = si.nPos * 32; //tileBank_KMod*16;
-	maxY = 32 * 8;
-	maxX = 32 * 8;
+	maxY = VDP_TILE_ROWS * 8;
+	maxX = VDP_TILE_COLUMNS * 8;
 
 	for (posY = 0; posY < maxY; posY += 8)
 	{
@@ -123,7 +117,7 @@ void DrawVDP_Tiles_KMod(LPDRAWITEMSTRUCT hlDIS)
 		hlDIS->hDC, // handle to destination device context
 		0,  // x-coordinate of destination rectangle's upper-left
 		// corner
-		(Paused ? 0 : TileCurDraw*maxY),  // y-coordinate of destination rectangle's upper-left
+		0,  // y-coordinate of destination rectangle's upper-left
 		// corner
 		maxX,  // width of destination rectangle
 		maxY, // height of destination rectangle
@@ -363,25 +357,13 @@ void VDPPal_Choose()
 	if (Paused)	UpdateVDP_KMod();
 }
 
-void VDPTile_Choose()
+static void VDPSelectTile_KMod(POINT pt)
 {
-	POINT pt;
-	SCROLLINFO si;
-
-	ZeroMemory(&si, sizeof(SCROLLINFO));
-	si.cbSize = sizeof(si);
-	si.fMask = SIF_POS;
-	GetScrollInfo((HWND)GetDlgItem(hVDP, IDC_VDP_SCROLL), SB_CTL, &si);
-
-	GetCursorPos(&pt);
-	ScreenToClient(hVDP, &pt);
-
-	if (!PtInRect(&rcTiles, pt))        return;
+	if (!PtInRect(&rcTiles, pt)) return;
 
 	pt.y -= rcTiles.top;
 	tile_KMod = (unsigned char)(pt.y / 8);
-	tile_KMod *= 32;
-	tile_KMod += si.nPos * 32;
+	tile_KMod *= VDP_TILE_COLUMNS;
 
 
 	pt.x -= rcTiles.left;
@@ -394,10 +376,18 @@ void VDPTile_Choose()
 }
 
 
+void VDPTile_Choose()
+{
+	POINT pt;
+	GetCursorPos(&pt);
+	ScreenToClient(hVDP, &pt);
+	VDPSelectTile_KMod(pt);
+}
+
+
 void VDPInit_KMod(HWND hwnd)
 {
-	RECT TZoomRect;
-	SCROLLINFO si;
+	RECT TZoomRect, windowRect, clientRect;
 
 	GetClientRect(GetDlgItem(hwnd, IDC_VDP_PREVIEW), &TZoomRect);
 
@@ -405,7 +395,6 @@ void VDPInit_KMod(HWND hwnd)
 	zoomTile_KMod = (UCHAR)min(zoomTile_KMod, (TZoomRect.bottom - TZoomRect.top) / 8);
 
 	pal_KMod = 0;
-	//	tileBank_KMod = 0;
 
 	hWndPal = GetDlgItem(hwnd, IDC_VDP_PAL);
 	GetClientRect(hWndPal, &rcPal);
@@ -420,10 +409,9 @@ void VDPInit_KMod(HWND hwnd)
 	GetClientRect(GetDlgItem(hwnd, IDC_VDP_TILES), &rcTiles);
 	MapWindowPoints(GetDlgItem(hwnd, IDC_VDP_TILES), hwnd, (LPPOINT)&rcTiles, 2);
 
-	rcTiles.bottom = rcTiles.top + 32 * 8;
-	rcTiles.right = rcTiles.left + 32 * 8;
+	rcTiles.bottom = rcTiles.top + VDP_TILE_ROWS * 8;
+	rcTiles.right = rcTiles.left + VDP_TILE_COLUMNS * 8;
 	MoveWindow(GetDlgItem(hwnd, IDC_VDP_TILES), rcTiles.left, rcTiles.top, rcTiles.right - rcTiles.left, rcTiles.bottom - rcTiles.top, TRUE);
-	MoveWindow(GetDlgItem(hwnd, IDC_VDP_SCROLL), rcTiles.right, rcTiles.top, GetSystemMetrics(SM_CXVSCROLL), rcTiles.bottom - rcTiles.top, TRUE);
 
 	MoveWindow(GetDlgItem(hwnd, IDC_VDP_TILE_ZOOM_ADR), rcTiles.left, rcTiles.bottom + 8, TZoomRect.right - TZoomRect.left, 16, TRUE);
 	MoveWindow(GetDlgItem(hwnd, IDC_VDP_PREVIEW), rcTiles.left, rcTiles.bottom + 8 + 16 + 4, TZoomRect.right - TZoomRect.left, TZoomRect.bottom - TZoomRect.top, TRUE);
@@ -434,23 +422,19 @@ void VDPInit_KMod(HWND hwnd)
 	CheckDlgButton(hwnd, IDC_VDP_PAL_4, BST_CHECKED);
 	ActivePal = 0x0F;
 
-	TileCurDraw = 0;
+	/* Include all VRAM tiles and retain a margin at the right edge. */
+	GetWindowRect(hwnd, &windowRect);
+	GetClientRect(hwnd, &clientRect);
+	SetWindowPos(hwnd, NULL, 0, 0,
+		max(clientRect.right, rcTiles.right + rcTiles.left) +
+			windowRect.right - windowRect.left - clientRect.right,
+		windowRect.bottom - windowRect.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
 
-	ZeroMemory(&si, sizeof(SCROLLINFO));
-	si.cbSize = sizeof(si);
-	si.fMask = SIF_RANGE | SIF_PAGE | SIF_POS;
-	si.nMin = 0;
-	si.nPage = 8;
-	si.nPos = 0;
-	si.nMax = 32;
-
-	SetScrollInfo(GetDlgItem(hwnd, IDC_VDP_SCROLL), SB_CTL, &si, TRUE);
 }
 
 
 BOOL CALLBACK VDPDlgProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam)
 {
-	SCROLLINFO si;
 
 	switch (Message)
 	{
@@ -496,22 +480,6 @@ BOOL CALLBACK VDPDlgProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam)
 		case IDC_VDP_CRAM:
 			DumpCRAM_KMod(hwnd);
 			break;
-			/*
-			case IDC_VDP_TILES_UP:
-			if (tileBank_KMod)	tileBank_KMod--;
-			wsprintf(debug_string, "0x%.4X", tileBank_KMod*16);
-			SendDlgItemMessage(hVDP , IDC_VDP_TILES_ADR, WM_SETTEXT, 0 , (LPARAM)debug_string);
-
-			if (Paused)	UpdateVDP_KMod( );
-			break;
-			case IDC_VDP_TILES_DWN:
-			if (tileBank_KMod < 96) tileBank_KMod++;
-			wsprintf(debug_string, "0x%.4X", tileBank_KMod*16);
-			SendDlgItemMessage(hVDP , IDC_VDP_TILES_ADR, WM_SETTEXT, 0 , (LPARAM)debug_string);
-
-			if (Paused)	UpdateVDP_KMod( );
-			break;
-			*/
 		case IDC_VDP_BMP:
 			DumpTiles_KMod(hwnd);
 			break;
@@ -545,42 +513,6 @@ BOOL CALLBACK VDPDlgProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam)
 			break;
 		}
 		break;
-
-	case WM_VSCROLL:
-		ZeroMemory(&si, sizeof(SCROLLINFO));
-		si.cbSize = sizeof(si);
-		si.fMask = SIF_ALL;
-		GetScrollInfo((HWND)lParam, SB_CTL, &si);
-		switch (LOWORD(wParam))
-		{
-		case SB_PAGEUP:
-			si.nPos -= si.nPage;
-			break;
-		case SB_PAGEDOWN:
-			si.nPos += si.nPage;
-			break;
-		case SB_LINEUP:
-			si.nPos--;
-			break;
-		case SB_LINEDOWN:
-			si.nPos++;
-			break;
-		case SB_THUMBTRACK:
-			//					 si.nPos = HIWORD(wParam);
-			si.nPos = si.nTrackPos;
-			break;
-		}
-
-		si.cbSize = sizeof(SCROLLINFO);
-		si.fMask = SIF_POS;
-		SetScrollInfo((HWND)lParam, SB_CTL, &si, TRUE);
-
-		wsprintf(debug_string, "Offset 0x%.4X", si.nPos * 32);
-		SendDlgItemMessage(hVDP, IDC_VDP_TILES_ADR, WM_SETTEXT, 0, (LPARAM)debug_string);
-
-		UpdateVDP_KMod();
-		UpdateWindow(hwnd);
-		return 0;
 
 	case WM_CLOSE:
 		CloseWindow_KMod(DMODE_VDP);
@@ -634,6 +566,14 @@ void vdpdebug_restore_window(const char *config_file)
 {
 	BOOL visible = GetPrivateProfileInt("DebugWindows", "VDPOpen", 0, config_file) != 0;
 	DebugWindow_RestoreGeometry(hVDP, "VDPRect", config_file);
+	{
+		RECT rect;
+		GetWindowRect(hVDP, &rect);
+		SetWindowPos(hVDP, NULL, 0, 0,
+			max(rect.right - rect.left, minimumVDPSize.cx),
+			max(rect.bottom - rect.top, minimumVDPSize.cy),
+			SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+	}
 	OpenedWindow_KMod[DMODE_VDP - 1] = visible && hVDP != NULL;
 	vdpdebug_show(visible);
 }

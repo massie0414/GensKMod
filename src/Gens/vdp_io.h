@@ -31,7 +31,7 @@ struct Reg_VDP_Type {
 	unsigned int DMA_Address;
 };
 
-extern unsigned char VRam[64000];
+extern unsigned char VRam[65536];
 extern unsigned char CRam[256]; /* CRAM is in fact 64 dword, but for save/load, it's easier by char */
 extern unsigned char VSRam[256];
 extern unsigned char H_Counter_Table[512 * 2];
