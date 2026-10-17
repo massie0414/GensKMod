@@ -9,6 +9,7 @@ void CD_HLE_Close(void);
 int CD_HLE_Boot(void);
 void CD_HLE_Frame(void);
 int CD_HLE_AudioPlaying(void);
+void CD_HLE_CdcHostRead(void);
 unsigned CD_HLE_MainExec(int cycles);
 unsigned CD_HLE_SubExec(int cycles);
 #ifdef __cplusplus

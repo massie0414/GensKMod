@@ -27,7 +27,7 @@ HLE使用中のステートセーブ／ロードは無効です。
 ゲーム内セーブを処理します。CDプレイヤー画面はありません。
 
 動作確認対象は提供された『惑星ウッドストック ～ファンキーホラーバンド～』と
-『SOL-FEACE』です。FHBについては、
+『SOL-FEACE』『天下布武 ～英雄たちの咆哮～』です。FHBについては、
 オープニング映像とCD音声、タイトル、名前入力、本編開始、移動、コマンド、
 セーブと再起動後のCONTINUEを
 確認しています。全編のクリアや他タイトルの互換性を保証するものではありません。
@@ -48,6 +48,18 @@ HLE起動時は、CPU間の短い通信通知を取りこぼさないよう、�
 BIOSの書き換え可能なTRAP／USER call 2の呼び出し先、サブCPUのTRAP命令、
 起動時の1M共有RAM、MODE1の2048バイト転送、TOC情報取得に対応しています。
 
+### 天下布武
+
+`rom/TENKA_FUBU/TENKA_FUBU.CUE` をBIOSなしで起動できます。
+メーカーのロゴ、オープニング映像とPCM・CD音声、タイトル、シナリオと大名の
+選択、本編の城・地形の表示まで検証しています。大名の決定にはパッドのCを使います。
+全編のクリア、ゲーム内の保存・再開は未検証です。
+
+CDCホストポートからの直接読み込み、毎秒75セクターの読み出し待ち、
+音声のシーク・一時停止状態、グラフィックス／タイマー割り込みに対応しました。
+起動時にBIOSのVDP設定テーブルを初期化し、天下布武のように独自の
+V-blank処理からサブCPUへ通知するゲームでは、HLEからの定期通知を止めます。
+
 ## 開発者向け検証
 
 Visual Studio 2022のC++ツールとPythonが必要です。
@@ -55,6 +67,7 @@ Visual Studio 2022のC++ツールとPythonが必要です。
 ```powershell
 python tests/run_cd_hle_tests.py --image src/SampleGame/FHB.CUE
 python tests/run_cd_hle_tests.py --sol-feace rom/SOL_FEACE/MEGADRIVE_GAME_SPECIAL.CUE
+python tests/run_cd_hle_tests.py --tenka-fubu rom/TENKA_FUBU/TENKA_FUBU.CUE
 ```
 
 Releaseをビルドし、CUEの境界・不正入力テストと、通常／精密タイミングの
@@ -75,3 +88,9 @@ SOL-FEACEの無操作／Start・移動・射撃ありの各30000フレームを�
 
 診断が必要な場合だけ、`GENS_HLE_TRACE` にログファイルのパスを指定してください。
 `GENS_HLE_SAVE_DIR` はテスト用の保存先変更に使用できます。
+
+`--tenka-fubu` は無操作とシナリオ・大名選択ありを各30000フレーム実行します。
+通常設定（22050 Hz）と精密設定（44100 Hz）で、映像、PCMを含むミキサー出力、
+CD音声、フレームスキップ、リセット・終了を検証します。
+合成ディスクではCDCホストポート、75 Hzの読み出し待ち、音声の一時停止・
+シーク状態、VDP初期値、グラフィックス／タイマー割り込みも検査します。

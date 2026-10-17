@@ -6,6 +6,7 @@
 #include "Star_68k.h"
 #include "mem_S68k.h"
 #include "pcm.h"
+#include "cd_hle.h"
 
 #define CDC_DMA_SPEED 256
 
@@ -219,6 +220,7 @@ unsigned short Read_CDC_Host_SUB(void)
 	{
 		if ((CDC.RS0 & 0x0700) == 0x0300)	// SUB CPU
 		{
+			CD_HLE_CdcHostRead();
 			CDC.DBC.N -= 2;
 			
 			if (CDC.DBC.N <= 0)
@@ -273,6 +275,7 @@ unsigned short Read_CDC_Host_MAIN(void)
 	{
 		if ((CDC.RS0 & 0x0700) == 0x0200)	// MAIN CPU
 		{
+			CD_HLE_CdcHostRead();
 			CDC.DBC.N -= 2;
 			
 			if (CDC.DBC.N <= 0)

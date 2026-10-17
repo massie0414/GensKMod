@@ -14,6 +14,7 @@
 #include "../src/Gens/cd_sys.h"
 #include "../src/Gens/G_dsound.h"
 #include "../src/Gens/vdp_io.h"
+#include "../src/Gens/LC89510.h"
 
 #define CHECK(x) do { if(!(x)) { fprintf(stderr,"FAIL line %d: %s\n",__LINE__,#x); return 1; } } while(0)
 static void be32(unsigned char *p,unsigned v) { p[0]=v>>24; p[1]=v>>16; p[2]=v>>8; p[3]=v; }
@@ -56,6 +57,20 @@ int main(void) {
     M68K_Init(); S68K_Init(); Z80_Init(); Init_Tab(); FILE_Init();
     SegaCD_Started=Init_SegaCD("synthetic.cue"); CHECK(SegaCD_Started && CD_HLE_Active);
     CHECK(Ram_Word_State==2 && SCD.TOC.Last_Track==22);
+    CHECK(rw(Ram_68k,0xfdb4)==0x8004 && rw(Ram_68k,0xfdb6)==0x8124);
+    // Graphics/timer handlers patch the target only, retaining the BIOS JMP.
+    for(unsigned level=1;level<=3;level+=2) {
+        unsigned hook=level==1?0x5f76:0x5f82;
+        CHECK(rw(Ram_Prg,hook)==0x4ef9);
+        longword(Ram_Prg,hook+2,0x5500);
+        word(Ram_Prg,0x5500,0x5279); longword(Ram_Prg,0x5502,0x5902); word(Ram_Prg,0x5506,0x4e73);
+        S68000CONTEXT saved=sub68k_context;
+        word(Ram_Prg,0x5400,0x60fe);
+        sub68k_context.pc=0x5400; sub68k_context.areg[7]=0x5700; sub68k_context.sr=0x2000;
+        sub68k_tripOdometer(); sub68k_interrupt(level,-1); CD_HLE_SubExec(500);
+        CHECK(rw(Ram_Prg,0x5902)==(level==1?1:2));
+        sub68k_context=saved;
+    }
     // Software TRAPs must reach hooks installed after boot, on both CPUs.
     for(int sub=0;sub<2;sub++)for(unsigned n=0;n<16;n++) {
         unsigned char *p=sub?Ram_Prg:Ram_68k;
@@ -94,6 +109,21 @@ int main(void) {
     // The same API must write the initial sub-CPU 1M bank at $0C0000.
     r=api(0x8c,0xc0000,0x5300); CHECK(!(r.sr&1));
     for(unsigned i=0;i<2048;i++)CHECK(Ram_Word_1M[(0x20000+i)^1]==data[33*2048+i]);
+    S68K_WB(0xff8004,3);
+    r=api(0x8b); CHECK(!(r.sr&1) && (CDC.RS0&0xc000)==0x4000);
+    CHECK(S68K_RW(0xff8008)==0x0002 && S68K_RW(0xff8008)==0x3301);
+    for(unsigned i=0;i<2048;i+=2)CHECK(S68K_RW(0xff8008)==data[33*2048+i]*256+data[33*2048+i+1]);
+    CHECK((CDC.RS0&0xc000)==0x8000 && !(SCD.Status_CDC&8));
+    // Streaming pollers must wait for the next sector rather than outrun 75 Hz.
+    longword(Ram_Prg,0x5204,3); api(0x20,0x5200);
+    r=api(0x8a); CHECK(!(r.sr&1)); api(0x8d);
+    r=api(0x8a); CHECK(r.sr&1);
+    CD_HLE_Frame(); r=api(0x8a); CHECK(!(r.sr&1));
+    // Pause is observable even before CDDA starts; seeks retain the track.
+    api(0x03); api(0x81); CHECK((rw(Ram_Prg,0x1300)&0xff00)==0x500);
+    word(Ram_Prg,0x5200,10); api(0x15,0x5200); api(0x81);
+    CHECK((rw(Ram_Prg,0x1300)&0xff00)==0x500 && Ram_Prg[0x1307^1]==10);
+    api(0x04); api(0x81); CHECK((rw(Ram_Prg,0x1300)&0xff00)==0x100);
     Free_Rom(Game); FILE_End(); CHECK(!CD_HLE_Active);
     puts("PASS: HLE writable TRAP/USER hooks, TOC, Mode 1 transfers and initial 1M banks");
     return 0;

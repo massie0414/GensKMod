@@ -15,6 +15,7 @@
 #include "Mem_Z80.h"
 #include "cd_file.h"
 #include "cd_sys.h"
+#include "LC89510.h"
 #include "Rom.h"
 #include "vdp_io.h"
 #include "gens.h"
@@ -26,8 +27,12 @@ static unsigned char boot[0x10000];
 static unsigned ip_off, ip_size, sp_off, sp_size;
 static unsigned read_lba, read_count;
 static int read_paused;
+static unsigned read_budget, read_clock;
+static int read_timed;
 static unsigned frame;
+static int native_irq2;
 static int audio_track=-1, audio_sector, audio_mode, audio_paused, audio_clock;
+static unsigned audio_seek_delay;
 static unsigned volume=1024, master_volume=1024, fade_target=1024, fade_step;
 static unsigned main_seen[256], sub_seen[256];
 static FILE *trace;
@@ -212,8 +217,9 @@ int CD_HLE_Boot(void) {
      * Empty RAM would run through the banked 68K window and corrupt RAM.
      * Supply our own DI / JP $0001 idle loop, replaceable by the game. */
     Ram_Z80[0]=0xf3; Ram_Z80[1]=0xc3; Ram_Z80[2]=1; Ram_Z80[3]=0;
-    read_lba=read_count=frame=0; read_paused=0;
+    read_lba=read_count=frame=0; read_budget=1; read_clock=0; read_paused=read_timed=0;
     audio_track=-1; audio_sector=audio_clock=audio_paused=0;
+    audio_seek_delay=0; native_irq2=0;
     volume=master_volume=fade_target=1024; fade_step=0;
     memset(main_seen,0,sizeof(main_seen)); memset(sub_seen,0,sizeof(sub_seen));
     if(trace)fclose(trace);
@@ -227,7 +233,8 @@ int CD_HLE_Boot(void) {
     for(i=0x200;i<0x400;i+=4)stub(Rom_Data,i,0x2000+(i-0x200)*2);
     /* Interrupt vectors point at writable, BIOS-compatible RAM trampolines. */
     for(i=8;i<0x100;i+=4)wl(Rom_Data,i,0x1800);
-    ww(Rom_Data,0x1800,0x4238); ww(Rom_Data,0x1802,0xfe26); ww(Rom_Data,0x1804,0x4e73);
+    ww(Rom_Data,0x1800,0x4238); ww(Rom_Data,0x1802,0xfe26); ww(Rom_Data,0x1804,0x08f9); ww(Rom_Data,0x1806,0);
+    wl(Rom_Data,0x1808,0xa12000); ww(Rom_Data,0x180c,0x4e73);
     /* Wait for the game's V-blank handler to acknowledge the BIOS work flag. */
     ww(Rom_Data,0x1840,0x4a38); ww(Rom_Data,0x1842,0xfe26);
     ww(Rom_Data,0x1844,0x66fa); ww(Rom_Data,0x1846,0x4e75);
@@ -242,6 +249,11 @@ int CD_HLE_Boot(void) {
     ww(Ram_Prg,0x1006,0x4ef9); wl(Ram_Prg,0x1008,main);
     for(i=8;i<0x100;i+=4)wl(Ram_Prg,i,0x1100);
     ww(Ram_Prg,0x1100,0x4e73);
+    /* Graphics/timer users patch only the destination, leaving the BIOS JMP. */
+    ww(Ram_Prg,0x5f76,0x4ef9); wl(Ram_Prg,0x5f78,0x1100);
+    wl(Ram_Prg,0x64,0x5f76);
+    ww(Ram_Prg,0x5f82,0x4ef9); wl(Ram_Prg,0x5f84,0x1100);
+    wl(Ram_Prg,0x6c,0x5f82);
     /* TRAP vectors dispatch through the BIOS-compatible writable jump table. */
     for(i=0;i<16;i++) {
         wl(Ram_Prg,0x80+i*4,0x5fa0+i*6);
@@ -265,17 +277,22 @@ int CD_HLE_Boot(void) {
     S68K_State=1; Int_Mask_S68K=4; Ram_Word_State=0; MS68K_Set_Word_Ram();
     /* CD boot hands the program 1M banks; games can then select 2M mode. */
     S68K_WB(0xff8003,4);
-    Set_VDP_Reg(1,0x24); Set_VDP_Reg(15,2);
+    /* Games also access the BIOS VDP register shadow directly. */
+    { static const unsigned char defaults[19]={4,0x24,0x30,0x28,7,0x5c,0,0,0,0,0,0,0x81,0x2f,0,2,0x11,0,0};
+      for(i=0;i<19;i++) { Set_VDP_Reg(i,defaults[i]); ww(Ram_68k,0xfdb4+i*2,0x8000+i*0x100+defaults[i]); }
+    }
     if(trace)fprintf(trace,"boot ip=%x/%x sp=%x/%x init=%x main=%x irq=%x\n",ip_off,ip_size,sp_off,sp_size,init,main,irq);
     return 1;
 }
 
 int CD_HLE_AudioPlaying(void) { return CD_HLE_Active && audio_track>=1 && !audio_paused; }
+void CD_HLE_CdcHostRead(void) { if(CD_HLE_Active)read_timed=1; }
 
 static void audio_tick(void) {
     short samples[1176];
     int clock_rate=Sound_Rate>0?Sound_Rate:44100;
     int frame_samples=Seg_Lenght>0?Seg_Lenght:clock_rate/(CPU_Mode?50:60);
+    if(audio_seek_delay && !--audio_seek_delay)audio_paused=0;
     if(audio_track<1 || audio_paused)return;
     /* Match the samples actually consumed by the mixer. At 22050 Hz NTSC,
      * each frame consumes 368 samples, not the nominal 367.5. Scheduling
@@ -289,7 +306,7 @@ static void audio_tick(void) {
         if(audio_sector>=t->Lenght) {
             if(audio_mode==0x13)audio_sector=0;
             else if(audio_mode==0x11 && audio_track+1<SCD.TOC.Last_Track) { audio_track++; audio_sector=0; t=&Tracks[audio_track]; }
-            else { audio_track=-1; break; }
+            else { audio_paused=1; break; }
         }
         if(t->Type!=TYPE_CDDA || !t->F || fseek(t->F,(t->FileOffset+audio_sector)*2352,SEEK_SET) || fread(samples,1,2352,t->F)!=2352) {
             unsupported(1,0x12); audio_track=-1; break;
@@ -304,8 +321,17 @@ static void audio_tick(void) {
 void CD_HLE_Frame(void) {
     if(!CD_HLE_Active)return;
     frame++;
+    /* CDCSTAT must expose the disc's 75-sector/s cadence. Streaming games
+     * otherwise overrun their compressed video/PCM rings in program RAM. */
+    read_clock+=75;
+    read_budget+=read_clock/(CPU_Mode?50:60);
+    read_clock%=CPU_Mode?50:60;
+    if(read_budget>2)read_budget=2;
     audio_tick();
-    sub68k_interrupt(2,-1);
+    /* Older IPs rely on the BIOS heartbeat; IPs that assert IRQ2 themselves
+     * own its timing (notably during sound-driver handshakes). SET_VINT
+     * clients still use the BIOS-managed heartbeat. */
+    if(!native_irq2 || main_seen[0x368/4])sub68k_interrupt(2,-1);
     if(trace && frame%60==0) { fprintf(trace,"frame %u main=%06x sub=%06x comm=%04x/%04x word=%u sr=%x/%x\n",frame,main68k_context.pc,sub68k_context.pc,COMM.Command[1],COMM.Status[1],Ram_Word_State,main68k_context.sr,sub68k_context.sr); fflush(trace); }
 }
 static void subcall(void) {
@@ -315,13 +341,18 @@ static void subcall(void) {
     if(fn<256&&!sub_seen[fn]++&&trace)fprintf(trace,"sub fn=%02x a0=%x a1=%x d1=%x\n",fn,a,c->areg[1],c->dreg[1]);
     c->sr &= ~1;
     switch(fn) {
-    case 0x02: audio_track=-1; break;
-    case 0x03: audio_paused=1; break;
-    case 0x04: audio_paused=0; break;
-    case 0x11: case 0x12: case 0x13: {
+    case 0x02: audio_track=-1; audio_seek_delay=0; break;
+    case 0x03: audio_paused=1; audio_seek_delay=0; break;
+    case 0x04: audio_paused=0; audio_seek_delay=0; break;
+    case 0x11: case 0x12: case 0x13: case 0x15: case 0x19: {
         unsigned t=memr(1,a);
         if(t<2 || t>(unsigned)SCD.TOC.Last_Track || Tracks[t-1].Type!=TYPE_CDDA) { c->sr|=1; unsupported(1,fn); break; }
-        audio_track=t-1; audio_sector=audio_clock=audio_paused=0; audio_mode=fn; CD_Audio_Starting=1;
+        /* MSCSEEK1 exposes the seek-complete pause before playing once.
+         * Keep it visible across a frame so callers can observe CDBSTAT. */
+        audio_track=t-1; audio_sector=audio_clock=audio_paused=0;
+        audio_seek_delay=fn==0x19?2:0;
+        if(fn==0x15 || fn==0x19)audio_paused=1;
+        audio_mode=fn==0x19?0x12:fn; CD_Audio_Starting=1;
         if(trace)fprintf(trace,"CDDA track %u started\n",t);
         break;
     }
@@ -330,14 +361,16 @@ static void subcall(void) {
     case 0x18: read_lba=meml(1,a); read_count=0; read_paused=1; audio_track=-1; if(read_lba>=(unsigned)Tracks[0].Lenght)c->sr|=1; break;
     case 0x10: audio_track=-1; read_count=0; break;
     case 0x80: break;
+    case 0x84: break; /* CDBPAUSE: image drives do not spin down in standby. */
     case 0x96: /* CDCSETMODE: HLE transfers sectors through the sub CPU. */
         if(c->dreg[1]&0xffff) { c->sr|=1; unsupported(1,fn); break; }
         read_count=0; read_paused=0; break;
     case 0x81:
         /* CDBSTAT returns a pointer, not a caller-provided output buffer. */
         c->areg[0]=0x1300; memset(Ram_Prg+0x1300,0,32);
-        ww(Ram_Prg,0x1300,(audio_track>=1?(audio_paused?0x500:0x100):0)|(read_count?(read_paused?5:1):0));
+        ww(Ram_Prg,0x1300,(audio_paused?0x500:(audio_track>=1?0x100:0))|(read_count?(read_paused?5:1):0));
         ww(Ram_Prg,0x1310,0x100|SCD.TOC.Last_Track);
+        Ram_Prg[0x1307^1]=(unsigned char)(audio_track>=1?audio_track+1:1);
         break;
     case 0x83: { /* CDBTOCREAD: absolute BCD MSF/track and track type. */
         unsigned t=c->dreg[1]&0xffff, pos=0;
@@ -366,8 +399,24 @@ static void subcall(void) {
         break;
     case 0x87: case 0x88: read_paused=0; break;
     case 0x89: read_count=0; break;
-    case 0x8a: if(!read_count||read_paused)c->sr|=1; break;
-    case 0x8b: if(!read_count||read_paused)c->sr|=1; else c->dreg[0]=sector_header(read_lba); break;
+    case 0x8a: if(!read_count||read_paused||(read_timed&&!read_budget))c->sr|=1; break;
+    case 0x8b:
+        if(!read_count||read_paused)c->sr|=1;
+        else {
+            unsigned h=sector_header(read_lba), dest=CDC.RS0&0x700;
+            c->dreg[0]=h;
+            if(dest==0x200 || dest==0x300) {
+                /* Some games read the CDC host port instead of CDCTRN.
+                 * Feed the existing port/DRQ/EDT implementation the same data. */
+                if(!sector(read_lba,CDC.Buffer+4,2048)) { c->sr|=1; break; }
+                CDC.Buffer[0]=(unsigned char)(h>>24); CDC.Buffer[1]=(unsigned char)(h>>16);
+                CDC.Buffer[2]=(unsigned char)(h>>8); CDC.Buffer[3]=(unsigned char)h;
+                CDC.DAC.N=0; CDC.DBC.N=2052;
+                CDC.RS0=(CDC.RS0&~0xc000)|0x4000;
+                CDC.IFSTAT&=~8; SCD.Status_CDC|=8;
+            }
+        }
+        break;
     case 0x8c:
         if(!read_count||read_paused||!sector(read_lba,b,sizeof(b))) { c->sr|=1; break; }
         for(i=0;i<sizeof(b);i+=2)memw(1,a+i,b[i]*256+b[i+1]);
@@ -375,7 +424,11 @@ static void subcall(void) {
         memw(1,c->areg[1],i>>16); memw(1,c->areg[1]+2,i);
         c->areg[0]+=sizeof(b); c->areg[1]+=4;
         break;
-    case 0x8d: if(read_count) { read_lba++; read_count--; } break;
+    case 0x8d:
+        SCD.Status_CDC&=~8; CDC.RS0&=~0x4000;
+        if(read_budget)read_budget--;
+        if(read_count) { read_lba++; read_count--; }
+        break;
     default: unsupported(1,fn); c->sr|=1; break;
     }
     ret(1);
@@ -435,10 +488,12 @@ static void maincall(unsigned fn) {
     ret(0);
 }
 unsigned CD_HLE_MainExec(int cycles) {
-    unsigned result;
+    unsigned result, previous_irq=sub68k_context.interrupts[0]&4;
+    unsigned in_vblank=(main68k_context.sr&0x700)==0x600;
     if(!CD_HLE_Active)return main68k_exec(cycles);
     if(Paused)return 0x80000004;
     result=main68k_exec(cycles);
+    if(in_vblank && !previous_irq && (sub68k_context.interrupts[0]&4))native_irq2=1;
     if((main68k_context.interrupts[0]&0x10) && main68k_context.pc>=0x2006 && main68k_context.pc<0x2400 && (main68k_context.pc&7)==6) {
         unsigned fn=0x200+(main68k_context.pc-0x2006)/2;
         restore_sr(0); maincall(fn);
@@ -453,4 +508,3 @@ unsigned CD_HLE_SubExec(int cycles) {
     else if(CD_HLE_Active && (sub68k_context.interrupts[0]&1) && sub68k_context.pc==0x1216) { restore_sr(1); bramcall(); }
     return result;
 }
-
