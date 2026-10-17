@@ -2854,6 +2854,13 @@ long PASCAL WinProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 					}
 					return 0;
 
+				case ID_EMULATION_ESCAPE:
+					if (Full_Screen)
+					{
+						Set_Render(hWnd, 0, -1, true);
+						return 0;
+					}
+					// In windowed mode, Escape retains its pause shortcut.
 				case ID_EMULATION_PAUSED:
 #ifndef GENS_KMOD
 					if (Debug)
