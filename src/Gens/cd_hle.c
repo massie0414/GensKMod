@@ -247,6 +247,14 @@ int CD_HLE_Boot(void) {
     wl(Rom_Data,0x78,0xfffd06); ww(Ram_68k,0xfd06,0x4ef9); wl(Ram_68k,0xfd08,0x1800);
     ww(Rom_Data,0x1860,0x4e75);
     ww(Ram_68k,0xfda8,0x4ef9); wl(Ram_68k,0xfdaa,0x1860); /* Writable V-blank callback. */
+    /* _MBURAM is the main CPU's optional backup RAM cartridge entry.
+     * No cartridge is attached: BRMINIT returns carry set and D1.w=0.
+     * Keep this separate from the sub CPU's internal backup RAM API.
+     * SEGA-CD Technical Bulletins, 6/16/92, BIOS specifications correction. */
+    ww(Ram_68k,0xfdae,0x4ef9); wl(Ram_68k,0xfdb0,0x1868);
+    ww(Rom_Data,0x1868,0x7200); /* MOVEQ #0,D1 */
+    ww(Rom_Data,0x186a,0x003c); ww(Rom_Data,0x186c,1); /* ORI #1,CCR */
+    ww(Rom_Data,0x186e,0x4e75);
     wl(Rom_Data,0x70,0xfffd0c); ww(Ram_68k,0xfd0c,0x4ef9); wl(Ram_68k,0xfd0e,0x1800);
     for(i=0;i<16;i++) {
         wl(Rom_Data,0x80+i*4,0xfffd18+i*6);
@@ -287,6 +295,8 @@ int CD_HLE_Boot(void) {
     S68K_State=1; Int_Mask_S68K=4; Ram_Word_State=0; MS68K_Set_Word_Ram();
     /* CD boot hands the program 1M banks; games can then select 2M mode. */
     S68K_WB(0xff8003,4);
+    /* BIOS TOC first/last track cache, also read directly by disc programs. */
+    ww(Ram_Prg,0x5e90,0x100|SCD.TOC.Last_Track);
     /* Games also access the BIOS VDP register shadow directly. */
     { static const unsigned char defaults[19]={4,0x24,0x30,0x28,7,0x5c,0,0,0,0,0,0,0x81,0x2f,0,2,0x11,0,0};
       for(i=0;i<19;i++) { Set_VDP_Reg(i,defaults[i]); ww(Ram_68k,0xfdb4+i*2,0x8000+i*0x100+defaults[i]); }
@@ -381,6 +391,16 @@ static void subcall(void) {
         ww(Ram_Prg,0x1300,(audio_paused?0x500:(audio_track>=1?0x100:0))|(read_count?(read_paused?5:1):0));
         ww(Ram_Prg,0x1310,0x100|SCD.TOC.Last_Track);
         Ram_Prg[0x1307^1]=(unsigned char)(audio_track>=1?audio_track+1:1);
+        /* The CDD table includes BCD absolute/track-relative MSF, not just
+         * the track number. Games wait for the relative frame to advance
+         * before beginning a transfer (Mega-CD BIOS Manual, pp. 20-21). */
+        {
+            unsigned relative=audio_track>=1?audio_sector:read_lba;
+            unsigned absolute=relative+150+(audio_track>=1?Tracks[audio_track].DiscStart:0);
+            unsigned flag=audio_track>=1?0:4;
+            wl(Ram_Prg,0x1308,(bcd(absolute/4500)<<24)|(bcd(absolute/75%60)<<16)|(bcd(absolute%75)<<8)|flag);
+            wl(Ram_Prg,0x130c,(bcd(relative/4500)<<24)|(bcd(relative/75%60)<<16)|(bcd(relative%75)<<8)|flag);
+        }
         break;
     case 0x83: { /* CDBTOCREAD: absolute BCD MSF/track and track type. */
         unsigned t=c->dreg[1]&0xffff, pos=0;

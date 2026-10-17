@@ -20,8 +20,11 @@
 //TODO what the exact use of pal_Kmod here ? why not CDpal_KMod ?
 
 static HWND hCD_GFX;
-static UCHAR CDpal_KMod, CDtileBank_KMod, CDzoomTile_KMod, CDTileCurDraw;
-static CHAR debug_string[1024];
+// 4096 8x16 tiles cover all 256 KiB of Word RAM.
+#define CD_GFX_COLUMNS 128
+#define CD_GFX_ROWS 32
+#define CD_GFX_WIDTH (CD_GFX_COLUMNS * 8)
+#define CD_GFX_HEIGHT (CD_GFX_ROWS * 16)
 
 
 
@@ -270,118 +273,110 @@ void DrawTileCD_KMod(HDC hDCMain, unsigned short int numTile, WORD x, WORD y, UC
 
 void DrawCD_GFX_KMod(LPDRAWITEMSTRUCT hlDIS)
 {
-	WORD posX, posY, maxY, maxX;
-	unsigned short int numTile = 0;
-	SCROLLINFO si;
+	static DWORD pixels[CD_GFX_WIDTH * CD_GFX_HEIGHT];
+	DWORD colors[16];
+	BITMAPINFO bmi;
+	unsigned int tile, x, y, i;
 
-	HDC hDC;
-	HBITMAP hBitmap, hOldBitmap;
-
-	hDC = CreateCompatibleDC(hlDIS->hDC);
-	hBitmap = CreateCompatibleBitmap(hlDIS->hDC, hlDIS->rcItem.right - hlDIS->rcItem.left, hlDIS->rcItem.bottom - hlDIS->rcItem.top);
-	hOldBitmap = SelectObject(hDC, hBitmap);
-
-	//	numTile = CDtileBank_KMod*32;
-
-	ZeroMemory(&si, sizeof(SCROLLINFO));
-	si.cbSize = sizeof(si);
-	si.fMask = SIF_POS;
-	GetScrollInfo((HWND)GetDlgItem(hCD_GFX, IDC_CD_GFX_SCROLL), SB_CTL, &si);
-
-	numTile = si.nPos * 32;
-
-	if (Paused)
+	for (i = 0; i < 16; ++i)
 	{
-		maxY = 16 * 16;
-	}
-	else
-	{
-		// speed up emulation by redrawing 1/4 each refresh
-		maxY = 4 * 16;
-		numTile += CDTileCurDraw * 4 * 32;
+		COLORREF color = vdpdebug_getColor(pal_KMod, i);
+		colors[i] = (GetRValue(color) << 16) | (GetGValue(color) << 8) | GetBValue(color);
 	}
 
-
-	maxX = 32 * 8;
-	for (posY = 0; posY < maxY; posY += 16)
+	// Write pixels directly instead of allocating a GDI bitmap for every tile.
+	for (tile = 0; tile < CD_GFX_COLUMNS * CD_GFX_ROWS; ++tile)
 	{
-		for (posX = 0; posX < maxX; posX += 8)
+		unsigned int tileX = (tile % CD_GFX_COLUMNS) * 8;
+		unsigned int tileY = (tile / CD_GFX_COLUMNS) * 16;
+		for (y = 0; y < 16; ++y)
 		{
-			DrawTileCD_KMod(hDC, numTile++, posX, posY, pal_KMod, 1);
+			for (x = 0; x < 8; x += 2)
+			{
+				unsigned char data = Ram_Word_2M[tile * 64 + y * 4 + ((x / 2) ^ 1)];
+				pixels[(tileY + y) * CD_GFX_WIDTH + tileX + x] = colors[data >> 4];
+				pixels[(tileY + y) * CD_GFX_WIDTH + tileX + x + 1] = colors[data & 15];
+			}
 		}
 	}
 
-
-	BitBlt(
-		hlDIS->hDC, // handle to destination device context
-		0,  // x-coordinate of destination rectangle's upper-left
-		// corner
-		(Paused ? 0 : CDTileCurDraw*maxY),  // y-coordinate of destination rectangle's upper-left
-		// corner
-		maxX,  // width of destination rectangle
-		maxY, // height of destination rectangle
-		hDC,  // handle to source device context
-		0,   // x-coordinate of source rectangle's upper-left
-		// corner
-		0,   // y-coordinate of source rectangle's upper-left
-		// corner
-		SRCCOPY  // raster operation code
-		);
-
-	SelectObject(hDC, hOldBitmap);
-	DeleteObject(hBitmap);
-
-	DeleteDC(hDC);
-
+	ZeroMemory(&bmi, sizeof(bmi));
+	bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+	bmi.bmiHeader.biWidth = CD_GFX_WIDTH;
+	bmi.bmiHeader.biHeight = -CD_GFX_HEIGHT;
+	bmi.bmiHeader.biPlanes = 1;
+	bmi.bmiHeader.biBitCount = 32;
+	bmi.bmiHeader.biCompression = BI_RGB;
+	SetStretchBltMode(hlDIS->hDC, COLORONCOLOR);
+	StretchDIBits(hlDIS->hDC, hlDIS->rcItem.left, hlDIS->rcItem.top,
+		hlDIS->rcItem.right - hlDIS->rcItem.left, hlDIS->rcItem.bottom - hlDIS->rcItem.top,
+		0, 0, CD_GFX_WIDTH, CD_GFX_HEIGHT, pixels, &bmi, DIB_RGB_COLORS, SRCCOPY);
 }
 
 
 void UpdateCD_GFX_KMod()
 {
-	if (OpenedWindow_KMod[5] == FALSE)	return;
-
+	if (OpenedWindow_KMod[5] == FALSE) return;
 	RedrawWindow(GetDlgItem(hCD_GFX, IDC_CD_GFX), NULL, NULL, RDW_INVALIDATE);
-
-	CDTileCurDraw++;
-	if (CDTileCurDraw > 3)	CDTileCurDraw = 0;
 }
 
 
 void CD_GFXInit_KMod(HWND hwnd)
 {
-	SCROLLINFO si;
-	RECT rc;
+	RECT image, button, frame = {0, 0, 0, 0}, window;
+	MONITORINFO monitor;
+	int width = CD_GFX_WIDTH, height = CD_GFX_HEIGHT;
+	int margin, buttonHeight, buttonWidth, clientWidth, clientHeight;
 
-	CDtileBank_KMod = 0;
+	GetWindowRect(GetDlgItem(hwnd, IDC_CD_GFX), &image);
+	MapWindowPoints(NULL, hwnd, (LPPOINT)&image, 2);
+	GetWindowRect(GetDlgItem(hwnd, IDC_CD_GFX_BMP), &button);
+	margin = image.left;
+	buttonHeight = button.bottom - button.top;
+	buttonWidth = button.right - button.left;
+	AdjustWindowRectEx(&frame, GetWindowLong(hwnd, GWL_STYLE), FALSE,
+		GetWindowLong(hwnd, GWL_EXSTYLE));
+	monitor.cbSize = sizeof(monitor);
+	if (GetMonitorInfo(MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST), &monitor))
+	{
+		int availableWidth = monitor.rcWork.right - monitor.rcWork.left -
+			(frame.right - frame.left) - margin * 2;
+		int availableHeight = monitor.rcWork.bottom - monitor.rcWork.top -
+			(frame.bottom - frame.top) - image.top - buttonHeight - margin * 2;
+		if (availableWidth < width && availableWidth > 0)
+		{
+			width = availableWidth;
+			height = MulDiv(width, CD_GFX_HEIGHT, CD_GFX_WIDTH);
+		}
+		if (availableHeight < height && availableHeight > 0)
+		{
+			height = availableHeight;
+			width = MulDiv(height, CD_GFX_WIDTH, CD_GFX_HEIGHT);
+		}
+	}
 
-	ZeroMemory(&si, sizeof(SCROLLINFO));
-	si.cbSize = sizeof(si);
-	si.fMask = SIF_RANGE | SIF_PAGE | SIF_POS;
-	si.nMin = 0;
-	si.nPage = 1;
-	si.nPos = 0;
-	si.nMax = 64 - 16;
-
-	SetScrollInfo(GetDlgItem(hwnd, IDC_CD_GFX_SCROLL), SB_CTL, &si, TRUE);
-
-
-	GetClientRect(GetDlgItem(hwnd, IDC_CD_GFX), &rc);
-	MapWindowPoints(GetDlgItem(hwnd, IDC_CD_GFX), hwnd, (LPPOINT)&rc, 2);
-
-	rc.bottom = rc.top + 16 * 16;
-	rc.right = rc.left + 32 * 8;
-	MoveWindow(GetDlgItem(hwnd, IDC_CD_GFX), rc.left, rc.top, rc.right - rc.left, rc.bottom - rc.top, TRUE);
-
-
-	MoveWindow(GetDlgItem(hwnd, IDC_CD_GFX_SCROLL), rc.right, rc.top, GetSystemMetrics(SM_CXVSCROLL), rc.bottom - rc.top, TRUE);
-
+	clientWidth = width + margin * 2;
+	clientHeight = image.top + height + margin * 2 + buttonHeight;
+	MoveWindow(GetDlgItem(hwnd, IDC_CD_GFX), margin, image.top, width, height, TRUE);
+	MoveWindow(GetDlgItem(hwnd, IDC_CD_GFX_DUMP), margin, image.top + height + margin,
+		buttonWidth, buttonHeight, TRUE);
+	MoveWindow(GetDlgItem(hwnd, IDC_CD_GFX_BMP), clientWidth - margin - buttonWidth,
+		image.top + height + margin, buttonWidth, buttonHeight, TRUE);
+	GetWindowRect(hwnd, &window);
+	window.right = clientWidth + frame.right - frame.left;
+	window.bottom = clientHeight + frame.bottom - frame.top;
+	if (GetMonitorInfo(MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST), &monitor))
+	{
+		window.left = max(monitor.rcWork.left, min(window.left, monitor.rcWork.right - window.right));
+		window.top = max(monitor.rcWork.top, min(window.top, monitor.rcWork.bottom - window.bottom));
+	}
+	SetWindowPos(hwnd, NULL, window.left, window.top, window.right, window.bottom,
+		SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
 
 BOOL CALLBACK CD_GFXDlgProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam)
 {
-	SCROLLINFO si;
-
 	switch (Message)
 	{
 	case WM_INITDIALOG:
@@ -400,42 +395,6 @@ BOOL CALLBACK CD_GFXDlgProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lPara
 			break;
 		}
 		break;
-
-	case WM_VSCROLL:
-		ZeroMemory(&si, sizeof(SCROLLINFO));
-		si.cbSize = sizeof(si);
-		si.fMask = SIF_ALL;
-		GetScrollInfo((HWND)lParam, SB_CTL, &si);
-		switch (LOWORD(wParam))
-		{
-		case SB_PAGEUP:
-			si.nPos -= si.nPage;
-			break;
-		case SB_PAGEDOWN:
-			si.nPos += si.nPage;
-			break;
-		case SB_LINEUP:
-			si.nPos--;
-			break;
-		case SB_LINEDOWN:
-			si.nPos++;
-			break;
-		case SB_THUMBTRACK:
-			//					 si.nPos = HIWORD(wParam);
-			si.nPos = si.nTrackPos;
-			break;
-		}
-
-		si.cbSize = sizeof(si);
-		si.fMask = SIF_POS;
-		SetScrollInfo((HWND)lParam, SB_CTL, &si, TRUE);
-
-		wsprintf(debug_string, "0x%.5X", (32 * si.nPos) * 0x500);
-		SendDlgItemMessage(hCD_GFX, IDC_CD_GFX_ADR, WM_SETTEXT, 0, (LPARAM)debug_string);
-
-		UpdateCD_GFX_KMod();
-		UpdateWindow(hwnd);
-		return 0;
 
 	case WM_DRAWITEM:
 		if ((UINT)wParam == IDC_CD_GFX)

@@ -67,9 +67,29 @@ int main(void) {
     M68K_Init(); S68K_Init(); Z80_Init(); Init_Tab(); FILE_Init();
     SegaCD_Started=Init_SegaCD("synthetic.cue"); CHECK(SegaCD_Started && CD_HLE_Active);
     CHECK(Ram_Word_State==2 && SCD.TOC.Last_Track==22);
+    CHECK(rw(Ram_Prg,0x5e90)==0x0116); // Direct BIOS TOC cache access.
     CHECK(rw(Ram_68k,0xfdb4)==0x8004 && rw(Ram_68k,0xfdb6)==0x8124);
     CHECK(rw(Ram_68k,0x63e)==0xbeef); // IP length excludes the $600-byte security block.
     CHECK(rw(Ram_68k,0xfda8)==0x4ef9); // Games patch the callback target only.
+    // _MBURAM probes an optional RAM cartridge, not internal sub-CPU BRAM.
+    // Execute a real absolute-short JSR as games do (sign-extended $FDAE).
+    CHECK(rw(Ram_68k,0xfdae)==0x4ef9);
+    for(unsigned fn=0;fn<=8;fn++) {
+        S68000CONTEXT saved=main68k_context;
+        word(Ram_68k,0x5400,0x4eb8); word(Ram_68k,0x5402,0xfdae);
+        word(Ram_68k,0x5404,0x60fe);
+        main68k_context.pc=0xff5400; main68k_context.areg[7]=0xff5700;
+        main68k_context.sr=0x2700; main68k_context.dreg[0]=fn;
+        main68k_context.dreg[1]=0xdeadbeef;
+        main68k_context.areg[0]=0x201250; main68k_context.areg[1]=0x201ed0;
+        main68k_tripOdometer(); CD_HLE_MainExec(100);
+        CHECK(main68k_context.pc==0xff5404 && main68k_context.areg[7]==0xff5700);
+        CHECK((main68k_context.sr&1) && main68k_context.dreg[1]==0);
+        CHECK(main68k_context.dreg[0]==fn);
+        CHECK(main68k_context.areg[0]==0x201250 && main68k_context.areg[1]==0x201ed0);
+        CHECK(rw(Ram_68k,0xfdb4)==0x8004); // Adjacent VDP shadow is intact.
+        main68k_context=saved;
+    }
     // Default V-blank user callback is callable, and can be replaced by the game.
     longword(Ram_68k,0xfdaa,0xff5500);
     word(Ram_68k,0x5500,0x7007); word(Ram_68k,0x5502,0x4e75);
@@ -148,6 +168,9 @@ int main(void) {
     // Adjacent Mode 1 reads advance by 2048 and never copy the EDC/ECC tail.
     longword(Ram_Prg,0x5200,33); longword(Ram_Prg,0x5204,1);
     r=api(0x20,0x5200); CHECK(!(r.sr&1));
+    api(0x81);
+    CHECK(rw(Ram_Prg,0x1308)==0x0002 && rw(Ram_Prg,0x130a)==0x3304);
+    CHECK(rw(Ram_Prg,0x130c)==0 && rw(Ram_Prg,0x130e)==0x3304);
     memset(Ram_Prg+0x20000,0xa5,0x1000);
     r=api(0x8c,0x20000,0x5300);
     CHECK(!(r.sr&1) && r.areg[0]==0x20800 && r.areg[1]==0x5304);
@@ -182,8 +205,13 @@ int main(void) {
     api(0x03); api(0x81); CHECK((rw(Ram_Prg,0x1300)&0xff00)==0x500);
     word(Ram_Prg,0x5200,10); api(0x15,0x5200); api(0x81);
     CHECK((rw(Ram_Prg,0x1300)&0xff00)==0x500 && Ram_Prg[0x1307^1]==10);
+    CHECK(rw(Ram_Prg,0x1308)==0x0004 && rw(Ram_Prg,0x130a)==0x4800);
+    CHECK(rw(Ram_Prg,0x130c)==0 && rw(Ram_Prg,0x130e)==0);
     api(0x04); api(0x81); CHECK((rw(Ram_Prg,0x1300)&0xff00)==0x100);
+    word(Ram_68k,0xfdae,0); word(Ram_Prg,0x5e90,0);
+    Reset_SegaCD();
+    CHECK(CD_HLE_Active && rw(Ram_68k,0xfdae)==0x4ef9 && rw(Ram_Prg,0x5e90)==0x0116);
     Free_Rom(Game); FILE_End(); CHECK(!CD_HLE_Active);
-    puts("PASS: HLE writable TRAP/USER hooks, TOC, Mode 1 transfers and initial 1M banks");
+    puts("PASS: HLE writable hooks, absent RAM cartridge, TOC/status times, Mode 1 transfers, reset and initial 1M banks");
     return 0;
 }
