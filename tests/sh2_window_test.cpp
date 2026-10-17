@@ -84,15 +84,17 @@ static void check(int mode, int list, void (*create)(HINSTANCE, HWND),
     check_text_bounds(hwnd,mode);
     assert(GetWindowLong(hwnd,GWL_STYLE)&WS_THICKFRAME);
     GetWindowRect(hwnd,&initial);
-    GetWindowRect(GetDlgItem(hwnd,list),&before);
+    assert(!GetDlgItem(hwnd,list));
+    GetWindowRect(GetDlgItem(hwnd,IDC_SH2_USAGE_GROUP),&before);
+    MapWindowPoints(NULL,hwnd,(POINT*)&before,2);
     SendMessage(hwnd,WM_GETMINMAXINFO,0,(LPARAM)&limits);
     assert(limits.ptMinTrackSize.x==initial.right-initial.left);
     SetWindowPos(hwnd,NULL,40,50,initial.right-initial.left+120,
                  initial.bottom-initial.top+80,SWP_NOZORDER|SWP_NOACTIVATE);
-    GetWindowRect(GetDlgItem(hwnd,list),&after);
+    GetWindowRect(GetDlgItem(hwnd,IDC_SH2_USAGE_GROUP),&after);
+    MapWindowPoints(NULL,hwnd,(POINT*)&after,2);
     check_text_bounds(hwnd,mode);
-    assert(after.right-after.left==before.right-before.left+120);
-    assert(after.bottom-after.top==before.bottom-before.top+80);
+    assert(EqualRect(&before,&after));
     ShowWindow(hwnd,SW_SHOW); OpenedWindow_KMod[mode-1]=TRUE;
     GetWindowRect(hwnd,&saved); save(config); destroy();
     assert(!HandleWindow_KMod[mode-1]);

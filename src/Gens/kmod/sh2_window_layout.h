@@ -17,7 +17,7 @@ static RECT SH2Window_ControlRect(HWND hwnd, int id)
     MapWindowPoints(NULL, hwnd, (POINT *)&r, 2);
     return r;
 }
-static void SH2Window_FitStatus(HWND hwnd, int srId, int adrId, int dataId, int usageId)
+static void SH2Window_FitStatus(HWND hwnd, int srId, int adrId, int dataId, int pcId)
 {
     const char *samples[3] = {
         "T=0 S=0 Q=0 M=0 I=0 SR=0000 Status=0000",
@@ -25,8 +25,8 @@ static void SH2Window_FitStatus(HWND hwnd, int srId, int adrId, int dataId, int 
         "GBR=FFFFFFFF VBR=FFFFFFFF PR=FFFFFFFF"
     };
     int ids[3], lines[3] = {1, 4, 3};
-    int i, top, right = 0, dx, dy, width, height;
-    RECT r, client, outer, group;
+    int i, top, right = 0, width, height;
+    RECT r, client, outer;
     HDC dc = GetDC(hwnd);
     ids[0] = srId; ids[1] = adrId; ids[2] = dataId;
     r = SH2Window_ControlRect(hwnd, srId);
@@ -47,22 +47,12 @@ static void SH2Window_FitStatus(HWND hwnd, int srId, int adrId, int dataId, int 
         top += height + 4;
     }
     ReleaseDC(hwnd, dc);
-    group = SH2Window_ControlRect(hwnd, IDC_SH2_USAGE_GROUP);
-    r = SH2Window_ControlRect(hwnd, adrId);
-    dx = max(0, right + 8 - group.left);
-    dy = r.top - group.top;
-    MoveWindow(GetDlgItem(hwnd, IDC_SH2_USAGE_GROUP), group.left + dx,
-        group.top + dy, group.right - group.left, max(group.bottom - group.top, top - 4 - r.top), FALSE);
-    ids[0] = usageId; ids[1] = IDC_SH2_USAGE_NOTE;
-    for (i = 0; i < 2; ++i) {
-        r = SH2Window_ControlRect(hwnd, ids[i]);
-        MoveWindow(GetDlgItem(hwnd, ids[i]), r.left + dx, r.top + dy,
-            r.right - r.left, r.bottom - r.top, FALSE);
-    }
+    r = SH2Window_ControlRect(hwnd, pcId);
+    right = max(right, r.right);
     GetClientRect(hwnd, &client);
     GetWindowRect(hwnd, &outer);
-    width = max(client.right, group.right + dx + 8);
-    height = max(client.bottom, max(top + 4, group.bottom + dy + 8));
+    width = max(client.right, right + 8);
+    height = max(client.bottom, top + 4);
     SetWindowPos(hwnd, NULL, 0, 0, outer.right - outer.left + width - client.right,
         outer.bottom - outer.top + height - client.bottom,
         SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
@@ -92,7 +82,7 @@ static void SH2Window_Resize(HWND hwnd, const SH2WindowLayout *layout)
 {
     RECT client;
     int i, dx, dy;
-    if (!layout->count) return;
+    if (!layout->count || !GetDlgItem(hwnd, layout->listId)) return;
     GetClientRect(hwnd, &client);
     dx = max(0, client.right - layout->client.cx);
     dy = max(0, client.bottom - layout->client.cy);

@@ -30,11 +30,21 @@ static S68000CONTEXT api(unsigned fn,unsigned a0=0,unsigned a1=0,unsigned d1=0) 
     CD_HLE_SubExec((int)sub68k_context.odometer);
     S68000CONTEXT result=sub68k_context; sub68k_context=saved; return result;
 }
+static S68000CONTEXT main_api(unsigned fn,unsigned a0=0,unsigned a1=0,unsigned d0=0,unsigned d1=0,unsigned d2=0) {
+    S68000CONTEXT saved=main68k_context;
+    main68k_context.pc=0x2006+(fn-0x200)*2; main68k_context.interrupts[0]=0x10;
+    main68k_context.areg[7]=0xff5600; main68k_context.areg[0]=a0; main68k_context.areg[1]=a1;
+    main68k_context.dreg[0]=d0; main68k_context.dreg[1]=d1; main68k_context.dreg[2]=d2;
+    word(Ram_68k,0x5600,0x2010); longword(Ram_68k,0x5602,0xff5400);
+    CD_HLE_MainExec((int)main68k_context.odometer);
+    S68000CONTEXT result=main68k_context; main68k_context=saved; return result;
+}
 int main(void) {
     unsigned char data[64*2048]={0}, raw[2352];
     memcpy(data,"SEGADISCSYSTEM",14);
-    be32(data+0x30,0x200); be32(data+0x34,4);
+    be32(data+0x30,0x800); be32(data+0x34,0x40);
     be32(data+0x40,0x800); be32(data+0x44,0x40);
+    data[0x83e]=0xbe; data[0x83f]=0xef;
     data[0x200]=0x60; data[0x201]=0xfe;
     be32(data+0x818,0x20);
     data[0x821]=0x10; data[0x823]=0x12; data[0x825]=0x14; data[0x827]=0x16;
@@ -58,6 +68,43 @@ int main(void) {
     SegaCD_Started=Init_SegaCD("synthetic.cue"); CHECK(SegaCD_Started && CD_HLE_Active);
     CHECK(Ram_Word_State==2 && SCD.TOC.Last_Track==22);
     CHECK(rw(Ram_68k,0xfdb4)==0x8004 && rw(Ram_68k,0xfdb6)==0x8124);
+    CHECK(rw(Ram_68k,0x63e)==0xbeef); // IP length excludes the $600-byte security block.
+    CHECK(rw(Ram_68k,0xfda8)==0x4ef9); // Games patch the callback target only.
+    // Default V-blank user callback is callable, and can be replaced by the game.
+    longword(Ram_68k,0xfdaa,0xff5500);
+    word(Ram_68k,0x5500,0x7007); word(Ram_68k,0x5502,0x4e75);
+    word(Ram_68k,0x5400,0x4eb8); word(Ram_68k,0x5402,0xfda8); word(Ram_68k,0x5404,0x60fe);
+    { S68000CONTEXT saved=main68k_context;
+      main68k_context.pc=0xff5400; main68k_context.areg[7]=0xff5700; main68k_context.sr=0x2700;
+      main68k_tripOdometer(); CD_HLE_MainExec(100);
+      CHECK(main68k_context.dreg[0]==7 && main68k_context.areg[7]==0xff5700);
+      main68k_context=saved; }
+    // Prefix-table and inline Nemesis runs, including XOR rows and exact RAM bounds.
+    { const unsigned char stream[]={0x80,1,0x8a,0x71,0,0xff,0x7f,0xe8,0};
+      for(unsigned i=0;i<sizeof(stream);i++)Ram_68k[(0x5000+i)^1]=stream[i];
+      memset(Ram_68k+0x5100,0xa5,36);
+      unsigned saved_a2=main68k_context.areg[2];
+      main68k_context.areg[2]=0xff5100;
+      S68000CONTEXT decoded=main_api(0x2f0,0xff5200,0xff5000,0xdeadbeef);
+      CHECK(decoded.areg[0]==0xff5200 && decoded.areg[1]==0xff5000 && decoded.areg[2]==0xff5100 && decoded.dreg[0]==0xdeadbeef);
+      // The VDP address is set by the caller, independently of D0.
+      Set_VDP_Reg(15,2); Write_VDP_Ctrl(0x5800); Write_VDP_Ctrl(1);
+      decoded=main_api(0x2ec,0xff5200,0xff5000,0x40000003);
+      CHECK(decoded.areg[1]==0xff5000 && decoded.dreg[0]==0x40000003);
+      for(unsigned i=0;i<32;i++)CHECK(VRam[0x5800+i]==Ram_68k[0x5100+i]);
+      main68k_context.areg[2]=saved_a2;
+      // DMA helpers restore the BIOS register shadow, not a temporary increment.
+      Set_VDP_Reg(15,64);
+      main_api(0x2d4,0,0,0x5a000001,0xff5100,2);
+      CHECK(VDP_Reg.Auto_Inc==(rw(Ram_68k,0xfdd2)&255));
+      CHECK(!Paused);
+      for(unsigned i=0;i<32;i+=4) {
+          unsigned v=((i/4)%2==0)?0xaaaa:0;
+          CHECK(rw(Ram_68k,0x5100+i)==v && rw(Ram_68k,0x5102+i)==v);
+      }
+      CHECK(rw(Ram_68k,0x5120)==0xa5a5); }
+    main_api(0x378,0,0,0x50,12); CHECK(rw(Ram_68k,0xfde0)==0x19 && rw(Ram_68k,0xfde2)==12);
+    main_api(0x340); CHECK(rw(Ram_68k,0xfde0)==0 && M68K_RB(0xa1200e)==0);
     // Graphics/timer handlers patch the target only, retaining the BIOS JMP.
     for(unsigned level=1;level<=3;level+=2) {
         unsigned hook=level==1?0x5f76:0x5f82;
@@ -114,6 +161,18 @@ int main(void) {
     CHECK(S68K_RW(0xff8008)==0x0002 && S68K_RW(0xff8008)==0x3301);
     for(unsigned i=0;i<2048;i+=2)CHECK(S68K_RW(0xff8008)==data[33*2048+i]*256+data[33*2048+i+1]);
     CHECK((CDC.RS0&0xc000)==0x8000 && !(SCD.Status_CDC&8));
+    // CDC DMA copies only the payload, advances the destination and signals EDT.
+    for(unsigned target=5;target<=7;target+=2) {
+        S68K_WB(0xff8004,(unsigned char)target); CDC.DMA_Adr=0x4000;
+        memset(Ram_Prg+0x20000,0xa5,0x810);
+        memset(Ram_Word_1M+0x20000,0xa5,0x810);
+        r=api(0x8b); CHECK(!(r.sr&1));
+        for(unsigned i=0;i<8 && (SCD.Status_CDC&8);i++)Update_CDC_TRansfert();
+        CHECK((CDC.RS0&0xc000)==0x8000 && !(SCD.Status_CDC&8));
+        unsigned char *dest=target==5?Ram_Prg:Ram_Word_1M;
+        for(unsigned i=0;i<2048;i++)CHECK(dest[(0x20000+i)^1]==data[33*2048+i]);
+        CHECK(rw(dest,0x20800)==0xa5a5);
+    }
     // Streaming pollers must wait for the next sector rather than outrun 75 Hz.
     longword(Ram_Prg,0x5204,3); api(0x20,0x5200);
     r=api(0x8a); CHECK(!(r.sr&1)); api(0x8d);

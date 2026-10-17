@@ -31,6 +31,7 @@ static unsigned read_budget, read_clock;
 static int read_timed;
 static unsigned frame;
 static int native_irq2;
+static int comm_wait;
 static int audio_track=-1, audio_sector, audio_mode, audio_paused, audio_clock;
 static unsigned audio_seek_delay;
 static unsigned volume=1024, master_volume=1024, fade_target=1024, fade_step;
@@ -191,7 +192,12 @@ int CD_HLE_Prepare(void) {
     ip_off=be32(boot+0x30); ip_size=be32(boot+0x34);
     /* First-sector IP (the header may give the next sector, $800).
      * Its security/startup block begins immediately after the disc header. */
-    if(ip_off==0x800)ip_off=0x200;
+    if(ip_off==0x800) {
+        /* The IP length describes data following the first-sector security
+         * block; both that $600-byte block and the IP are handed to main RAM. */
+        if(ip_size>0xf000-0x600)return 0;
+        ip_off=0x200; ip_size+=0x600;
+    }
     sp_off=be32(boot+0x40); sp_size=be32(boot+0x44);
     if((ip_off|ip_size|sp_off|sp_size)&1)return 0;
     if(ip_size<2)return 0;
@@ -219,7 +225,7 @@ int CD_HLE_Boot(void) {
     Ram_Z80[0]=0xf3; Ram_Z80[1]=0xc3; Ram_Z80[2]=1; Ram_Z80[3]=0;
     read_lba=read_count=frame=0; read_budget=1; read_clock=0; read_paused=read_timed=0;
     audio_track=-1; audio_sector=audio_clock=audio_paused=0;
-    audio_seek_delay=0; native_irq2=0;
+    audio_seek_delay=0; native_irq2=0; comm_wait=0;
     volume=master_volume=fade_target=1024; fade_step=0;
     memset(main_seen,0,sizeof(main_seen)); memset(sub_seen,0,sizeof(sub_seen));
     if(trace)fclose(trace);
@@ -239,14 +245,18 @@ int CD_HLE_Boot(void) {
     ww(Rom_Data,0x1840,0x4a38); ww(Rom_Data,0x1842,0xfe26);
     ww(Rom_Data,0x1844,0x66fa); ww(Rom_Data,0x1846,0x4e75);
     wl(Rom_Data,0x78,0xfffd06); ww(Ram_68k,0xfd06,0x4ef9); wl(Ram_68k,0xfd08,0x1800);
+    ww(Rom_Data,0x1860,0x4e75);
+    ww(Ram_68k,0xfda8,0x4ef9); wl(Ram_68k,0xfdaa,0x1860); /* Writable V-blank callback. */
     wl(Rom_Data,0x70,0xfffd0c); ww(Ram_68k,0xfd0c,0x4ef9); wl(Ram_68k,0xfd0e,0x1800);
     for(i=0;i<16;i++) {
         wl(Rom_Data,0x80+i*4,0xfffd18+i*6);
         ww(Ram_68k,0xfd18+i*6,0x4e73);
     }
-    /* Sub-program initialization followed by its main entry point. */
+    /* BIOS enables interrupts again after USER_INIT, even if the game
+     * temporarily masks IRQ2 while initializing its own state. */
     ww(Ram_Prg,0x1000,0x4eb9); wl(Ram_Prg,0x1002,init);
-    ww(Ram_Prg,0x1006,0x4ef9); wl(Ram_Prg,0x1008,main);
+    ww(Ram_Prg,0x1006,0x027c); ww(Ram_Prg,0x1008,0xf8ff);
+    ww(Ram_Prg,0x100a,0x4ef9); wl(Ram_Prg,0x100c,main);
     for(i=8;i<0x100;i+=4)wl(Ram_Prg,i,0x1100);
     ww(Ram_Prg,0x1100,0x4e73);
     /* Graphics/timer users patch only the destination, leaving the BIOS JMP. */
@@ -405,13 +415,16 @@ static void subcall(void) {
         else {
             unsigned h=sector_header(read_lba), dest=CDC.RS0&0x700;
             c->dreg[0]=h;
-            if(dest==0x200 || dest==0x300) {
-                /* Some games read the CDC host port instead of CDCTRN.
-                 * Feed the existing port/DRQ/EDT implementation the same data. */
+            if(dest==0x200 || dest==0x300 || dest==0x400 || dest==0x500 || dest==0x700) {
+                /* Feed host-port readers and DMA users through the existing CDC
+                 * DRQ/EDT machinery. DMA receives payload only, without header. */
                 if(!sector(read_lba,CDC.Buffer+4,2048)) { c->sr|=1; break; }
                 CDC.Buffer[0]=(unsigned char)(h>>24); CDC.Buffer[1]=(unsigned char)(h>>16);
                 CDC.Buffer[2]=(unsigned char)(h>>8); CDC.Buffer[3]=(unsigned char)h;
                 CDC.DAC.N=0; CDC.DBC.N=2052;
+                if(dest>=0x400) {
+                    memmove(CDC.Buffer,CDC.Buffer+4,2048); CDC.DBC.N=2048;
+                }
                 CDC.RS0=(CDC.RS0&~0xc000)|0x4000;
                 CDC.IFSTAT&=~8; SCD.Status_CDC|=8;
             }
@@ -440,6 +453,52 @@ static void vram_clear(unsigned start,unsigned bytes) {
     Write_VDP_Ctrl((unsigned short)(start>>14));
     for(i=0;i<bytes;i+=2)Write_Word_VDP_Data(0);
 }
+/* Nemesis tile streams contain a prefix table followed by nibble runs.
+ * The six-one prefix encodes an inline run; bit 15 of the tile count selects
+ * XOR against the preceding 32-bit row. No firmware code is executed here. */
+static int nemesis(unsigned source,unsigned destination,int to_ram) {
+    unsigned a=source,header=memr(0,a),tiles=header&0x7fff,pixel=0,n=0,i;
+    unsigned char code[256],length[256],runs[256],color[256];
+    unsigned bits=0,remaining=0,produced=0,row=0,row_pixels=0,previous=0;
+    a+=2;
+    for(i=0;i<512;i++) {
+        unsigned d=M68K_RB(a++);
+        if(d==255)break;
+        if(d&128) { pixel=d&15; d=M68K_RB(a++); }
+        if(n>=256 || !(d&15) || (d&15)>8)return 0;
+        length[n]=d&15; runs[n]=((d>>4)&7)+1; color[n]=pixel; code[n++]=(unsigned char)M68K_RB(a++);
+    }
+    if(i==512)return 0;
+    while(produced<tiles*64) {
+        unsigned prefix=0,len,run=0,value=0;
+        for(len=1;len<=8;len++) {
+            if(!remaining) { bits=M68K_RB(a++); remaining=8; }
+            prefix=(prefix<<1)|((bits>>--remaining)&1);
+            if(len==6 && prefix==63) {
+                unsigned inline_bits=0,j;
+                for(j=0;j<7;j++) {
+                    if(!remaining) { bits=M68K_RB(a++); remaining=8; }
+                    inline_bits=(inline_bits<<1)|((bits>>--remaining)&1);
+                }
+                run=(inline_bits>>4)+1; value=inline_bits&15; break;
+            }
+            for(i=0;i<n;i++)if(length[i]==len && code[i]==prefix) { run=runs[i]; value=color[i]; break; }
+            if(run)break;
+        }
+        if(!run || run>tiles*64-produced)return 0;
+        while(run--) {
+            row=(row<<4)|value; produced++;
+            if(++row_pixels==8) {
+                unsigned out=(header&0x8000)?row^previous:row;
+                previous=out;
+                if(to_ram) { memw(0,destination,out>>16); memw(0,destination+2,out); destination+=4; }
+                else { Write_Word_VDP_Data((unsigned short)(out>>16)); Write_Word_VDP_Data((unsigned short)out); }
+                row=row_pixels=0;
+            }
+        }
+    }
+    return 1;
+}
 static void maincall(unsigned fn) {
     struct S68000CONTEXT *c=&main68k_context;
     if(!main_seen[(fn>>2)&255]++&&trace)fprintf(trace,"main fn=%03x a0=%x a1=%x d0=%x d1=%x\n",fn,c->areg[0],c->areg[1],c->dreg[0],c->dreg[1]);
@@ -464,9 +523,76 @@ static void maincall(unsigned fn) {
         }
         break;
     }
+    case 0x2ec: case 0x2f0: {
+        /* Nemesis writes to the already selected VDP address. D0 is saved
+         * by the BIOS, not a destination command; RAM output uses A2.
+         * Both entry points preserve the input CPU registers. */
+        if(!nemesis(c->areg[1],c->areg[2],fn==0x2f0))unsupported(0,fn);
+        break;
+    }
+    case 0x2bc: case 0x2c0: {
+        unsigned cmd=c->dreg[0]|0x40000080, n=c->dreg[1], set2=VDP_Reg.Set2;
+        Set_VDP_Reg(15,1); Set_VDP_Reg(1,set2|0x10);
+        Set_VDP_Reg(19,n&255); Set_VDP_Reg(20,(n>>8)&255); Set_VDP_Reg(23,0x80);
+        Write_VDP_Ctrl((unsigned short)(cmd>>16)); Write_VDP_Ctrl((unsigned short)cmd);
+        Write_Word_VDP_Data((unsigned short)(fn==0x2bc?0:(c->dreg[2]&255)*0x101));
+        Set_VDP_Reg(1,set2); Set_VDP_Reg(15,2);
+        break;
+    }
+    case 0x2b4: case 0x2b8: {
+        unsigned cmd=c->dreg[0],i,n=(c->dreg[1]&0xffff)+1,value=fn==0x2b8?0:c->dreg[2];
+        Write_VDP_Ctrl((unsigned short)(cmd>>16)); Write_VDP_Ctrl((unsigned short)cmd);
+        for(i=0;i<n;i++)Write_Word_VDP_Data((unsigned short)value);
+        break;
+    }
+    case 0x30c: {
+        unsigned i;
+        if(!(Ram_68k[0xfe26^1]&1))break;
+        Set_VDP_Reg(15,2); Write_VDP_Ctrl(0x7800); Write_VDP_Ctrl(2);
+        for(i=0;i<640;i+=2)Write_Word_VDP_Data((unsigned short)rw(Ram_68k,0xf900+i));
+        break;
+    }
+    case 0x2c4: case 0x2c8: case 0x2cc: case 0x36c: case 0x334: {
+        unsigned y,x,cmd=c->dreg[0],src=c->areg[1],tile=c->dreg[3],cols=(c->dreg[1]&0xffff)+1,rows=(c->dreg[2]&0xffff)+1;
+        for(y=0;y<rows;y++) {
+            Write_VDP_Ctrl((unsigned short)(cmd>>16)); Write_VDP_Ctrl((unsigned short)cmd);
+            for(x=0;x<cols;x++) {
+                if(fn==0x2c4) { tile=memr(0,src); src+=2; }
+                else if(fn==0x2c8) { tile=(tile&~255U)|M68K_RB(src++); }
+                Write_Word_VDP_Data((unsigned short)(fn==0x334?tile+y+x*rows:tile));
+                if(fn==0x36c)tile++;
+            }
+            cmd+=rw(Ram_68k,0xfe2e)<<16;
+        }
+        c->areg[1]=src; c->dreg[0]=cmd;
+        break;
+    }
+    case 0x2d0: case 0x2d4: {
+        unsigned cmd=c->dreg[0]|0x40000000, src=c->dreg[1], n=c->dreg[2]&0xffff, i, inc=rw(Ram_68k,0xfdd2)&255;
+        if(!n)n=65536;
+        if(fn==0x2d4)Set_VDP_Reg(15,2);
+        Write_VDP_Ctrl((unsigned short)(cmd>>16)); Write_VDP_Ctrl((unsigned short)(cmd&~0x80));
+        for(i=0;i<n;i++)Write_Word_VDP_Data((unsigned short)memr(0,src+i*2));
+        if(fn==0x2d4)Set_VDP_Reg(15,inc);
+        break;
+    }
     case 0x2d8: ww(Ram_68k,0xfdb6,rw(Ram_68k,0xfdb6)|0x40); Set_VDP_Reg(1,VDP_Reg.Set2|0x40); break;
     case 0x2dc: ww(Ram_68k,0xfdb6,rw(Ram_68k,0xfdb6)&~0x40); Set_VDP_Reg(1,VDP_Reg.Set2&~0x40); break;
+    case 0x2e0: case 0x2e4: {
+        unsigned a=c->areg[1], header=memr(0,a), offset=header>>8, count=(header&255)+1, i;
+        if(fn==0x2e4)Ram_68k[0xfe29^1]|=1;
+        for(i=0;i<count;i++)memw(0,0xfffb80+offset+i*2,memr(0,a+2+i*2));
+        c->areg[1]=a+2+count*2; c->dreg[0]=0xffff;
+        break;
+    }
     case 0x2e8: { unsigned i; if(!(Ram_68k[0xfe29^1]&1))break; Ram_68k[0xfe29^1]&=~1; for(i=0;i<128;i+=2)ww(CRam,i,rw(Ram_68k,0xfb80+i)); CRam_Flag=1; } break;
+    case 0x29c: {
+        unsigned port=c->areg[6]&0xffffff, hi,lo;
+        M68K_WB(port+6,0x40); M68K_WB(port,0x40); hi=M68K_RB(port);
+        M68K_WB(port,0); lo=M68K_RB(port);
+        c->dreg[7]=((hi&12)?8:0)|((hi&3)?4:0)|((lo&12)?2:0)|((lo&3)?1:0);
+        break;
+    }
     case 0x298: {
         unsigned port;
         for(port=0;port<2;port++) {
@@ -481,6 +607,42 @@ static void maincall(unsigned fn) {
     case 0x2a4: vram_clear(0xa000,0xe00); vram_clear(0xb800,4); vram_clear(0xc000,0x4000); wl(Ram_68k,0xf900,0); break;
     case 0x2a8: memset(VSRam,0,80); break;
     case 0x368: wl(Ram_68k,0xfd08,c->areg[1]); break;
+    case 0x344: { /* Exchange buffered commands with the sub CPU. */
+        unsigned flags=M68K_RB(0xa1200e);
+        M68K_WB(0xa1200e,flags|1);
+        Ram_68k[0xfdde^1]&=~2;
+        if((S68K_State&3)!=1)break;
+        if(M68K_RB(0xa1200f)&1) {
+            Ram_68k[0xfdde^1]^=1; Ram_68k[0xfdde^1]|=2;
+            comm_wait=1; return;
+        }
+        sub68k_interrupt(2,-1); M68K_WB(0xa1200e,flags|3);
+        break;
+    }
+
+    case 0x378: { /* Queue a BIOS CD command for the next communication exchange. */
+        static const unsigned char codes[]={0x0a,2,3,4,5,6,7,8,9,0x10,0x11,0x12,0x13,0x14,0x15,0x16,0x17,0x18,0x20,0x21,0x80,0x81,0x82,0x83,0x85,0x86,0x87,0x89,0x8a,0x8b,0x8c,0x8d,0x8f,0x90,0x91,0x92,0x93,0,0xc0,0xc1,0x19,0xc2,0xc3};
+        /* Parameter layouts: none, packed byte, packed volume, or word. */
+        static const unsigned char formats[]={0,0,0,0,0,0,0,0,0,3,3,3,3,1,3,1,1,1,3,3,0,0,3,3,2,2,0,0,0,0,3,0,0,0,0,3,3,3,3,3,3,3,3};
+        unsigned index=(c->dreg[0]&0xffff)/2, code, value=c->dreg[1]&0xffff;
+        if(index>=sizeof(codes)) { unsupported(0,fn); break; }
+        code=codes[index];
+        if(formats[index]==0)ww(Ram_68k,0xfde0,code);
+        else if(formats[index]==1)wl(Ram_68k,0xfde0,((value&0xff00)|code)<<16|(c->dreg[1]>>16));
+        else {
+            if(formats[index]==2) {
+                value|=(c->dreg[2]&15)<<12; code|=(c->dreg[2]&0xff0)<<4;
+            }
+            wl(Ram_68k,0xfde0,(code<<16)|value);
+        }
+        break;
+    }
+    case 0x340: { /* CLEAR_COMM: clear the main CPU-owned communication registers. */
+        unsigned i; M68K_WB(0xa1200e,0);
+        for(i=0;i<16;i+=2)M68K_WW(0xa12010+i,0);
+        memset(Ram_68k+0xfdde,0,18);
+        break;
+    }
     case 0x360: sub68k_interrupt(2,-1); break;
     case 0x364: break; /* Boot presentation is intentionally omitted. */
     default: unsupported(0,fn); break;
@@ -492,6 +654,21 @@ unsigned CD_HLE_MainExec(int cycles) {
     unsigned in_vblank=(main68k_context.sr&0x700)==0x600;
     if(!CD_HLE_Active)return M68K_Exec_Profiled(cycles);
     if(Paused)return 0x80000004;
+    if(comm_wait) {
+        unsigned i, flags=M68K_RB(0xa1200f);
+        /* The sub CPU acknowledges the phase before either side copies data.
+         * Yield this CPU slice while it waits, so the sub CPU can run. */
+        if(((flags>>1)&1)!=(Ram_68k[0xfdde^1]&1))return 0;
+        Ram_68k[0xfddf^1]=(unsigned char)flags;
+        for(i=0;i<16;i+=2) {
+            M68K_WW(0xa12010+i,rw(Ram_68k,0xfde0+i));
+            ww(Ram_68k,0xfde0+i,0);
+            ww(Ram_68k,0xfdf0+i,M68K_RW(0xa12020+i));
+        }
+        sub68k_interrupt(2,-1);
+        M68K_WB(0xa1200e,M68K_RB(0xa1200e)|2);
+        comm_wait=0; ret(0);
+    }
     result=M68K_Exec_Profiled(cycles);
     if(in_vblank && !previous_irq && (sub68k_context.interrupts[0]&4))native_irq2=1;
     if((main68k_context.interrupts[0]&0x10) && main68k_context.pc>=0x2006 && main68k_context.pc<0x2400 && (main68k_context.pc&7)==6) {

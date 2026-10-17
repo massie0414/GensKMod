@@ -29,7 +29,7 @@ static CHAR debug_string[1024];
 void UpdateSSH2_KMod()
 {
 	unsigned int i, PC, usage;
-	unsigned int rows = SH2Window_Rows(hSSH2, IDC_SSH2_DISAM);
+	unsigned int rows = (GetDlgItem(hSSH2, IDC_SSH2_DISAM) ? SH2Window_Rows(hSSH2, IDC_SSH2_DISAM) : 0);
 	unsigned char tmp_string[256];
 
 	usage = S_SH2.Usage_PerMille;
@@ -189,6 +189,8 @@ void SwitchSSH2ViewMode_KMod()
 {
 	SCROLLINFO si;
 
+	if (!GetDlgItem(hSSH2, IDC_SSH2_SCROLL)) return;
+
 	ZeroMemory(&si, sizeof(SCROLLINFO));
 	si.cbSize = sizeof(si);
 	si.fMask = SIF_RANGE | SIF_PAGE | SIF_POS;
@@ -266,7 +268,7 @@ BOOL CALLBACK SSH2DlgProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam)
 		SendDlgItemMessage(hwnd, IDC_SSH2_STATUS_SR, WM_SETFONT, (WPARAM)hFont, TRUE);
 		SendDlgItemMessage(hwnd, IDC_SSH2_STATUS_ADR, WM_SETFONT, (WPARAM)hFont, TRUE);
 		SendDlgItemMessage(hwnd, IDC_SSH2_STATUS_DATA, WM_SETFONT, (WPARAM)hFont, TRUE);
-		SH2Window_FitStatus(hwnd, IDC_SSH2_STATUS_SR, IDC_SSH2_STATUS_ADR, IDC_SSH2_STATUS_DATA, IDC_SSH2_USAGE);
+		SH2Window_FitStatus(hwnd, IDC_SSH2_STATUS_SR, IDC_SSH2_STATUS_ADR, IDC_SSH2_STATUS_DATA, IDC_SSH2_PC);
 		SH2Window_InitLayout(hwnd, &windowLayout, IDC_SSH2_DISAM, IDC_SSH2_SCROLL);
 		sSH2_reset();
 		

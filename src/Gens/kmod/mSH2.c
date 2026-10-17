@@ -29,7 +29,7 @@ static CHAR debug_string[1024];
 void UpdateMSH2_KMod()
 {
 	unsigned int i, PC, usage;
-	unsigned int rows = SH2Window_Rows(hMSH2, IDC_MSH2_DISAM);
+	unsigned int rows = (GetDlgItem(hMSH2, IDC_MSH2_DISAM) ? SH2Window_Rows(hMSH2, IDC_MSH2_DISAM) : 0);
 	unsigned char tmp_string[256];
 	
 	usage = M_SH2.Usage_PerMille;
@@ -268,6 +268,8 @@ void SwitchMSH2ViewMode_KMod()
 {
 	SCROLLINFO si;
 
+	if (!GetDlgItem(hMSH2, IDC_MSH2_SCROLL)) return;
+
 	ZeroMemory(&si, sizeof(SCROLLINFO));
 	si.cbSize = sizeof(si);
 	si.fMask = SIF_RANGE | SIF_PAGE | SIF_POS;
@@ -345,7 +347,7 @@ BOOL CALLBACK MSH2DlgProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam)
 		SendDlgItemMessage(hwnd, IDC_MSH2_STATUS_SR, WM_SETFONT, (WPARAM)hFont, TRUE);
 		SendDlgItemMessage(hwnd, IDC_MSH2_STATUS_ADR, WM_SETFONT, (WPARAM)hFont, TRUE);
 		SendDlgItemMessage(hwnd, IDC_MSH2_STATUS_DATA, WM_SETFONT, (WPARAM)hFont, TRUE);
-		SH2Window_FitStatus(hwnd, IDC_MSH2_STATUS_SR, IDC_MSH2_STATUS_ADR, IDC_MSH2_STATUS_DATA, IDC_MSH2_USAGE);
+		SH2Window_FitStatus(hwnd, IDC_MSH2_STATUS_SR, IDC_MSH2_STATUS_ADR, IDC_MSH2_STATUS_DATA, IDC_MSH2_PC);
 		SH2Window_InitLayout(hwnd, &windowLayout, IDC_MSH2_DISAM, IDC_MSH2_SCROLL);
 
 		mSH2_reset();

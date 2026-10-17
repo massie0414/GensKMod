@@ -60,6 +60,21 @@ CDCホストポートからの直接読み込み、毎秒75セクターの読み
 起動時にBIOSのVDP設定テーブルを初期化し、天下布武のように独自の
 V-blank処理からサブCPUへ通知するゲームでは、HLEからの定期通知を止めます。
 
+### クイズスクランブルスペシャル
+
+ルートの `QUIZSCRAMBL.cmd` をダブルクリックすると起動します。
+File → Open ROM から `rom/QUIZSCRAMBL/QUIZSCRAMBL.CUE` を開く方法でも、
+BIOSなしで起動できます。
+オープニング映像とCD音声、Start操作による画面の進行、クイズの問題と
+選択肢の表示まで確認しています。全編のクリア・ゲーム内保存は未確認です。
+
+起動用IPの長さに先頭セクターのセキュリティ領域を加えて読み込みます。
+サブCPU初期化後の割り込み有効化、書き換え可能なV-blankコールバック、
+BIOSの通信バッファー交換、CDCからプログラム／共有RAMへのDMA転送、
+VDP・パレット・スプライト転送、Nemesis画像展開とCD音声コマンドに対応しました。
+Nemesis展開はゲームが設定したVDPの書き込み先を使用し、入力レジスターを
+保持します。RAM向けの展開先はA2です。
+
 ## 開発者向け検証
 
 Visual Studio 2022のC++ツールとPythonが必要です。
@@ -68,6 +83,7 @@ Visual Studio 2022のC++ツールとPythonが必要です。
 python tests/run_cd_hle_tests.py --image src/SampleGame/FHB.CUE
 python tests/run_cd_hle_tests.py --sol-feace rom/SOL_FEACE/MEGADRIVE_GAME_SPECIAL.CUE
 python tests/run_cd_hle_tests.py --tenka-fubu rom/TENKA_FUBU/TENKA_FUBU.CUE
+python tests/run_cd_hle_tests.py --quiz-scramble rom/QUIZSCRAMBL/QUIZSCRAMBL.CUE
 ```
 
 Releaseをビルドし、CUEの境界・不正入力テストと、通常／精密タイミングの
@@ -94,3 +110,9 @@ SOL-FEACEの無操作／Start・移動・射撃ありの各30000フレームを�
 CD音声、フレームスキップ、リセット・終了を検証します。
 合成ディスクではCDCホストポート、75 Hzの読み出し待ち、音声の一時停止・
 シーク状態、VDP初期値、グラフィックス／タイマー割り込みも検査します。
+
+`--quiz-scramble` は通常設定（22050 Hz）と精密設定（44100 Hz）で、
+無操作とStart・方向・ボタン操作ありを各30000フレーム実行します。
+画面の変化、ミキサーとCD音声、フレームスキップ、リセット・終了を検査します。
+合成ディスクではIP読み込み範囲、V-blankコールバック、Nemesisの通常／インライン
+ランとXOR行、CDCのプログラム／共有RAM DMA転送と転送境界も検査します。
