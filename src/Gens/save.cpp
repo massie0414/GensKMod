@@ -8,6 +8,7 @@
 #include "cpu_sh2.h"
 #include "sh2.h"
 #include "z80.h"
+#include "Cpu_Z80.h"
 #include "cd_aspi.h"
 #include "gens.h"
 #include "G_main.h"
@@ -192,6 +193,7 @@ int Load_State(char *Name)
 	{
 		S68K_Usage_ClearHistory();
 		M68K_Usage_ClearHistory();
+		Z80_Usage_ClearHistory();
 		z80_Reset(&M_Z80);
 //		main68k_reset();
 //		YM2612ResetChip(0);

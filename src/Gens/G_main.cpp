@@ -60,6 +60,7 @@
 #include "kmod/sSH2.h"
 #include "kmod/s68k.h"
 #include "kmod/m68k.h"
+#include "kmod/z80.h"
 
 static gdbServerThread * g_gdb_main68k_server;
 static gdbServerThread * g_gdb_sub68k_server;
@@ -1902,6 +1903,7 @@ int PASCAL WinMain(HINSTANCE hInst,	HINSTANCE hPrevInst, LPSTR lpCmdLine, int nC
 	sSH2_save_window(Str_Tmp);
 	s68kdebug_save_window(Str_Tmp);
 	m68kdebug_save_window(Str_Tmp);
+	z80debug_save_window(Str_Tmp);
 #endif
 
 	End_All();

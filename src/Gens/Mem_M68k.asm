@@ -540,7 +540,8 @@ section .text align=64
 	extern _sub68k_reset
 	extern _sub68k_interrupt
 	extern z80_Reset
-	extern z80_Exec
+	extern @Z80_Exec_Profiled@8
+%define z80_Exec @Z80_Exec_Profiled@8
 	extern z80_Set_Odo
 	extern _M68K_Set_Prg_Ram
 	extern _MS68K_Set_Word_Ram
@@ -1625,7 +1626,7 @@ section .text align=64
 		mov ebx, [Z80_M68K_Cycle_Tab + ebx * 4]
 		mov ecx, M_Z80
 		sub edx, ebx
-		call z80_Exec
+		call @Z80_Exec_Profiled@8
 		pop edx
 
 	.already_desactived
@@ -1903,7 +1904,7 @@ section .text align=64
 		mov ebx, [Z80_M68K_Cycle_Tab + ebx * 4]
 		mov ecx, M_Z80
 		sub edx, ebx
-		call z80_Exec
+		call @Z80_Exec_Profiled@8
 		pop edx
 
 	.already_desactived

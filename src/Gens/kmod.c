@@ -220,6 +220,7 @@ void Init_KMod( )
 	sSH2_restore_window(config_file);
 	s68kdebug_restore_window(config_file);
 	m68kdebug_restore_window(config_file);
+	z80debug_restore_window(config_file);
 
    
 	//HandleWindow_KMod[0] = hM68K;
@@ -301,7 +302,7 @@ void kmod_close()
 			mode != (DMODE_VDP - 1) && mode != (DMODE_SPRITES - 1) &&
 			mode != (DMODE_32_MEMORY - 1) && mode != (DMODE_32_SOUND - 1) && mode != (DMODE_32_FPS - 1) && mode != (DMODE_32_SDRAM - 1) && mode != (DMODE_32_VDP - 1) && mode != (DMODE_32_REG - 1) &&
 			mode != (DMODE_32_MSH2 - 1) && mode != (DMODE_32_SSH2 - 1) &&
-			mode != (DMODE_68K - 1) && mode != (DMODE_CD_68K - 1))
+			mode != (DMODE_68K - 1) && mode != (DMODE_CD_68K - 1) && mode != (DMODE_Z80 - 1))
 		{
 			CloseWindow_KMod((UCHAR)(mode + 1));
 		}

@@ -11,6 +11,8 @@ void z80debug_show(BOOL visibility);
 void z80debug_update();
 void z80debug_reset();
 void z80debug_destroy();
+void z80debug_save_window(const char *config_file);
+void z80debug_restore_window(const char *config_file);
 
 
 void z80debug_dump();//TODO remove

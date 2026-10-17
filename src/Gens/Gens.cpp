@@ -34,6 +34,7 @@
 #include "32x_boot.h"
 #define main68k_exec CD_HLE_MainExec
 #define sub68k_exec CD_HLE_SubExec
+#define z80_Exec Z80_Exec_Profiled
 
 #include "kmod/gmv.h"
 
@@ -703,6 +704,7 @@ int Do_Genesis_Frame_No_VDP(void)
 	M68K_Usage_Begin_Frame();
 
 	z80_Clear_Odo(&M_Z80);
+	Z80_Usage_Begin_Frame();
 
 	Patch_Codes();
 
@@ -823,6 +825,7 @@ int Do_Genesis_Frame_No_VDP(void)
 	if (GYM_Dumping) Update_GYM_Dump((unsigned char) 0, (unsigned char) 0, (unsigned char) 0);
 
 	M68K_Usage_End_Frame(CPL_M68K * VDP_Num_Lines);
+	Z80_Usage_End_Frame(CPL_Z80 * VDP_Num_Lines);
 	return(1);
 }
 
@@ -850,6 +853,7 @@ int Do_Genesis_Frame()
 #endif
 	M68K_Usage_Begin_Frame();
 	z80_Clear_Odo(&M_Z80);
+	Z80_Usage_Begin_Frame();
 
 	Patch_Codes();
 
@@ -972,6 +976,7 @@ int Do_Genesis_Frame()
 	if (GYM_Dumping) Update_GYM_Dump((unsigned char) 0, (unsigned char) 0, (unsigned char) 0);
 
 	M68K_Usage_End_Frame(CPL_M68K * VDP_Num_Lines);
+	Z80_Usage_End_Frame(CPL_Z80 * VDP_Num_Lines);
 	return(1);
 }
 
@@ -1254,6 +1259,7 @@ int Do_32X_Frame_No_VDP()
 #endif
 	M68K_Usage_Begin_Frame();
 	z80_Clear_Odo(&M_Z80);
+	Z80_Usage_Begin_Frame();
 	M_SH2.Idle_Cycles = S_SH2.Idle_Cycles = 0;
 	SH2_Clear_Odo(&M_SH2);
 	SH2_Clear_Odo(&S_SH2);
@@ -1526,6 +1532,7 @@ int Do_32X_Frame_No_VDP()
 	if (GYM_Dumping) Update_GYM_Dump((unsigned char) 0, (unsigned char) 0, (unsigned char) 0);
 
 	M68K_Usage_End_Frame(CPL_M68K * VDP_Num_Lines);
+	Z80_Usage_End_Frame(CPL_Z80 * VDP_Num_Lines);
 	return 1;
 }
 
@@ -1556,6 +1563,7 @@ int Do_32X_Frame()
 #endif
 	M68K_Usage_Begin_Frame();
 	z80_Clear_Odo(&M_Z80);
+	Z80_Usage_Begin_Frame();
 	M_SH2.Idle_Cycles = S_SH2.Idle_Cycles = 0;
 	SH2_Clear_Odo(&M_SH2);
 	SH2_Clear_Odo(&S_SH2);
@@ -1827,6 +1835,7 @@ int Do_32X_Frame()
 	if (GYM_Dumping) Update_GYM_Dump((unsigned char) 0, (unsigned char) 0, (unsigned char) 0);
 
 	M68K_Usage_End_Frame(CPL_M68K * VDP_Num_Lines);
+	Z80_Usage_End_Frame(CPL_Z80 * VDP_Num_Lines);
 	return 1;
 }
 
@@ -2120,6 +2129,7 @@ int Do_SegaCD_Frame_No_VDP(void)
 	sub68k_tripOdometer(); S68K_Usage_Begin_Frame();
 	CD_HLE_Frame();
 	z80_Clear_Odo(&M_Z80);
+	Z80_Usage_Begin_Frame();
 
 	VRam_Flag = 1;
 
@@ -2242,6 +2252,7 @@ int Do_SegaCD_Frame_No_VDP(void)
 
 	S68K_Usage_End_Frame(CPL_S68K * VDP_Num_Lines);
 	M68K_Usage_End_Frame(CPL_M68K * VDP_Num_Lines);
+	Z80_Usage_End_Frame(CPL_Z80 * VDP_Num_Lines);
 	return(1);
 }
 
@@ -2273,6 +2284,7 @@ int Do_SegaCD_Frame_No_VDP_Cycle_Accurate(void)
 	sub68k_tripOdometer(); S68K_Usage_Begin_Frame();
 	CD_HLE_Frame();
 	z80_Clear_Odo(&M_Z80);
+	Z80_Usage_Begin_Frame();
 
 	VRam_Flag = 1;
 
@@ -2511,6 +2523,7 @@ int Do_SegaCD_Frame_No_VDP_Cycle_Accurate(void)
 
 	S68K_Usage_End_Frame(CPL_S68K * VDP_Num_Lines);
 	M68K_Usage_End_Frame(CPL_M68K * VDP_Num_Lines);
+	Z80_Usage_End_Frame(CPL_Z80 * VDP_Num_Lines);
 	return(1);
 }
 
@@ -2544,6 +2557,7 @@ int Do_SegaCD_Frame(void)
 	sub68k_tripOdometer(); S68K_Usage_Begin_Frame();
 	CD_HLE_Frame();
 	z80_Clear_Odo(&M_Z80);
+	Z80_Usage_Begin_Frame();
 
 	VRam_Flag = 1;
 
@@ -2695,6 +2709,7 @@ int Do_SegaCD_Frame(void)
 
 	S68K_Usage_End_Frame(CPL_S68K * VDP_Num_Lines);
 	M68K_Usage_End_Frame(CPL_M68K * VDP_Num_Lines);
+	Z80_Usage_End_Frame(CPL_Z80 * VDP_Num_Lines);
 	return(1);
 }
 
@@ -2726,6 +2741,7 @@ int Do_SegaCD_Frame_Cycle_Accurate(void)
 	sub68k_tripOdometer(); S68K_Usage_Begin_Frame();
 	CD_HLE_Frame();
 	z80_Clear_Odo(&M_Z80);
+	Z80_Usage_Begin_Frame();
 
 	VRam_Flag = 1;
 
@@ -2993,5 +3009,6 @@ int Do_SegaCD_Frame_Cycle_Accurate(void)
 
 	S68K_Usage_End_Frame(CPL_S68K * VDP_Num_Lines);
 	M68K_Usage_End_Frame(CPL_M68K * VDP_Num_Lines);
+	Z80_Usage_End_Frame(CPL_Z80 * VDP_Num_Lines);
 	return 1;
 }

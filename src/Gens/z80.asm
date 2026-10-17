@@ -203,6 +203,9 @@ bits 32
 	endstruc
 
 
+	DECLV Z80_UsageBusyCycles
+		resd 1
+
 	DECLV M_Z80
 		Z80_CONTEXT
 
@@ -2553,6 +2556,15 @@ Z80I_SCF:
 ALIGN32
 
 Z80I_HALT
+    ; HALT costs four cycles; the remainder is idle, not executed work.
+    cmp ebp, M_Z80
+    jne short .usage_done
+    cmp edi, 3
+    jle short .usage_done
+    mov edx, edi
+    sub edx, 3
+    sub [Z80_UsageBusyCycles], edx
+.usage_done
 	mov edx, [ebp + Z80.Status]
 	or edi, byte -1
 	or edx, Z80_HALTED
@@ -5150,6 +5162,10 @@ z80_Exec_Really_Quit:
 	mov ebx, [ebp + Z80.CycleCnt]
 	mov cl, [ebp + Z80.Status]
 	sub eax, edi
+    cmp ebp, M_Z80
+    jne short .usage_done
+    add [Z80_UsageBusyCycles], eax
+.usage_done
 %if (Z80_SAFE = 1)
 	mov edx, [ebp + Z80.BasePC]
 %endif
