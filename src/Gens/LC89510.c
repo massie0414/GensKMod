@@ -220,7 +220,6 @@ unsigned short Read_CDC_Host_SUB(void)
 	{
 		if ((CDC.RS0 & 0x0700) == 0x0300)	// SUB CPU
 		{
-			CD_HLE_CdcHostRead();
 			CDC.DBC.N -= 2;
 			
 			if (CDC.DBC.N <= 0)
@@ -275,7 +274,6 @@ unsigned short Read_CDC_Host_MAIN(void)
 	{
 		if ((CDC.RS0 & 0x0700) == 0x0200)	// MAIN CPU
 		{
-			CD_HLE_CdcHostRead();
 			CDC.DBC.N -= 2;
 			
 			if (CDC.DBC.N <= 0)

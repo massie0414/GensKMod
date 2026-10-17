@@ -22,7 +22,7 @@ int rendered, skipped, controls, flips;
 unsigned int GetTickCount() { return clock_ms; }
 void Sleep(int) {}
 int Get_Current_Seg() { return 0; }
-void Write_Sound_Buffer(void*) { assert(false); }
+void Write_Sound_Buffer(void*) {}
 void Update_Controllers() { ++controls; }
 void Flip_GFX(HWND) { ++flips; }
 int frame() { ++rendered; Seg_L[0] += 100; Seg_R[0] += 100; return 1; }
@@ -59,11 +59,21 @@ int main() {
  Emulation_Speed = 8; Last_Time = Used_Time = 0;
  rendered = skipped = 0; clock_ms = 10000; Update_Emulation(nullptr);
  assert(rendered + skipped == 48);
- // Normal-speed manual frame skip still follows the original path.
- Emulation_Speed = 1; Sound_Enable = 0; Frame_Skip = 1; Frame_Number = 0;
- rendered = skipped = 0; Update_Emulation(nullptr); Update_Emulation(nullptr);
- assert(rendered == 1 && skipped == 1);
- puts("PASS: 240 speed/PAL/audio/frame-skip combinations, stalls, clock wrap, normal speed");
+ // Normal speed remains paced with fixed frame skip and audio enabled.
+ for (int pal = 0; pal < 2; ++pal)
+ for (int sound = 0; sound < 2; ++sound)
+ for (int skip = 0; skip <= 8; ++skip) {
+  CPU_Mode = pal; Emulation_Speed = 1; Sound_Enable = sound;
+  Frame_Skip = skip; Frame_Number = 0;
+  Last_Time = clock_ms = Used_Time = 0;
+  rendered = skipped = controls = flips = 0;
+  for (clock_ms = 1; clock_ms <= 4000; ++clock_ms) Update_Emulation(nullptr);
+  int total = (pal ? 50 : 60) * 4;
+  assert(rendered + skipped == total);
+  assert(rendered == total / (skip + 1));
+  assert(controls == total && flips == rendered);
+ }
+ puts("PASS: speed/PAL/audio/frame-skip combinations, stalls, clock wrap, paced normal speed");
 }
 '''
 cpp = out / 'speed_scheduler_test.cpp'

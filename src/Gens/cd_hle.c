@@ -28,7 +28,7 @@ static unsigned ip_off, ip_size, sp_off, sp_size;
 static unsigned read_lba, read_count;
 static int read_paused;
 static unsigned read_budget, read_clock;
-static int read_timed;
+static unsigned sectors_read;
 static unsigned frame;
 static int native_irq2;
 static int comm_wait;
@@ -223,7 +223,7 @@ int CD_HLE_Boot(void) {
      * Empty RAM would run through the banked 68K window and corrupt RAM.
      * Supply our own DI / JP $0001 idle loop, replaceable by the game. */
     Ram_Z80[0]=0xf3; Ram_Z80[1]=0xc3; Ram_Z80[2]=1; Ram_Z80[3]=0;
-    read_lba=read_count=frame=0; read_budget=1; read_clock=0; read_paused=read_timed=0;
+    read_lba=read_count=frame=0; read_budget=1; read_clock=0; read_paused=0; sectors_read=0;
     audio_track=-1; audio_sector=audio_clock=audio_paused=0;
     audio_seek_delay=0; native_irq2=0; comm_wait=0;
     volume=master_volume=fade_target=1024; fade_step=0;
@@ -306,7 +306,6 @@ int CD_HLE_Boot(void) {
 }
 
 int CD_HLE_AudioPlaying(void) { return CD_HLE_Active && audio_track>=1 && !audio_paused; }
-void CD_HLE_CdcHostRead(void) { if(CD_HLE_Active)read_timed=1; }
 
 static void audio_tick(void) {
     short samples[1176];
@@ -342,7 +341,8 @@ void CD_HLE_Frame(void) {
     if(!CD_HLE_Active)return;
     frame++;
     /* CDCSTAT must expose the disc's 75-sector/s cadence. Streaming games
-     * otherwise overrun their compressed video/PCM rings in program RAM. */
+     * otherwise overrun their compressed video/PCM rings in program RAM.
+     * Apply this to BIOS transfers too, even if no host port was accessed. */
     read_clock+=75;
     read_budget+=read_clock/(CPU_Mode?50:60);
     read_clock%=CPU_Mode?50:60;
@@ -352,7 +352,7 @@ void CD_HLE_Frame(void) {
      * own its timing (notably during sound-driver handshakes). SET_VINT
      * clients still use the BIOS-managed heartbeat. */
     if(!native_irq2 || main_seen[0x368/4])sub68k_interrupt(2,-1);
-    if(trace && frame%60==0) { fprintf(trace,"frame %u main=%06x sub=%06x comm=%04x/%04x word=%u sr=%x/%x\n",frame,main68k_context.pc,sub68k_context.pc,COMM.Command[1],COMM.Status[1],Ram_Word_State,main68k_context.sr,sub68k_context.sr); fflush(trace); }
+    if(trace && frame%60==0) { fprintf(trace,"frame %u main=%06x sub=%06x comm=%04x/%04x word=%u sr=%x/%x sectors=%u\n",frame,main68k_context.pc,sub68k_context.pc,COMM.Command[1],COMM.Status[1],Ram_Word_State,main68k_context.sr,sub68k_context.sr,sectors_read); fflush(trace); }
 }
 static void subcall(void) {
     struct S68000CONTEXT *c=&sub68k_context;
@@ -429,9 +429,9 @@ static void subcall(void) {
         break;
     case 0x87: case 0x88: read_paused=0; break;
     case 0x89: read_count=0; break;
-    case 0x8a: if(!read_count||read_paused||(read_timed&&!read_budget))c->sr|=1; break;
+    case 0x8a: if(!read_count||read_paused||!read_budget)c->sr|=1; break;
     case 0x8b:
-        if(!read_count||read_paused)c->sr|=1;
+        if(!read_count||read_paused||!read_budget)c->sr|=1;
         else {
             unsigned h=sector_header(read_lba), dest=CDC.RS0&0x700;
             c->dreg[0]=h;
@@ -451,7 +451,7 @@ static void subcall(void) {
         }
         break;
     case 0x8c:
-        if(!read_count||read_paused||!sector(read_lba,b,sizeof(b))) { c->sr|=1; break; }
+        if(!read_count||read_paused||!read_budget||!sector(read_lba,b,sizeof(b))) { c->sr|=1; break; }
         for(i=0;i<sizeof(b);i+=2)memw(1,a+i,b[i]*256+b[i+1]);
         i=sector_header(read_lba);
         memw(1,c->areg[1],i>>16); memw(1,c->areg[1]+2,i);
@@ -459,8 +459,9 @@ static void subcall(void) {
         break;
     case 0x8d:
         SCD.Status_CDC&=~8; CDC.RS0&=~0x4000;
-        if(read_budget)read_budget--;
-        if(read_count) { read_lba++; read_count--; }
+        if(read_count && !read_paused && read_budget) {
+            read_budget--; read_lba++; read_count--; sectors_read++;
+        }
         break;
     default: unsupported(1,fn); c->sr|=1; break;
     }

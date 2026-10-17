@@ -61,7 +61,7 @@ int Init_DDraw(HWND hWnd)
 	DDSURFACEDESC2 ddsd;
 
 	End_DDraw();
-	
+
 	if (Full_Screen) Rend = Render_FS;
 	else Rend = Render_W;
 
@@ -538,7 +538,7 @@ int Flip_DDraw(HWND hWnd)
 
 			lpDDS_Blit->Unlock(NULL);
 		}
-	
+
 		if (RectDest.top < RectDest.bottom)
 		{
 			if (W_VSync)
@@ -747,27 +747,39 @@ int Update_Emulation(HWND hWnd)
 
 	if (Frame_Skip != -1)
 	{
-		if (Sound_Enable)
+		// Fixed frame skip controls rendering, but must still pace emulated time.
+		unsigned int now = GetTickCount();
+		unsigned int elapsed = now - (unsigned int)Last_Time;
+		Last_Time = now;
+		if (elapsed > 100) elapsed = 100;
+		Used_Time += elapsed * (CPU_Mode ? 50 : 60);
+		int frames = Used_Time / 1000;
+		Used_Time %= 1000;
+		if (!frames) Sleep(Sleep_Time);
+		for (int frame = 0; frame < frames; ++frame)
 		{
-			WP = (WP + 1) & (Sound_Segs - 1);
+			if (Sound_Enable)
+			{
+				WP = (WP + 1) & (Sound_Segs - 1);
 
-			if (WP == Get_Current_Seg())
-				WP = (WP + Sound_Segs - 1) & (Sound_Segs - 1);
+				if (WP == Get_Current_Seg())
+					WP = (WP + Sound_Segs - 1) & (Sound_Segs - 1);
 
-			Write_Sound_Buffer(NULL);
-		}
+				Write_Sound_Buffer(NULL);
+			}
 
-		Update_Controllers();
+			Update_Controllers();
 
-		if (Frame_Number++ < Frame_Skip)
-		{
-			Update_Frame_Fast();
-		}
-		else
-		{
-			Frame_Number = 0;
-			Update_Frame();
-			Flip_GFX(hWnd);
+			if (Frame_Number++ < Frame_Skip)
+			{
+				Update_Frame_Fast();
+			}
+			else
+			{
+				Frame_Number = 0;
+				Update_Frame();
+				Flip_GFX(hWnd);
+			}
 		}
 	}
 	else
@@ -1153,12 +1165,12 @@ int Take_Shot()
 	HRESULT rval;
 	DDSURFACEDESC2 ddsd;
 	RECT RD;
-	
+
 /* KANEDA_BUG
 	2 screenshots => the 2nd will have "Screen shot x saved" 
 	need to clear the screen before
 */
-	
+
 #ifdef GENS_KMOD
 	if (KConf.RawShots)
 	{
@@ -1172,7 +1184,7 @@ int Take_Shot()
 	Put_Info(" ", 10);
 	//Do_VDP_Only();
     Flip_GFX(HWnd);
-	
+
 /***********************/
 
 	RD = GetShotRect();
@@ -1211,9 +1223,9 @@ void MP3_init_test()
 	FILE *f;
 
 	f = fopen("\\vc\\gens\\release\\test.mp3", "rb");
-	
+
 	if (f == NULL) return;
-	
+
 	MP3_Test(f);
 
 	Play_Sound();

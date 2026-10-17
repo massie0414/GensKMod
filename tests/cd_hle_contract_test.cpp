@@ -165,6 +165,30 @@ int main(void) {
     r=api(0x83,0,0,22); CHECK(r.dreg[0]==0x00046016 && !(r.dreg[1]&255));
     r=api(0x83,0,0,99); CHECK(r.dreg[0]==0x00020000);
     r=api(0x81); CHECK(r.areg[0]==0x1300 && rw(Ram_Prg,0x1310)==0x0116);
+    // BIOS-only readers (without touching the host port) obey 75 sectors/s.
+    longword(Ram_Prg,0x5200,33); longword(Ram_Prg,0x5204,3);
+    api(0x20,0x5200);
+    while(!(api(0x8a).sr&1))api(0x8d); // Drain earlier frame credits.
+    for(int pal=0;pal<2;pal++) {
+        CPU_Mode=pal;
+        unsigned transferred=0;
+        for(int tick=0;tick<(pal?50:60);tick++) {
+            CD_HLE_Frame();
+            // Starting another request must not replenish the drive budget.
+            longword(Ram_Prg,0x5204,3); api(0x20,0x5200);
+            unsigned burst=0;
+            while(!(api(0x8a).sr&1)) {
+                CHECK(!(api(0x8b).sr&1));
+                CHECK(!(api(0x8c,0x20000,0x5300).sr&1));
+                api(0x8d); transferred++; CHECK(++burst<=2);
+            }
+            CHECK(api(0x8b).sr&1);
+            CHECK(api(0x8c,0x20000,0x5300).sr&1);
+            api(0x8d); CHECK(api(0x8a).sr&1);
+        }
+        CHECK(transferred==75);
+    }
+    CPU_Mode=0; CD_HLE_Frame();
     // Adjacent Mode 1 reads advance by 2048 and never copy the EDC/ECC tail.
     longword(Ram_Prg,0x5200,33); longword(Ram_Prg,0x5204,1);
     r=api(0x20,0x5200); CHECK(!(r.sr&1));
@@ -212,6 +236,6 @@ int main(void) {
     Reset_SegaCD();
     CHECK(CD_HLE_Active && rw(Ram_68k,0xfdae)==0x4ef9 && rw(Ram_Prg,0x5e90)==0x0116);
     Free_Rom(Game); FILE_End(); CHECK(!CD_HLE_Active);
-    puts("PASS: HLE writable hooks, absent RAM cartridge, TOC/status times, Mode 1 transfers, reset and initial 1M banks");
+    puts("PASS: HLE writable hooks, absent RAM cartridge, TOC/status times, 75 Hz BIOS/host transfers, Mode 1 transfers, reset and initial 1M banks");
     return 0;
 }

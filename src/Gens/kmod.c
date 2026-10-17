@@ -30,6 +30,7 @@
 #include "kmod\s68k.h"
 #include "kmod\cdc.h"
 #include "kmod\cdgfx.h"
+#include "kmod\cdprg.h"
 #include "kmod\cd_reg.h"
 
 #include "kmod\mSH2.h"
@@ -189,6 +190,7 @@ void Init_KMod( )
 	s68kdebug_create(ghInstance, HWnd);
 	cdcdebug_create(ghInstance, HWnd);
 	cdgfx_create(ghInstance, HWnd);
+	cdprg_create(ghInstance, HWnd);
 	cdreg_create(ghInstance, HWnd);
 
 	mSH2_create(ghInstance, HWnd);
@@ -222,6 +224,7 @@ void Init_KMod( )
 	cdcdebug_restore_window(config_file);
 	cdreg_restore_window(config_file);
 	cdgfx_restore_window(config_file);
+	cdprg_restore_window(config_file);
 	m68kdebug_restore_window(config_file);
 	z80debug_restore_window(config_file);
 	disassembly_restore_window(config_file);
@@ -282,6 +285,7 @@ void Update_KMod( )
 		s68kdebug_update();
 		cdcdebug_update();
 		cdgfx_update();
+		cdprg_update();
 		cdreg_update();
 	}
 
@@ -306,7 +310,7 @@ void kmod_close()
 			mode != (DMODE_VDP - 1) && mode != (DMODE_SPRITES - 1) &&
 			mode != (DMODE_32_MEMORY - 1) && mode != (DMODE_32_SOUND - 1) && mode != (DMODE_32_FPS - 1) && mode != (DMODE_32_SDRAM - 1) && mode != (DMODE_32_VDP - 1) && mode != (DMODE_32_REG - 1) &&
 			mode != (DMODE_32_MSH2 - 1) && mode != (DMODE_32_SSH2 - 1) &&
-			mode != (DMODE_68K - 1) && mode != (DMODE_CD_68K - 1) && mode != (DMODE_CD_CDC - 1) && mode != (DMODE_CD_REG - 1) && mode != (DMODE_CD_GFX - 1) && mode != (DMODE_Z80 - 1))
+			mode != (DMODE_68K - 1) && mode != (DMODE_CD_68K - 1) && mode != (DMODE_CD_CDC - 1) && mode != (DMODE_CD_REG - 1) && mode != (DMODE_CD_GFX - 1) && mode != (DMODE_CD_PRG - 1) && mode != (DMODE_Z80 - 1))
 		{
 			CloseWindow_KMod((UCHAR)(mode + 1));
 		}
@@ -348,6 +352,7 @@ void ResetDebug_KMod(  )
 	s68kdebug_reset();
 	cdcdebug_reset();
 	cdgfx_reset();
+	cdprg_reset();
 	cdreg_reset();
 
 	mSH2_reset();

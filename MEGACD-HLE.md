@@ -60,6 +60,20 @@ CDCホストポートからの直接読み込み、毎秒75セクターの読み
 起動時にBIOSのVDP設定テーブルを初期化し、天下布武のように独自の
 V-blank処理からサブCPUへ通知するゲームでは、HLEからの定期通知を止めます。
 
+### サンダーストームFX
+
+`rom/THUNDER_STORM/THUNDER_STORM.CUE` のBIOSなし起動、Start入力から
+ゲーム映像への遷移、音声出力を検証しました。通常／精密同期の両モードで
+7200フレームを実行し、連続転送時に毎秒75セクターとなることを確認しています。
+
+CDCの速度制限をホストポート経由だけでなく、BIOSのCDCSTAT／CDCREAD／
+CDCTRN経由にも適用しました。読み込み要求を出し直しても転送枠は増えません。
+これにより、CDの連続読み込みで進む映像が高速再生される問題を修正しました。
+物理ドライブのシーク時間の再現や全編クリアは未検証です。
+
+`python tests/run_cd_hle_tests.py --skip-build --thunder-storm rom/THUNDER_STORM/THUNDER_STORM.CUE`
+で、Releaseビルド済みのオブジェクトを使って再検証できます。
+
 ### クイズスクランブルスペシャル
 
 ルートの `QUIZSCRAMBL.cmd` をダブルクリックすると起動します。

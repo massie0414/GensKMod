@@ -62,6 +62,7 @@
 #include "kmod/cdc.h"
 #include "kmod/cd_reg.h"
 #include "kmod/cdgfx.h"
+#include "kmod/cdprg.h"
 #include "kmod/m68k.h"
 #include "kmod/z80.h"
 #include "kmod/disassembly.h"
@@ -219,6 +220,9 @@ int Toggle_AlwaysOnTop(HWND hWnd)
 int Set_Frame_Skip(HWND hWnd, int Num)
 {
 	Frame_Skip = Num;
+	Frame_Number = 0;
+	Last_Time = GetTickCount();
+	Used_Time = 0;
 
 	if (Frame_Skip != -1)
 		MESSAGE_NUM_L("Frame skip set to %d", "Frame skip set to %d", Frame_Skip, 1500)
@@ -1909,6 +1913,7 @@ int PASCAL WinMain(HINSTANCE hInst,	HINSTANCE hPrevInst, LPSTR lpCmdLine, int nC
 	cdcdebug_save_window(Str_Tmp);
 	cdreg_save_window(Str_Tmp);
 	cdgfx_save_window(Str_Tmp);
+	cdprg_save_window(Str_Tmp);
 	m68kdebug_save_window(Str_Tmp);
 	z80debug_save_window(Str_Tmp);
 	disassembly_save_window(Str_Tmp);
@@ -2406,6 +2411,13 @@ long PASCAL WinProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 					MINIMIZE
 #endif
 					Change_Debug(hWnd, DMODE_CD_CDC);
+					return 0;
+
+				case ID_CPU_DEBUG_SEGACD_PRG:
+#ifdef GENS_KMOD
+					MINIMIZE
+					Change_Debug(hWnd, DMODE_CD_PRG);
+#endif
 					return 0;
 
 				case ID_CPU_DEBUG_SEGACD_GFX:
@@ -3657,6 +3669,7 @@ HMENU Build_Main_Menu(void)
 		MENU_L(DebugMCD, 1, Flags, ID_CPU_DEBUG_SEGACD_REG, "CD Registers", "", "CD Registers");
 		MENU_L(DebugMCD, 2, Flags, ID_CPU_DEBUG_SEGACD_CDC, "CD Controler", "", "CD Controler");
 		MENU_L(DebugMCD, 3, Flags, ID_CPU_DEBUG_SEGACD_GFX, "CD Word RAM", "", "CD Word RAM");
+		MENU_L(DebugMCD, 4, Flags, ID_CPU_DEBUG_SEGACD_PRG, "CD Program RAM", "", "CD Program RAM");
 #else
 		if (Debug == DMODE_CD_68K) Flags |= MF_CHECKED;
 		else Flags &= ~MF_CHECKED;

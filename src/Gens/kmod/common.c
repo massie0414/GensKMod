@@ -22,6 +22,7 @@
 #include "s68k.h"
 #include "cdc.h"
 #include "cdgfx.h"
+#include "cdprg.h"
 #include "cd_reg.h"
 
 #include "mSH2.h"
@@ -116,6 +117,9 @@ void CloseWindow_KMod(UCHAR mode)
 		break;
 	case DMODE_CD_GFX:
 		cdgfx_show(FALSE);
+		break;
+	case DMODE_CD_PRG:
+		cdprg_show(FALSE);
 		break;
 	case DMODE_CD_REG:
 		cdreg_show(FALSE);
@@ -217,6 +221,9 @@ void OpenWindow_KMod(UCHAR mode)
 		break;
 	case DMODE_CD_GFX:
 		cdgfx_show(TRUE);
+		break;
+	case DMODE_CD_PRG:
+		cdprg_show(TRUE);
 		break;
 	case DMODE_CD_REG:
 		cdreg_show(TRUE);
