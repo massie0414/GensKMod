@@ -9,6 +9,7 @@
 
 unsigned char VRam[65536];
 unsigned char CRam[256];
+unsigned char VSRam[256];
 struct Reg_VDP_Type VDP_Reg;
 unsigned short MD_Screen[336 * 240];
 int Mode_555;
@@ -188,6 +189,37 @@ int main(void)
     planes_show(0, TRUE); planes_show(1, TRUE);
     assert(IsWindowVisible(a) && IsWindowVisible(b));
 
+    /* Viewport borders follow independent scroll values and wrap at map edges. */
+    {
+        DRAWITEMSTRUCT item = {0};
+        item.hDC = dc; item.rcItem.right = 64; item.rcItem.bottom = 64;
+        VDP_Reg.Set2 = 0x40;
+        VDP_Reg.Scr_Size = 1; /* 512 x 256 */
+        VDP_Reg.H_Scr_Adr = 0x3f;
+        *(unsigned short *)&VRam[0xfc00] = 16;
+        *(unsigned short *)&VSRam[0] = 240;
+        PlaneExplorer_DrawViewport(&explorers[0], &item);
+        assert(viewport_mask[240 * 1024 + 496]);
+        assert(viewport_mask[0]);
+        assert(!viewport_mask[220 * 1024]);
+        assert(!viewport_mask[300]);
+        assert(GetPixel(dc, 0, 0) == RGB(255, 0, 0));
+        PlaneExplorer_DrawViewport(&explorers[1], &item);
+        assert(viewport_mask[0] && !viewport_mask[496]);
+        VDP_Reg.Set3 = 3;
+        *(unsigned short *)&VRam[0xfc04] = 32;
+        PlaneExplorer_DrawViewport(&explorers[0], &item);
+        assert(viewport_mask[241 * 1024 + 480]);
+        VDP_Reg.Set3 = 4;
+        *(unsigned short *)&VSRam[4] = 32;
+        PlaneExplorer_DrawViewport(&explorers[0], &item);
+        assert(viewport_mask[32 * 1024]);
+        VDP_Reg.Set4 = 7; VDP_Reg.Set2 = 0x48;
+        PlaneExplorer_DrawViewport(&explorers[0], &item);
+        assert(viewport_mask[480 * 1024 + 496]);
+        VDP_Reg.Set4 = VDP_Reg.Set2 = VDP_Reg.Set3 = VDP_Reg.Scr_Size = 0;
+        memset(VSRam, 0, sizeof(VSRam));
+    }
     paint(a, dc); assert(GetPixel(dc, 0, 0) == RGB(238, 0, 0));
     paint(b, dc); assert(GetPixel(dc, 0, 0) == RGB(0, 238, 0));
     paint(a, dc); assert(GetPixel(dc, 0, 0) == RGB(238, 0, 0));

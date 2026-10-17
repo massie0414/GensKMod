@@ -368,6 +368,57 @@ static void IntensityPaint(PlaneExplorer *explorer, LPDRAWITEMSTRUCT item)
     SetDlgItemText(explorer->hwnd, IDC_PLANEEXPLORER_TILEINFO, "Dim image: other pixels. Mask only: colored areas on black.");
 }
 
+/* Mark source pixels covered by the viewport, then outline their union.
+ * Keeping the mask in map coordinates also handles wraparound and split scroll. */
+static unsigned char viewport_mask[PLANE_BITMAP_WIDTH * PLANE_BITMAP_HEIGHT];
+
+static void PlaneExplorer_DrawViewport(PlaneExplorer *explorer, LPDRAWITEMSTRUCT item)
+{
+    static const unsigned int scroll_masks[4] = {0, 7, 0x1f8, 0x1ff};
+    int width = PlaneWidth(explorer->plane) * 8;
+    int scale = (VDP_Reg.Set4 & 6) == 6 ? 2 : 1;
+    int height = PlaneHeight(explorer->plane) * 8 * scale;
+    int sw = (VDP_Reg.Set4 & 1) ? 320 : 256;
+    int sh = (VDP_Reg.Set2 & 8) ? 240 : 224;
+    int x, y, sx, sy, dy, start;
+    HBRUSH red;
+    RECT run;
+    if (explorer->plane > 1 || !(VDP_Reg.Set2 & 0x40)) return;
+    memset(viewport_mask, 0, sizeof(viewport_mask));
+    for (y = 0; y < sh; ++y) {
+        unsigned int address = (((VDP_Reg.H_Scr_Adr & 0x3f) << 10) +
+            (y & scroll_masks[VDP_Reg.Set3 & 3]) * 4 + explorer->plane * 2) & 0xffff;
+        int hs = *(unsigned short *)&VRam[address] & 0x3ff;
+        for (x = 0; x < sw; ++x) {
+            int column = (VDP_Reg.Set3 & 4) ? (x / 16) * 4 : 0;
+            int vs = *(unsigned short *)&VSRam[column + explorer->plane * 2];
+            sx = ((x - hs) % width + width) % width;
+            sy = ((y + (vs / scale)) * scale) % height;
+            for (dy = 0; dy < scale; ++dy)
+                viewport_mask[(sy + dy) * PLANE_BITMAP_WIDTH + sx] = 1;
+        }
+    }
+    red = CreateSolidBrush(RGB(255, 0, 0));
+    for (y = 0; y < height; ++y) {
+        start = -1;
+        for (x = 0; x <= width; ++x) {
+            int i = y * PLANE_BITMAP_WIDTH + x;
+            BOOL edge = x < width && viewport_mask[i] &&
+                (x == 0 || x == width - 1 || y == 0 || y == height - 1 ||
+                 !viewport_mask[i-1] || !viewport_mask[i+1] ||
+                 !viewport_mask[i-PLANE_BITMAP_WIDTH] || !viewport_mask[i+PLANE_BITMAP_WIDTH]);
+            if (edge && start < 0) start = x;
+            if (!edge && start >= 0) {
+                SetRect(&run, start, y, x, y + 1);
+                IntersectRect(&run, &run, &item->rcItem);
+                if (!IsRectEmpty(&run)) FillRect(item->hDC, &run, red);
+                start = -1;
+            }
+        }
+    }
+    DeleteObject(red);
+}
+
 static void PlaneExplorerPaint_KMod(PlaneExplorer *explorer, LPDRAWITEMSTRUCT lpdi)
 {
 	struct BMI_LOCAL
@@ -458,6 +509,7 @@ static void PlaneExplorerPaint_KMod(PlaneExplorer *explorer, LPDRAWITEMSTRUCT lp
 		(const BITMAPINFO *)&bmi,
 		DIB_RGB_COLORS);
 
+    PlaneExplorer_DrawViewport(explorer, lpdi);
 	if (explorer->plane == 2) return;
  if (explorer->plane == 3) {
   wsprintf(buffer, "Width: %d Height: %d  Window Base: 0x%04X  H: 0x%02X V: 0x%02X",

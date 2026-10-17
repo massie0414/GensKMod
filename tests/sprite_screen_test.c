@@ -1,7 +1,9 @@
 #include <assert.h>
 #include <string.h>
 #include "../src/Gens/kmod/planes.c"
-unsigned char VRam[65536], CRam[256];
+unsigned char VRam[65536], CRam[256], VSRam[256];
+unsigned short MD_Screen[336 * 240];
+int Mode_555;
 struct Reg_VDP_Type VDP_Reg;
 UCHAR OpenedWindow_KMod[WIN_NUMBER];
 HWND HandleWindow_KMod[WIN_NUMBER];
