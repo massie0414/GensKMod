@@ -14,6 +14,7 @@
 #include "common.h"
 #include "utils.h"
 #include "cdgfx.h"
+#include "window_geometry.h"
 //// size WRAM = 256*1024....4096tiles (64b) ==> (32*8)*(64*16)
 
 #include "vdp.h"
@@ -25,6 +26,101 @@ static HWND hCD_GFX;
 #define CD_GFX_ROWS 32
 #define CD_GFX_WIDTH (CD_GFX_COLUMNS * 8)
 #define CD_GFX_HEIGHT (CD_GFX_ROWS * 16)
+#define CD_GFX_PREVIEW_ID 50990
+#define CD_GFX_PREVIEW_WIDTH 64
+#define CD_GFX_PREVIEW_HEIGHT 128
+
+static unsigned int selectedTile;
+static WNDPROC imageProc;
+
+static unsigned char CD_GFXPixel(unsigned int tile, unsigned int x, unsigned int y)
+{
+	unsigned char data = Ram_Word_2M[tile * 64 + y * 4 + ((x / 2) ^ 1)];
+	return (x & 1) ? (data & 15) : (data >> 4);
+}
+
+static void CD_GFXSetSelectedTile(HWND hwnd, unsigned int tile)
+{
+	char address[32];
+	if (tile >= CD_GFX_COLUMNS * CD_GFX_ROWS) return;
+	selectedTile = tile;
+	wsprintf(address, "0x%06X", selectedTile * 64);
+	SetDlgItemText(hwnd, IDC_CD_GFX_ADR, address);
+	InvalidateRect(GetDlgItem(hwnd, IDC_CD_GFX), NULL, FALSE);
+	InvalidateRect(GetDlgItem(hwnd, CD_GFX_PREVIEW_ID), NULL, FALSE);
+}
+
+static BOOL CD_GFXNavigate(HWND hwnd, WPARAM key)
+{
+	if (key == VK_LEFT)
+	{
+		if (selectedTile > 0) CD_GFXSetSelectedTile(hwnd, selectedTile - 1);
+		return TRUE;
+	}
+	if (key == VK_RIGHT)
+	{
+		CD_GFXSetSelectedTile(hwnd, selectedTile + 1);
+		return TRUE;
+	}
+	if (key == VK_UP)
+	{
+		if (selectedTile >= CD_GFX_COLUMNS)
+			CD_GFXSetSelectedTile(hwnd, selectedTile - CD_GFX_COLUMNS);
+		return TRUE;
+	}
+	if (key == VK_DOWN)
+	{
+		CD_GFXSetSelectedTile(hwnd, selectedTile + CD_GFX_COLUMNS);
+		return TRUE;
+	}
+	return FALSE;
+}
+
+static void CD_GFXSelectTile(HWND hwnd, int x, int y)
+{
+	RECT rect;
+	GetClientRect(GetDlgItem(hwnd, IDC_CD_GFX), &rect);
+	if (x < 0 || y < 0 || x >= rect.right || y >= rect.bottom) return;
+	CD_GFXSetSelectedTile(hwnd, (y * CD_GFX_HEIGHT / rect.bottom / 16) * CD_GFX_COLUMNS +
+		x * CD_GFX_WIDTH / rect.right / 8);
+}
+
+static LRESULT CALLBACK CD_GFXImageProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	if (message == WM_LBUTTONDOWN)
+	{
+		SetFocus(hwnd);
+		CD_GFXSelectTile(GetParent(hwnd), (short)LOWORD(lParam), (short)HIWORD(lParam));
+		return 0;
+	}
+	if (message == WM_GETDLGCODE)
+		return CallWindowProc(imageProc, hwnd, message, wParam, lParam) | DLGC_WANTARROWS;
+	if (message == WM_KEYDOWN && CD_GFXNavigate(GetParent(hwnd), wParam)) return 0;
+	return CallWindowProc(imageProc, hwnd, message, wParam, lParam);
+}
+
+static void CD_GFXDrawPreview(LPDRAWITEMSTRUCT draw)
+{
+	DWORD pixels[8 * 16];
+	BITMAPINFO bmi;
+	unsigned int x, y;
+	for (y = 0; y < 16; y++)
+		for (x = 0; x < 8; x++)
+		{
+			COLORREF color = vdpdebug_getColor(pal_KMod, CD_GFXPixel(selectedTile, x, y));
+			pixels[y * 8 + x] = (GetRValue(color) << 16) | (GetGValue(color) << 8) | GetBValue(color);
+		}
+	ZeroMemory(&bmi, sizeof(bmi));
+	bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+	bmi.bmiHeader.biWidth = 8;
+	bmi.bmiHeader.biHeight = -16;
+	bmi.bmiHeader.biPlanes = 1;
+	bmi.bmiHeader.biBitCount = 32;
+	bmi.bmiHeader.biCompression = BI_RGB;
+	SetStretchBltMode(draw->hDC, COLORONCOLOR);
+	StretchDIBits(draw->hDC, 0, 0, draw->rcItem.right, draw->rcItem.bottom,
+		0, 0, 8, 16, pixels, &bmi, DIB_RGB_COLORS, SRCCOPY);
+}
 
 
 
@@ -311,29 +407,39 @@ void DrawCD_GFX_KMod(LPDRAWITEMSTRUCT hlDIS)
 	StretchDIBits(hlDIS->hDC, hlDIS->rcItem.left, hlDIS->rcItem.top,
 		hlDIS->rcItem.right - hlDIS->rcItem.left, hlDIS->rcItem.bottom - hlDIS->rcItem.top,
 		0, 0, CD_GFX_WIDTH, CD_GFX_HEIGHT, pixels, &bmi, DIB_RGB_COLORS, SRCCOPY);
+	{
+		RECT selection;
+		int width = hlDIS->rcItem.right - hlDIS->rcItem.left;
+		int height = hlDIS->rcItem.bottom - hlDIS->rcItem.top;
+		int x = selectedTile % CD_GFX_COLUMNS;
+		int y = selectedTile / CD_GFX_COLUMNS;
+		selection.left = hlDIS->rcItem.left + MulDiv(x * 8, width, CD_GFX_WIDTH);
+		selection.top = hlDIS->rcItem.top + MulDiv(y * 16, height, CD_GFX_HEIGHT);
+		selection.right = hlDIS->rcItem.left + MulDiv((x + 1) * 8, width, CD_GFX_WIDTH);
+		selection.bottom = hlDIS->rcItem.top + MulDiv((y + 1) * 16, height, CD_GFX_HEIGHT);
+		FrameRect(hlDIS->hDC, &selection, (HBRUSH)GetStockObject(WHITE_BRUSH));
+	}
 }
 
 
 void UpdateCD_GFX_KMod()
 {
-	if (OpenedWindow_KMod[5] == FALSE) return;
+	if (OpenedWindow_KMod[DMODE_CD_GFX - 1] == FALSE) return;
 	RedrawWindow(GetDlgItem(hCD_GFX, IDC_CD_GFX), NULL, NULL, RDW_INVALIDATE);
+	InvalidateRect(GetDlgItem(hCD_GFX, CD_GFX_PREVIEW_ID), NULL, FALSE);
 }
 
 
 void CD_GFXInit_KMod(HWND hwnd)
 {
-	RECT image, button, frame = {0, 0, 0, 0}, window;
+	RECT image, frame = {0, 0, 0, 0}, window;
 	MONITORINFO monitor;
 	int width = CD_GFX_WIDTH, height = CD_GFX_HEIGHT;
-	int margin, buttonHeight, buttonWidth, clientWidth, clientHeight;
+	int margin, clientWidth, clientHeight;
 
 	GetWindowRect(GetDlgItem(hwnd, IDC_CD_GFX), &image);
 	MapWindowPoints(NULL, hwnd, (LPPOINT)&image, 2);
-	GetWindowRect(GetDlgItem(hwnd, IDC_CD_GFX_BMP), &button);
 	margin = image.left;
-	buttonHeight = button.bottom - button.top;
-	buttonWidth = button.right - button.left;
 	AdjustWindowRectEx(&frame, GetWindowLong(hwnd, GWL_STYLE), FALSE,
 		GetWindowLong(hwnd, GWL_EXSTYLE));
 	monitor.cbSize = sizeof(monitor);
@@ -342,7 +448,7 @@ void CD_GFXInit_KMod(HWND hwnd)
 		int availableWidth = monitor.rcWork.right - monitor.rcWork.left -
 			(frame.right - frame.left) - margin * 2;
 		int availableHeight = monitor.rcWork.bottom - monitor.rcWork.top -
-			(frame.bottom - frame.top) - image.top - buttonHeight - margin * 2;
+			(frame.bottom - frame.top) - image.top - margin * 2 - CD_GFX_PREVIEW_HEIGHT;
 		if (availableWidth < width && availableWidth > 0)
 		{
 			width = availableWidth;
@@ -356,12 +462,14 @@ void CD_GFXInit_KMod(HWND hwnd)
 	}
 
 	clientWidth = width + margin * 2;
-	clientHeight = image.top + height + margin * 2 + buttonHeight;
+	clientHeight = image.top + height + margin * 2 + CD_GFX_PREVIEW_HEIGHT;
 	MoveWindow(GetDlgItem(hwnd, IDC_CD_GFX), margin, image.top, width, height, TRUE);
-	MoveWindow(GetDlgItem(hwnd, IDC_CD_GFX_DUMP), margin, image.top + height + margin,
-		buttonWidth, buttonHeight, TRUE);
-	MoveWindow(GetDlgItem(hwnd, IDC_CD_GFX_BMP), clientWidth - margin - buttonWidth,
-		image.top + height + margin, buttonWidth, buttonHeight, TRUE);
+	MoveWindow(GetDlgItem(hwnd, CD_GFX_PREVIEW_ID), margin, image.top + height + margin,
+		CD_GFX_PREVIEW_WIDTH, CD_GFX_PREVIEW_HEIGHT, TRUE);
+	/* Give the address the remaining width, including room for A-F digits. */
+	MoveWindow(GetDlgItem(hwnd, IDC_CD_GFX_ADR), margin * 2 + CD_GFX_PREVIEW_WIDTH,
+		image.top + height + margin, max(0, clientWidth - margin * 3 - CD_GFX_PREVIEW_WIDTH),
+		CD_GFX_PREVIEW_HEIGHT, TRUE);
 	GetWindowRect(hwnd, &window);
 	window.right = clientWidth + frame.right - frame.left;
 	window.bottom = clientHeight + frame.bottom - frame.top;
@@ -380,34 +488,35 @@ BOOL CALLBACK CD_GFXDlgProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lPara
 	switch (Message)
 	{
 	case WM_INITDIALOG:
+		selectedTile = 0;
+		HandleWindow_KMod[DMODE_CD_GFX - 1] = hwnd;
+		CreateWindow("STATIC", "", WS_CHILD | WS_VISIBLE | SS_OWNERDRAW,
+			0, 0, 0, 0, hwnd, (HMENU)CD_GFX_PREVIEW_ID, GetModuleHandle(NULL), NULL);
+		imageProc = (WNDPROC)SetWindowLongPtr(GetDlgItem(hwnd, IDC_CD_GFX), GWLP_WNDPROC,
+			(LONG_PTR)CD_GFXImageProc);
 		CD_GFXInit_KMod(hwnd);
 		break;
 
-	case WM_COMMAND:
-		switch (LOWORD(wParam))
-		{
-		case IDC_CD_GFX_DUMP:
-			//TODO
-			break;
-
-		case IDC_CD_GFX_BMP:
-			DumpTilesCD_KMod(hCD_GFX);
-			break;
-		}
-		break;
+	case WM_KEYDOWN:
+		return CD_GFXNavigate(hwnd, wParam);
 
 	case WM_DRAWITEM:
 		if ((UINT)wParam == IDC_CD_GFX)
 			DrawCD_GFX_KMod((LPDRAWITEMSTRUCT)lParam);
+		else if ((UINT)wParam == CD_GFX_PREVIEW_ID)
+			CD_GFXDrawPreview((LPDRAWITEMSTRUCT)lParam);
 		break;
 
+	case WM_COMMAND:
+		if (LOWORD(wParam) != IDCANCEL) return FALSE;
 	case WM_CLOSE:
 		CloseWindow_KMod(DMODE_CD_GFX);
 		break;
 
 	case WM_DESTROY:
-		cdgfx_destroy();
-		PostQuitMessage(0);
+		hCD_GFX = NULL;
+		HandleWindow_KMod[DMODE_CD_GFX - 1] = NULL;
+		OpenedWindow_KMod[DMODE_CD_GFX - 1] = FALSE;
 		break;
 
 	default:
@@ -439,6 +548,27 @@ void cdgfx_reset()
 }
 void cdgfx_destroy()
 {
-	DestroyWindow(hCD_GFX);
+	if (hCD_GFX) DestroyWindow(hCD_GFX);
+}
+
+void cdgfx_save_window(const char *config_file)
+{
+	WritePrivateProfileString("DebugWindows", "CDGfxOpen",
+		OpenedWindow_KMod[DMODE_CD_GFX - 1] ? "1" : "0", config_file);
+	DebugWindow_SaveGeometry(hCD_GFX, "CDGfxRect", config_file);
+}
+
+void cdgfx_restore_window(const char *config_file)
+{
+	RECT rect;
+	BOOL visible = GetPrivateProfileInt("DebugWindows", "CDGfxOpen", 0, config_file) != 0;
+	if (!hCD_GFX) return;
+	GetWindowRect(hCD_GFX, &rect);
+	DebugWindow_RestoreGeometry(hCD_GFX, "CDGfxRect", config_file);
+	/* Keep the image layout calculated for the current display. */
+	SetWindowPos(hCD_GFX, NULL, 0, 0, rect.right - rect.left, rect.bottom - rect.top,
+		SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+	OpenedWindow_KMod[DMODE_CD_GFX - 1] = visible;
+	cdgfx_show(visible);
 }
 

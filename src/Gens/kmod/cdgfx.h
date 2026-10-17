@@ -10,6 +10,8 @@ void cdgfx_show(BOOL visibility);
 void cdgfx_update();
 void cdgfx_reset();
 void cdgfx_destroy();
+void cdgfx_save_window(const char *config_file);
+void cdgfx_restore_window(const char *config_file);
 
 #ifdef __cplusplus
 };

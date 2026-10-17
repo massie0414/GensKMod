@@ -61,6 +61,7 @@
 #include "kmod/s68k.h"
 #include "kmod/cdc.h"
 #include "kmod/cd_reg.h"
+#include "kmod/cdgfx.h"
 #include "kmod/m68k.h"
 #include "kmod/z80.h"
 #include "kmod/disassembly.h"
@@ -1907,6 +1908,7 @@ int PASCAL WinMain(HINSTANCE hInst,	HINSTANCE hPrevInst, LPSTR lpCmdLine, int nC
 	s68kdebug_save_window(Str_Tmp);
 	cdcdebug_save_window(Str_Tmp);
 	cdreg_save_window(Str_Tmp);
+	cdgfx_save_window(Str_Tmp);
 	m68kdebug_save_window(Str_Tmp);
 	z80debug_save_window(Str_Tmp);
 	disassembly_save_window(Str_Tmp);
