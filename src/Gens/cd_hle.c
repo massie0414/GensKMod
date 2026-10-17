@@ -48,6 +48,7 @@ static unsigned sector_header(unsigned lba) {
     unsigned t=lba+150,m=t/4500,s=t/75%60,f=t%75;
     return ((m/10*16+m%10)<<24)|((s/10*16+s%10)<<16)|((f/10*16+f%10)<<8)|1;
 }
+static unsigned bcd(unsigned v) { return (v/10)*16+v%10; }
 static int sector(unsigned lba, unsigned char *b, unsigned bytes) {
     unsigned stride=Tracks[0].Type==TYPE_BIN?2352:2048;
     if(!Tracks[0].F || Tracks[0].Lenght<=0 || lba >= (unsigned)Tracks[0].Lenght || lba>0x7fffffffU/stride)return 0;
@@ -232,14 +233,25 @@ int CD_HLE_Boot(void) {
     ww(Rom_Data,0x1844,0x66fa); ww(Rom_Data,0x1846,0x4e75);
     wl(Rom_Data,0x78,0xfffd06); ww(Ram_68k,0xfd06,0x4ef9); wl(Ram_68k,0xfd08,0x1800);
     wl(Rom_Data,0x70,0xfffd0c); ww(Ram_68k,0xfd0c,0x4ef9); wl(Ram_68k,0xfd0e,0x1800);
+    for(i=0;i<16;i++) {
+        wl(Rom_Data,0x80+i*4,0xfffd18+i*6);
+        ww(Ram_68k,0xfd18+i*6,0x4e73);
+    }
     /* Sub-program initialization followed by its main entry point. */
     ww(Ram_Prg,0x1000,0x4eb9); wl(Ram_Prg,0x1002,init);
     ww(Ram_Prg,0x1006,0x4ef9); wl(Ram_Prg,0x1008,main);
     for(i=8;i<0x100;i+=4)wl(Ram_Prg,i,0x1100);
     ww(Ram_Prg,0x1100,0x4e73);
+    /* TRAP vectors dispatch through the BIOS-compatible writable jump table. */
+    for(i=0;i<16;i++) {
+        wl(Ram_Prg,0x80+i*4,0x5fa0+i*6);
+        ww(Ram_Prg,0x5fa0+i*6,0x4e73);
+    }
     wl(Ram_Prg,0x68,0x1120);
     ww(Ram_Prg,0x1120,0x48e7); ww(Ram_Prg,0x1122,0xfffe);
-    ww(Ram_Prg,0x1124,0x4eb9); wl(Ram_Prg,0x1126,irq);
+    /* USER call 2 is writable; the SP header supplies its initial target. */
+    ww(Ram_Prg,0x5f34,0x4ef9); wl(Ram_Prg,0x5f36,irq);
+    ww(Ram_Prg,0x1124,0x4eb9); wl(Ram_Prg,0x1126,0x5f34);
     ww(Ram_Prg,0x112a,0x4cdf); ww(Ram_Prg,0x112c,0x7fff); ww(Ram_Prg,0x112e,0x4e73);
     /* User-call entry (fourth SP jump-table entry). */
     if(rw(Ram_Prg,table+6)) {
@@ -251,6 +263,8 @@ int CD_HLE_Boot(void) {
     main68k_context.pc=0xff0000; main68k_context.areg[7]=0xfffd00; main68k_context.sr=0x2000;
     sub68k_context.pc=0x1000; sub68k_context.areg[7]=0x5e00; sub68k_context.sr=0x2000;
     S68K_State=1; Int_Mask_S68K=4; Ram_Word_State=0; MS68K_Set_Word_Ram();
+    /* CD boot hands the program 1M banks; games can then select 2M mode. */
+    S68K_WB(0xff8003,4);
     Set_VDP_Reg(1,0x24); Set_VDP_Reg(15,2);
     if(trace)fprintf(trace,"boot ip=%x/%x sp=%x/%x init=%x main=%x irq=%x\n",ip_off,ip_size,sp_off,sp_size,init,main,irq);
     return 1;
@@ -297,7 +311,7 @@ void CD_HLE_Frame(void) {
 static void subcall(void) {
     struct S68000CONTEXT *c=&sub68k_context;
     unsigned fn=c->dreg[0]&0xffff,a=c->areg[0],i;
-    unsigned char b[2336];
+    unsigned char b[2048]; /* MODE1 payload; EDC/ECC are not program data. */
     if(fn<256&&!sub_seen[fn]++&&trace)fprintf(trace,"sub fn=%02x a0=%x a1=%x d1=%x\n",fn,a,c->areg[1],c->dreg[1]);
     c->sr &= ~1;
     switch(fn) {
@@ -323,11 +337,22 @@ static void subcall(void) {
         /* CDBSTAT returns a pointer, not a caller-provided output buffer. */
         c->areg[0]=0x1300; memset(Ram_Prg+0x1300,0,32);
         ww(Ram_Prg,0x1300,(audio_track>=1?(audio_paused?0x500:0x100):0)|(read_count?(read_paused?5:1):0));
+        ww(Ram_Prg,0x1310,0x100|SCD.TOC.Last_Track);
         break;
+    case 0x83: { /* CDBTOCREAD: absolute BCD MSF/track and track type. */
+        unsigned t=c->dreg[1]&0xffff, pos=0;
+        if(t && t<=(unsigned)SCD.TOC.Last_Track)pos=Tracks[t-1].DiscStart;
+        else t=0; /* Missing track: disc start, with a zero track byte. */
+        pos+=150;
+        c->dreg[0]=(bcd(pos/4500)<<24)|(bcd(pos/75%60)<<16)|(bcd(pos%75)<<8)|t;
+        c->dreg[1]=(c->dreg[1]&~255U)|(t<=1?255:0);
+        break;
+    }
     case 0x17: case 0x20: case 0x21:
         read_lba=meml(1,a); read_paused=0; audio_track=-1;
         read_count=fn==0x17?(unsigned)Tracks[0].Lenght-read_lba:meml(1,a+4);
         if(fn==0x21)read_count-=read_lba;
+        if(trace)fprintf(trace,"READ lba=%u count=%u\n",read_lba,read_count);
         if(read_lba >= (unsigned)Tracks[0].Lenght || read_count > (unsigned)Tracks[0].Lenght-read_lba) { read_count=0; c->sr|=1; }
         break;
     case 0x85:

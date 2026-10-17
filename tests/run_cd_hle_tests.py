@@ -1,4 +1,4 @@
-"""Build Win32 tests with VS 2022. The optional FHB image is supplied by the user."""
+"""Build Win32 tests with VS C++ tools. Optional game images are supplied by the user."""
 import argparse
 import os
 from pathlib import Path
@@ -9,13 +9,17 @@ import tempfile
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--image", type=Path)
+    parser.add_argument("--sol-feace", type=Path, help="SOL-FEACE CUE for opening and gameplay tests")
     parser.add_argument("--skip-build", action="store_true", help="reuse the Release emulator objects")
     parser.add_argument("--build-only", action="store_true")
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     image = args.image.resolve() if args.image else None
+    sol_feace = args.sol_feace.resolve() if args.sol_feace else None
     if image and not image.is_file():
         parser.error("image does not exist")
+    if sol_feace and not sol_feace.is_file():
+        parser.error("SOL-FEACE image does not exist")
     env = {key.upper(): value for key, value in os.environ.items()}
     vswhere = Path(env["PROGRAMFILES(X86)"]) / "Microsoft Visual Studio/Installer/vswhere.exe"
     vs = Path(subprocess.check_output([
@@ -44,22 +48,36 @@ def main():
         subprocess.run(script, shell=True, cwd=root, env=env, check=True)
 
     compile_test("cd_cue_test", ["tests/cd_cue_test.c", "src/Gens/cd_cue.c"])
-    if image:
+    if image or sol_feace:
         objects = sorted((root / "src/Gens/bin/obj/Release").rglob("*.obj"))
         if not objects:
             parser.error("Release objects are missing; omit --skip-build")
-        compile_test("cd_hle_boot_test", ["tests/cd_hle_boot_test.cpp"], objects, [
+        libraries = [
             "/LIBPATH:" + str(root / "src/dx70_min/lib"),
             str(root / "src/Gens/libs/zlib.lib"), str(root / "src/Gens/libs/htmlhelp.lib"),
             "wsock32.lib", "comctl32.lib", "ddraw.lib", "dsound.lib", "dinput.lib",
             "dxguid.lib", "winmm.lib", "vfw32.lib", "user32.lib", "gdi32.lib",
             "shell32.lib", "advapi32.lib", "comdlg32.lib"
-        ])
+        ]
+        compile_test("cd_hle_contract_test", ["tests/cd_hle_contract_test.cpp"], objects, libraries)
+        if image:
+            compile_test("cd_hle_boot_test", ["tests/cd_hle_boot_test.cpp"], objects, libraries)
+        if sol_feace:
+            compile_test("cd_sol_feace_test", ["tests/cd_sol_feace_test.cpp"], objects, libraries)
     if args.build_only:
         print("Test executables:", out)
         return
     run = Path(tempfile.mkdtemp(prefix="run-", dir=out))
     subprocess.run([str(out / "cd_cue_test.exe")], cwd=run, env=env, check=True)
+    if image or sol_feace:
+        subprocess.run([str(out / "cd_hle_contract_test.exe")], cwd=run, env=env, check=True)
+    if sol_feace:
+        for timing, rate in (("normal", 22050), ("accurate", 44100)):
+            for mode in ("opening", "play"):
+                folder = run / ("sol-feace-" + timing + "-" + mode)
+                folder.mkdir()
+                subprocess.run([str(out / "cd_sol_feace_test.exe"), str(sol_feace), mode, timing, str(rate)],
+                               cwd=folder, env=env, check=True)
     if image:
         for timing in ("normal", "accurate"):
             folder = run / timing

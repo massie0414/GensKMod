@@ -2084,6 +2084,7 @@ void Reset_SegaCD()
 int Do_SegaCD_Frame_No_VDP(void)
 {
     if(CD_32X_Active) return Do_32X_Frame_No_VDP();
+    if(CD_HLE_Active) return Do_SegaCD_Frame_No_VDP_Cycle_Accurate();
 	int *buf[2];
 	int HInt_Counter;
 
@@ -2501,6 +2502,8 @@ int Do_SegaCD_Frame_No_VDP_Cycle_Accurate(void)
 int Do_SegaCD_Frame(void)
 {
     if(CD_32X_Active) return Do_32X_Frame();
+    /* HLE has no BIOS drive delays; retain short main/sub handshake pulses. */
+    if(CD_HLE_Active) return Do_SegaCD_Frame_Cycle_Accurate();
 	int *buf[2];
 	int HInt_Counter;
  
