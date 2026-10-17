@@ -295,7 +295,7 @@ void kmod_close()
 	{
 		// Restored windows stay open when loading another ROM.
 		if (OpenedWindow_KMod[mode] && mode != (DMODE_MSG - 1) &&
-			mode != (DMODE_DISASSEMBLY - 1) && mode != (DMODE_PLANE_A - 1) && mode != (DMODE_PLANE_B - 1) &&
+			mode != (DMODE_DISASSEMBLY - 1) && mode != (DMODE_PLANE_A - 1) && mode != (DMODE_PLANE_B - 1) && mode != (DMODE_SPRITE_SCREEN - 1) &&
 			mode != (DMODE_VDP - 1) && mode != (DMODE_SPRITES - 1) &&
 			mode != (DMODE_32_MEMORY - 1) && mode != (DMODE_32_SOUND - 1) && mode != (DMODE_32_FPS - 1) && mode != (DMODE_32_SDRAM - 1) && mode != (DMODE_32_VDP - 1) && mode != (DMODE_32_REG - 1) &&
 			mode != (DMODE_32_MSH2 - 1) && mode != (DMODE_32_SSH2 - 1))

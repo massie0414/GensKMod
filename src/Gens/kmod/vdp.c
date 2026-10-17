@@ -20,6 +20,13 @@
 UCHAR pal_KMod;
 static HWND hVDP;
 static SIZE minimumVDPSize;
+static int selectedVDPSprite = -1;
+
+void vdpdebug_select_sprite(int index)
+{
+	selectedVDPSprite = index >= 0 && index < 80 ? index : -1;
+	if (hVDP) InvalidateRect(GetDlgItem(hVDP, IDC_VDP_TILES), NULL, FALSE);
+}
 
 static long palH, palV;
 static UCHAR zoomTile_KMod;
@@ -109,6 +116,30 @@ void DrawVDP_Tiles_KMod(LPDRAWITEMSTRUCT hlDIS)
 		for (posX = 0; posX < maxX; posX += 8)
 		{
 			vdpdebug_drawTile(hDC, numTile++, posX, posY, pal_KMod, 1);
+		}
+	}
+
+	if (selectedVDPSprite >= 0)
+	{
+		unsigned int base = (VDP_Reg.Spr_Att_Adr & ((VDP_Reg.Set4 & 1) ? 0x7E : 0x7F)) << 9;
+		unsigned short data[4];
+		int i, count, first, units = (VDP_Reg.Set4 & 6) == 6 ? 2 : 1;
+		for (i = 0; i < 4; i++)
+			data[i] = *(unsigned short *)&VRam[(base + selectedVDPSprite * 8 + i * 2) & 0xFFFF];
+		first = (data[2] & 0x7FF) * units;
+		count = (((data[1] >> 10) & 3) + 1) * (((data[1] >> 8) & 3) + 1) * units;
+		if (data[0] || data[1] || data[2] || data[3])
+		{
+			HBRUSH red = CreateSolidBrush(RGB(255, 0, 0));
+			for (i = 0; i < count; i++)
+			{
+				int tile = (first + i) & 0x7FF;
+				RECT frame;
+				SetRect(&frame, (tile % VDP_TILE_COLUMNS) * 8, (tile / VDP_TILE_COLUMNS) * 8,
+					(tile % VDP_TILE_COLUMNS) * 8 + 8, (tile / VDP_TILE_COLUMNS) * 8 + 8);
+				FrameRect(hDC, &frame, red);
+			}
+			DeleteObject(red);
 		}
 	}
 

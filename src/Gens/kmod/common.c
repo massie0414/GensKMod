@@ -72,6 +72,9 @@ void CloseWindow_KMod(UCHAR mode)
 	case DMODE_PLANE_A:
 		planes_show(0, FALSE);
 		break;
+	case DMODE_SPRITE_SCREEN:
+		planes_show(2, FALSE);
+		break;
 	case DMODE_PLANE_B:
 		planes_show(1, FALSE);
 		break; 
@@ -160,6 +163,9 @@ void OpenWindow_KMod(UCHAR mode)
 		break;
 	case DMODE_PLANE_A:
 		planes_show(0, TRUE);
+		break;
+	case DMODE_SPRITE_SCREEN:
+		planes_show(2, TRUE);
 		break;
 	case DMODE_PLANE_B:
 		planes_show(1, TRUE);

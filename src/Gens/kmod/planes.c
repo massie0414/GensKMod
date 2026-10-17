@@ -13,7 +13,7 @@
 #include "planes.h"
 #include "window_geometry.h"
 
-#define PLANE_COUNT 2
+#define PLANE_COUNT 3
 #define PLANE_BITMAP_WIDTH 1024
 #define PLANE_BITMAP_HEIGHT 2048
 
@@ -22,6 +22,8 @@ typedef struct PlaneExplorer
 	HWND hwnd;
 	int plane;
 	BOOL show_transparence;
+	BOOL has_selected_sprite;
+	RECT selected_sprite;
 	unsigned int old_width;
 	unsigned int old_height;
 	unsigned int old_tile_height;
@@ -30,10 +32,18 @@ typedef struct PlaneExplorer
 
 static PlaneExplorer explorers[PLANE_COUNT];
 static COLORREF plane_explorer_palette[256];
+static int selected_screen_sprite = -1;
+
+void planes_select_sprite(int index)
+{
+	selected_screen_sprite = index >= 0 && index < 80 ? index : -1;
+	if (explorers[2].hwnd)
+		InvalidateRect(GetDlgItem(explorers[2].hwnd, IDC_PLANEXPLEORER_MAIN), NULL, FALSE);
+}
 
 static UCHAR PlaneExplorerMode(int plane)
 {
-	return plane == 0 ? DMODE_PLANE_A : DMODE_PLANE_B;
+	return plane == 2 ? DMODE_SPRITE_SCREEN : plane == 0 ? DMODE_PLANE_A : DMODE_PLANE_B;
 }
 
 static void PlaneExplorerInit_KMod(PlaneExplorer *explorer)
@@ -41,7 +51,7 @@ static void PlaneExplorerInit_KMod(PlaneExplorer *explorer)
 	HWND hexplorer = GetDlgItem(explorer->hwnd, IDC_PLANEXPLEORER_MAIN);
 	RECT rc;
 
-	SetWindowText(explorer->hwnd, explorer->plane == 0 ? "Plane A" : "Plane B");
+	SetWindowText(explorer->hwnd, explorer->plane == 2 ? "Sprite Screen" : explorer->plane == 0 ? "Plane A" : "Plane B");
 	CheckDlgButton(explorer->hwnd, IDC_PLANEEXPLORER_TRANS,
 		explorer->show_transparence ? BST_CHECKED : BST_UNCHECKED);
 	explorer->old_width = 0;
@@ -185,6 +195,62 @@ static void PlaneExplorer_DrawTile(PlaneExplorer *explorer, unsigned short name_
 	}
 }
 
+/* Sprite table order determines overlap; color zero is transparent. */
+static void SpriteScreen_UpdateBitmap(PlaneExplorer *explorer)
+{
+    int width = (VDP_Reg.Set4 & 1) ? 320 : 256;
+    int th = (VDP_Reg.Set4 & 6) == 6 ? 16 : 8;
+    int height = ((VDP_Reg.Set2 & 8) ? 240 : 224) * (th / 8);
+    unsigned int base = (VDP_Reg.Spr_Att_Adr & ((VDP_Reg.Set4 & 1) ? 0x7E : 0x7F)) << 9;
+    unsigned char occupied[320 * 480] = {0}, visited[80] = {0};
+    int x, y, index = 0, count = 0;
+    char text[128];
+    explorer->has_selected_sprite = FALSE;
+    for (y = 0; y < height; y++)
+        for (x = 0; x < width; x++)
+            explorer->data[y * PLANE_BITMAP_WIDTH + x] =
+                (x < width && y < height && !explorer->show_transparence) ? 0 : 253 + (((x ^ y) >> 2) & 1);
+    while (index < ((VDP_Reg.Set4 & 1) ? 80 : 64) && !visited[index])
+    {
+        unsigned short words[4];
+        int i, sx, sy, sw, sh;
+        visited[index] = 1;
+        for (i = 0; i < 4; i++) words[i] = *(unsigned short *)&VRam[(base + index * 8 + i * 2) & 0xFFFF];
+        sx = words[3] & 511;
+        sx -= 128;
+        sy = (words[0] & (th == 16 ? 1023 : 511)) - 128 * (th / 8);
+        sw = (((words[1] >> 10) & 3) + 1) * 8;
+        sh = (((words[1] >> 8) & 3) + 1) * th;
+        if (index == selected_screen_sprite && (words[0] || words[1] || words[2] || words[3]))
+        {
+            RECT sprite, screen = {0, 0, width, height};
+            SetRect(&sprite, sx, sy, sx + sw, sy + sh);
+            explorer->has_selected_sprite = IntersectRect(&explorer->selected_sprite, &sprite, &screen);
+        }
+        for (y = 0; y < sh; y++)
+            for (x = 0; x < sw; x++)
+            {
+                int px = sx + x, py = sy + y;
+                int tx = words[2] & 0x0800 ? sw - 1 - x : x;
+                int ty = words[2] & 0x1000 ? sh - 1 - y : y;
+                unsigned int tile, address;
+                unsigned char pixel;
+                if (px < 0 || px >= width || py < 0 || py >= height || occupied[py * 320 + px]) continue;
+                tile = (words[2] & 0x7FF) + (tx / 8) * (sh / th) + ty / th;
+                address = (tile * th * 4 + (ty % th) * 4 + (tx % 8) / 2) & 0xFFFF;
+                pixel = (VRam[address ^ 1] >> ((tx & 1) ? 0 : 4)) & 15;
+                if (!pixel) continue;
+                explorer->data[py * PLANE_BITMAP_WIDTH + px] = pixel | ((words[2] >> 9) & 0x30);
+                occupied[py * 320 + px] = 1;
+            }
+        count++;
+        index = words[1] & 127;
+        if (!index) break;
+    }
+    wsprintf(text, "Sprite Screen: %d x %d  Linked sprites: %d  SAT: 0x%04X", width, height, count, base);
+    SetDlgItemText(explorer->hwnd, IDC_PLANEEXPLORER_PROPS, text);
+}
+
 static void PlaneExplorer_UpdateBitmap(PlaneExplorer *explorer)
 {
 	unsigned int i, j;
@@ -256,9 +322,50 @@ static void PlaneExplorerPaint_KMod(PlaneExplorer *explorer, LPDRAWITEMSTRUCT lp
 
 	char buffer[1024];
 	PlaneExplorer_UpdatePalette();
-	PlaneExplorer_UpdateBitmap(explorer);
+	if (explorer->plane == 2) SpriteScreen_UpdateBitmap(explorer);
+	else PlaneExplorer_UpdateBitmap(explorer);
 
 	memcpy(bmi.palette, plane_explorer_palette, sizeof(bmi.palette));
+	if (explorer->plane == 2)
+	{
+		int width = (VDP_Reg.Set4 & 1) ? 320 : 256;
+		int height = ((VDP_Reg.Set2 & 8) ? 240 : 224) * (((VDP_Reg.Set4 & 6) == 6) ? 2 : 1);
+		int availableWidth = lpdi->rcItem.right - lpdi->rcItem.left;
+		int availableHeight = lpdi->rcItem.bottom - lpdi->rcItem.top;
+		int drawWidth = min(availableWidth, MulDiv(availableHeight, width, height));
+		int drawHeight = MulDiv(drawWidth, height, width);
+		unsigned char pixels[320 * 480];
+		int row;
+		/* Give GDI a complete screen-sized DIB, rather than a cropped region
+		 * of the much taller plane buffer when scaling to a window DC. */
+		bmi.hdr.biWidth = width;
+		bmi.hdr.biHeight = -height;
+		for (row = 0; row < height; row++)
+			memcpy(pixels + row * width, explorer->data + row * PLANE_BITMAP_WIDTH, width);
+		FillRect(lpdi->hDC, &lpdi->rcItem, GetSysColorBrush(COLOR_3DFACE));
+		SetStretchBltMode(lpdi->hDC, COLORONCOLOR);
+		if (drawWidth > 0 && drawHeight > 0)
+			StretchDIBits(lpdi->hDC, (availableWidth - drawWidth) / 2, (availableHeight - drawHeight) / 2,
+				drawWidth, drawHeight, 0, 0, width, height, pixels,
+				(const BITMAPINFO *)&bmi, DIB_RGB_COLORS, SRCCOPY);
+		if (explorer->has_selected_sprite && drawWidth > 0 && drawHeight > 0)
+		{
+			RECT *sprite = &explorer->selected_sprite, frame;
+			HBRUSH red = CreateSolidBrush(RGB(255, 0, 0));
+			int left = (availableWidth - drawWidth) / 2;
+			int top = (availableHeight - drawHeight) / 2;
+			SetRect(&frame, left + MulDiv(sprite->left, drawWidth, width),
+				top + MulDiv(sprite->top, drawHeight, height),
+				left + MulDiv(sprite->right, drawWidth, width),
+				top + MulDiv(sprite->bottom, drawHeight, height));
+			FrameRect(lpdi->hDC, &frame, red);
+			InflateRect(&frame, -1, -1);
+			if (!IsRectEmpty(&frame)) FrameRect(lpdi->hDC, &frame, red);
+			DeleteObject(red);
+		}
+		return;
+	}
+
 
 	SetDIBitsToDevice(
 		lpdi->hDC,
@@ -271,6 +378,7 @@ static void PlaneExplorerPaint_KMod(PlaneExplorer *explorer, LPDRAWITEMSTRUCT lp
 		(const BITMAPINFO *)&bmi,
 		DIB_RGB_COLORS);
 
+	if (explorer->plane == 2) return;
 	wsprintf(buffer, "Width: %d Height: %d  Plane A Base: 0x%04X  Plane B Base: 0x%04X  Mode: %s",
 		32 + (VDP_Reg.Scr_Size & 0x3) * 32,
 		32 + ((VDP_Reg.Scr_Size >> 4) & 0x3) * 32,
@@ -302,6 +410,11 @@ static void PlaneExplorer_GetTipText(PlaneExplorer *explorer, int x, int y, char
 		return;
 	}
 
+	if (explorer->plane == 2)
+	{
+		buffer[0] = 0;
+		return;
+	}
 	name.word = *(unsigned short *)(&VRam[tile_addr]);
 
 	wsprintf(buffer, "%d, %d in plane %c @ 0x%04X is @ 0x%04X = 0x%04X [tile %d, pal %d,%s%s prior %d]",
@@ -462,6 +575,9 @@ void planes_save_visibility(const char *config_file)
 		OpenedWindow_KMod[DMODE_PLANE_B - 1] ? "1" : "0", config_file);
 	DebugWindow_SaveGeometry(explorers[0].hwnd, "PlaneARect", config_file);
 	DebugWindow_SaveGeometry(explorers[1].hwnd, "PlaneBRect", config_file);
+	WritePrivateProfileString("DebugWindows", "SpriteScreenOpen",
+		OpenedWindow_KMod[DMODE_SPRITE_SCREEN - 1] ? "1" : "0", config_file);
+	DebugWindow_SaveGeometry(explorers[2].hwnd, "SpriteScreenRect", config_file);
 }
 
 void planes_restore_visibility(const char *config_file)
@@ -470,9 +586,9 @@ void planes_restore_visibility(const char *config_file)
 	for (plane = 0; plane < PLANE_COUNT; ++plane)
 	{
 		BOOL visible = GetPrivateProfileInt("DebugWindows",
-			plane == 0 ? "PlaneAOpen" : "PlaneBOpen", 0, config_file) != 0;
+			plane == 2 ? "SpriteScreenOpen" : plane == 0 ? "PlaneAOpen" : "PlaneBOpen", 0, config_file) != 0;
 		DebugWindow_RestoreGeometry(explorers[plane].hwnd,
-			plane == 0 ? "PlaneARect" : "PlaneBRect", config_file);
+			plane == 2 ? "SpriteScreenRect" : plane == 0 ? "PlaneARect" : "PlaneBRect", config_file);
 		OpenedWindow_KMod[PlaneExplorerMode(plane) - 1] =
 			visible && explorers[plane].hwnd != NULL;
 		planes_show(plane, visible);

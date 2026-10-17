@@ -10,6 +10,7 @@ extern "C" {
 void vdpdebug_create(HINSTANCE hInstance, HWND hWndParent);
 void vdpdebug_show(BOOL visibility);
 void vdpdebug_update();
+void vdpdebug_select_sprite(int index);
 void vdpdebug_reset();
 void vdpdebug_destroy();
 void vdpdebug_save_window(const char *config_file);

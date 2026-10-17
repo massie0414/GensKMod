@@ -2327,6 +2327,9 @@ long PASCAL WinProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                     Change_Debug(hWnd, DMODE_DISASSEMBLY);
                     return 0;
 
+                case ID_CPU_DEBUG_SPRITE_SCREEN:
+                    Change_Debug(hWnd, DMODE_SPRITE_SCREEN);
+                    break;
                 case ID_CPU_DEBUG_PLANE_A:
                     MINIMIZE
                     Change_Debug(hWnd, DMODE_PLANE_A);
@@ -3546,7 +3549,8 @@ HMENU Build_Main_Menu(void)
     MENU_L(CPUDebug, 4, Flags, ID_CPU_DEBUG_PLANE_B, "Plane B", "", "Plane B");
     MENU_L(CPUDebug, 5, Flags, ID_CPU_DEBUG_DISASSEMBLY, "Disassembly", "", "Disassembly");
 	
-	MENU_L(CPUDebug, 6, Flags | MF_POPUP, (UINT)DebugMD, "Genesis", "", "Genesis");
+	MENU_L(CPUDebug, 6, Flags, ID_CPU_DEBUG_SPRITE_SCREEN, "Sprite Screen", "", "Sprite Screen");
+	MENU_L(CPUDebug, 7, Flags | MF_POPUP, (UINT)DebugMD, "Genesis", "", "Genesis");
 
 	MENU_L(DebugMD, 0, Flags, ID_CPU_DEBUG_GENESIS_68000, "Genesis - 68K", "", "Genesis - 68K");
 	MENU_L(DebugMD, 1, Flags, ID_CPU_DEBUG_GENESIS_Z80, "Z80", "", "Z80");
@@ -3580,7 +3584,7 @@ HMENU Build_Main_Menu(void)
 #ifdef GENS_KMOD
 		Flags = MF_BYPOSITION | MF_STRING;
 
-		MENU_L(CPUDebug, 7, Flags | MF_POPUP, (UINT)DebugMCD, "SegaCD", "", "SegaCD");
+		MENU_L(CPUDebug, 8, Flags | MF_POPUP, (UINT)DebugMCD, "SegaCD", "", "SegaCD");
 
 		MENU_L(DebugMCD, 0, Flags, ID_CPU_DEBUG_SEGACD_68000, "SegaCD - 68K", "", "SegaCD - 68K");
 		MENU_L(DebugMCD, 1, Flags, ID_CPU_DEBUG_SEGACD_REG, "CD Registers", "", "CD Registers");
@@ -3611,11 +3615,11 @@ HMENU Build_Main_Menu(void)
 
 		if (SegaCD_Started)
 		{
-			MENU_L(CPUDebug, 8, Flags | MF_POPUP, (UINT)Debug32X, "32X", "", "32X");
+			MENU_L(CPUDebug, 9, Flags | MF_POPUP, (UINT)Debug32X, "32X", "", "32X");
 		}
 		else
 		{
-			MENU_L(CPUDebug, 7, Flags | MF_POPUP, (UINT)Debug32X, "32X", "", "32X");
+			MENU_L(CPUDebug, 8, Flags | MF_POPUP, (UINT)Debug32X, "32X", "", "32X");
 		}
 
 		MENU_L(Debug32X, 0, Flags, ID_CPU_DEBUG_32X_MAINSH2, "Master SH2", "", "Master SH2");

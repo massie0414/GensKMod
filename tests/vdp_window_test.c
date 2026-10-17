@@ -6,6 +6,7 @@
 #include "../src/Gens/kmod/vdp.c"
 
 unsigned char VRam[65536], CRam[256];
+struct Reg_VDP_Type VDP_Reg;
 UCHAR ActivePal, OpenedWindow_KMod[WIN_NUMBER];
 int Paused = 1, CRam_Flag;
 HACCEL hAccelTable;
@@ -49,6 +50,23 @@ int main(void)
             PatBlt(memory, 0, 0, 512, 256, BLACKNESS);
             DrawVDP_Tiles_KMod(&draw);
             assert(GetPixel(memory, 511, 255) == RGB(255, 255, 255));
+        }
+        {
+            unsigned short *sat = (unsigned short *)(VRam + 0xF000);
+            VDP_Reg.Set4 = 1; VDP_Reg.Spr_Att_Adr = 0x78;
+            sat[0] = 128; sat[1] = 0x0400; sat[2] = 63; sat[3] = 128;
+            vdpdebug_select_sprite(0);
+            DrawVDP_Tiles_KMod(&draw);
+            assert(GetPixel(memory, 504, 0) == RGB(255,0,0));
+            assert(GetPixel(memory, 0, 8) == RGB(255,0,0));
+            assert(GetPixel(memory, 8, 8) != RGB(255,0,0));
+            sat[2] = 2047;
+            DrawVDP_Tiles_KMod(&draw);
+            assert(GetPixel(memory, 504, 248) == RGB(255,0,0));
+            assert(GetPixel(memory, 0, 0) == RGB(255,0,0));
+            vdpdebug_select_sprite(-1);
+            DrawVDP_Tiles_KMod(&draw);
+            assert(GetPixel(memory, 504, 248) != RGB(255,0,0));
         }
         Paused = 1;
         lastTile.x = rcTiles.right - 1;

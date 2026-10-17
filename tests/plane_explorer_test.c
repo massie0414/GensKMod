@@ -7,7 +7,7 @@
 #include <string.h>
 #include "../src/Gens/kmod/planes.c"
 
-unsigned char VRam[64000];
+unsigned char VRam[65536];
 unsigned char CRam[256];
 struct Reg_VDP_Type VDP_Reg;
 UCHAR OpenedWindow_KMod[WIN_NUMBER];
@@ -16,7 +16,7 @@ HWND HandleWindow_KMod[WIN_NUMBER];
 void CloseWindow_KMod(UCHAR mode)
 {
     OpenedWindow_KMod[mode - 1] = FALSE;
-    planes_show(mode == DMODE_PLANE_A ? 0 : 1, FALSE);
+    planes_show(mode == DMODE_SPRITE_SCREEN ? 2 : mode == DMODE_PLANE_A ? 0 : 1, FALSE);
 }
 
 static void paint(HWND hwnd, HDC dc)
