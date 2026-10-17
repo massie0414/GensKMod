@@ -13,20 +13,38 @@
 #include "../SH2.h"
 #include "../Mem_SH2.h"
 #include "../Star_68k.h"
+#include "../Mem_S68k.h"
+#include "../Mem_Z80.h"
+#include "../Z80.h"
+#include "../Z80dis.h"
 #include "disassembly.h"
+#include "window_geometry.h"
 
-/* Decode ROM backing storage only; never call emulated bus handlers. */
+/* Decode instruction backing storage only; never call emulated bus handlers. */
 static HWND window;
 static HFONT font;
 static unsigned cursor, page, nextPage, limit;
 static unsigned history[256], historyCount;
 static BOOL sh2, truncated;
-static BOOL slave;
+static BOOL slave, sub68k, z80;
 static unsigned char *pcData;
 static unsigned pcSize, displayBase, pcSwap;
 static HMODULE richEdit;
 static unsigned lineAddresses[256], lineCount;
 static int highlightedLine = -1;
+
+static BOOL CPUActive(void)
+{
+    return Game && (sub68k ? SegaCD_Started : sh2 ? _32X_Started :
+        (Genesis_Started || _32X_Started || SegaCD_Started));
+}
+
+static unsigned CurrentPC(void)
+{
+    if (z80) return z80_Get_PC(&M_Z80) & 0xFFFF;
+    if (sh2) return SH2_Get_PC(slave ? &S_SH2 : &M_SH2);
+    return (sub68k ? sub68k_context.pc : main68k_context.pc) & 0xFFFFFF;
+}
 
 static void SetLineBackground(HWND text, int line, COLORREF color)
 {
@@ -50,9 +68,9 @@ static void HighlightPC(void)
     CHARRANGE selection;
     POINT scroll;
     if (!window) return;
-    if (Game && (sh2 ? _32X_Started : (Genesis_Started || _32X_Started)))
+    if (CPUActive())
     {
-        pc = sh2 ? SH2_Get_PC(slave ? &S_SH2 : &M_SH2) : main68k_context.pc & 0xFFFFFF;
+        pc = CurrentPC();
         for (i = 0; i < lineCount; ++i)
             if (sh2 ? ((pc & 0xDFFFFFFF) == (lineAddresses[i] & 0xDFFFFFFF)) : pc == lineAddresses[i])
             { current = (int)i; break; }
@@ -91,6 +109,12 @@ static void UseROM(void)
 {
     pcData = NULL;
     displayBase = sh2 ? 0x02000000 : 0;
+    if (sub68k || z80)
+    {
+        pcData = sub68k ? Ram_Prg : Ram_Z80;
+        pcSize = sub68k ? sizeof(Ram_Prg) : sizeof(Ram_Z80);
+        pcSwap = sub68k ? 1 : 0;
+    }
 }
 
 static unsigned char RomByte(unsigned address)
@@ -128,11 +152,11 @@ static void Render(void)
     unsigned start, i, line, used = 0, count;
     if (!window) return;
     lineCount = 0;
-    limit = Game && (Genesis_Started || _32X_Started) ?
+    limit = CPUActive() ?
         (pcData ? pcSize : min(Rom_Size, sizeof(Rom_Data))) : 0;
     if (!limit)
     {
-        SetDisassemblyText("No cartridge ROM loaded.");
+        SetDisassemblyText(sub68k ? "The Sega CD 68000 CPU is inactive." : "No cartridge ROM loaded.");
         SetDlgItemText(window, IDC_DISASM_STATUS, "Disassembly - read only");
         EnableWindow(GetDlgItem(window, IDC_DISASM_NEXT), FALSE);
         EnableWindow(GetDlgItem(window, IDC_DISASM_PREV), FALSE);
@@ -146,7 +170,29 @@ static void Render(void)
         start = cursor;
         lineAddresses[lineCount++] = displayBase + start;
         truncated = FALSE;
-        if (limit - cursor == 1)
+        if (z80)
+        {
+            /* The legacy decoder has no bounds argument. Pad a local instruction
+               so a prefix or operand at the end of RAM cannot overread it. */
+            unsigned char data[8] = {0};
+            char decoded[128];
+            int consumed = 0;
+            for (i = 0; i < sizeof(data) && start + i < limit; ++i)
+                data[i] = RomByte(start + i);
+            if (!z80dis(data, &consumed, decoded) || consumed <= 0 ||
+                (unsigned)consumed > limit - start)
+            {
+                cursor = start + 1;
+                sprintf(instruction, "DC.B $%02X ; truncated instruction", data[0]);
+            }
+            else
+            {
+                cursor += consumed;
+                strcpy(instruction, decoded + 18);
+                instruction[strcspn(instruction, "\r\n")] = 0;
+            }
+        }
+        else if (limit - cursor == 1)
         {
             sprintf(instruction, "DC.B $%02X", RomByte(cursor));
             ++cursor;
@@ -176,7 +222,8 @@ static void Render(void)
     sprintf(address, "%08X", page + displayBase);
     SetDlgItemText(window, IDC_DISASM_ADDRESS, address);
     sprintf(status, "%s %s / %u bytes / linear decoding (memory also contains data)",
-        sh2 ? (slave ? "Slave SH2" : "Master SH2") : "68000", pcData ? "PC memory" : "ROM", limit);
+        z80 ? "Z80" : sub68k ? "Sega CD 68000" : sh2 ? (slave ? "Slave SH2" : "Master SH2") : "Genesis 68000",
+        pcData ? (sub68k ? "Program RAM" : z80 ? "RAM" : "PC memory") : (!sh2 && SegaCD_Started ? "Mega CD BIOS" : "ROM"), limit);
     SetDlgItemText(window, IDC_DISASM_STATUS, status);
     EnableWindow(GetDlgItem(window, IDC_DISASM_NEXT), nextPage < limit);
     EnableWindow(GetDlgItem(window, IDC_DISASM_PREV), historyCount != 0);
@@ -188,12 +235,21 @@ static void JumpToPC(void)
     unsigned char *data = NULL;
     unsigned size = 0, base = 0, swap = 0;
     char status[128];
-    if (!Game || (!Genesis_Started && !_32X_Started))
+    if (!CPUActive())
     {
-        SetDlgItemText(window, IDC_DISASM_STATUS, "No active cartridge CPU.");
+        SetDlgItemText(window, IDC_DISASM_STATUS, "No active CPU.");
         return;
     }
-    if (sh2)
+    if (z80)
+    {
+        pc = CurrentPC();
+        /* Z80 RAM is mirrored at 0x2000-0x3fff. Do not read I/O handlers. */
+        if (pc < 0x4000)
+        {
+            data = Ram_Z80; size = sizeof(Ram_Z80); base = pc & 0x2000;
+        }
+    }
+    else if (sh2)
     {
         SH2_CONTEXT *cpu = slave ? &S_SH2 : &M_SH2;
         if (!_32X_Started)
@@ -226,9 +282,9 @@ static void JumpToPC(void)
     }
     else
     {
-        struct STARSCREAM_PROGRAMREGION *region = main68k_context.fetch;
-        pc = main68k_context.pc & 0xFFFFFF;
-        /* Use the CPU's actual fetch mapping, including RAM and 32X banks/BIOS. */
+        struct STARSCREAM_PROGRAMREGION *region = sub68k ? sub68k_context.fetch : main68k_context.fetch;
+        pc = CurrentPC();
+        /* Use the CPU's actual fetch mapping, including Mega CD BIOS/RAM and 32X banks/BIOS. */
         if (region)
             for (; region->lowaddr != (unsigned)-1; ++region)
                 if (pc >= region->lowaddr && pc <= region->highaddr)
@@ -240,7 +296,7 @@ static void JumpToPC(void)
                     break;
                 }
     }
-    if (!data || pc - base >= size || (pc & 1))
+    if (!data || pc - base >= size || (!z80 && (pc & 1)))
     {
         sprintf(status, "PC %08X is outside readable instruction memory.", pc);
         SetDlgItemText(window, IDC_DISASM_STATUS, status);
@@ -261,7 +317,7 @@ void disassembly_clear(void)
     UseROM();
     if (window)
     {
-        SetDisassemblyText("No cartridge ROM loaded.");
+        SetDisassemblyText(sub68k ? "The Sega CD 68000 CPU is inactive." : "No cartridge ROM loaded.");
         SetDlgItemText(window, IDC_DISASM_STATUS, "Disassembly - read only");
         EnableWindow(GetDlgItem(window, IDC_DISASM_NEXT), FALSE);
         EnableWindow(GetDlgItem(window, IDC_DISASM_PREV), FALSE);
@@ -288,9 +344,13 @@ static INT_PTR CALLBACK DisassemblyProc(HWND hwnd, UINT message, WPARAM wParam, 
         SendDlgItemMessage(hwnd, IDC_DISASM_TEXT, EM_SETLIMITTEXT, 65535, 0);
         SendDlgItemMessage(hwnd, IDC_DISASM_TEXT, EM_SETBKGNDCOLOR, 0, RGB(255, 255, 255));
         SetTimer(hwnd, 1, 100, NULL);
-        SendDlgItemMessage(hwnd, IDC_DISASM_CPU, CB_ADDSTRING, 0, (LPARAM)"68000 ROM");
-        SendDlgItemMessage(hwnd, IDC_DISASM_CPU, CB_ADDSTRING, 0, (LPARAM)"Master SH2 (32X)");
-        SendDlgItemMessage(hwnd, IDC_DISASM_CPU, CB_ADDSTRING, 0, (LPARAM)"Slave SH2 (32X)");
+        SendDlgItemMessage(hwnd, IDC_DISASM_CPU, CB_ADDSTRING, 0, (LPARAM)"Genesis 68000");
+        SendDlgItemMessage(hwnd, IDC_DISASM_CPU, CB_ADDSTRING, 0, (LPARAM)"Z80");
+        SendDlgItemMessage(hwnd, IDC_DISASM_CPU, CB_ADDSTRING, 0, (LPARAM)"Sega CD 68000");
+        SendDlgItemMessage(hwnd, IDC_DISASM_CPU, CB_ADDSTRING, 0, (LPARAM)"32X SH2 Master");
+        SendDlgItemMessage(hwnd, IDC_DISASM_CPU, CB_ADDSTRING, 0, (LPARAM)"32X SH2 Slave");
+        sh2 = slave = sub68k = z80 = FALSE;
+        UseROM();
         SendDlgItemMessage(hwnd, IDC_DISASM_CPU, CB_SETCURSEL, 0, 0);
         {
             RECT client;
@@ -300,7 +360,12 @@ static INT_PTR CALLBACK DisassemblyProc(HWND hwnd, UINT message, WPARAM wParam, 
         Render();
         return TRUE;
     case WM_TIMER:
-        if (wParam == 1 && IsWindowVisible(hwnd)) HighlightPC();
+        if (wParam == 1 && IsWindowVisible(hwnd))
+        {
+            /* Init_SegaCD sets its started flag after disassembly_reset. */
+            if (!lineCount && CPUActive()) Render();
+            else HighlightPC();
+        }
         return TRUE;
     case WM_SIZE:
         if (window)
@@ -327,8 +392,10 @@ static INT_PTR CALLBACK DisassemblyProc(HWND hwnd, UINT message, WPARAM wParam, 
             if (HIWORD(wParam) == CBN_SELCHANGE)
             {
                 int selected = (int)SendDlgItemMessage(hwnd, IDC_DISASM_CPU, CB_GETCURSEL, 0, 0);
-                sh2 = selected != 0;
-                slave = selected == 2;
+                sh2 = selected == 3 || selected == 4;
+                sub68k = selected == 2;
+                z80 = selected == 1;
+                slave = selected == 4;
                 disassembly_reset();
             }
             return TRUE;
@@ -363,9 +430,9 @@ static INT_PTR CALLBACK DisassemblyProc(HWND hwnd, UINT message, WPARAM wParam, 
                 errno = 0;
                 value = strtoul(input, &end, 16);
                 if (value >= displayBase && value - displayBase < limit) value -= displayBase;
-                if (!input[0] || input[0] == '-' || errno == ERANGE || *end || value >= limit || (value & 1))
+                if (!input[0] || input[0] == '-' || errno == ERANGE || *end || value >= limit || (!z80 && (value & 1)))
                 {
-                    SetDlgItemText(hwnd, IDC_DISASM_STATUS, "Enter an even hexadecimal address within the displayed memory.");
+                    SetDlgItemText(hwnd, IDC_DISASM_STATUS, z80 ? "Enter a hexadecimal address within the displayed memory." : "Enter an even hexadecimal address within the displayed memory.");
                     return TRUE;
                 }
                 page = value;
@@ -404,4 +471,19 @@ void disassembly_show(BOOL visible)
 {
     if (visible) Render();
     ShowWindow(window, visible ? SW_SHOW : SW_HIDE);
+}
+
+void disassembly_save_window(const char *config)
+{
+    WritePrivateProfileString("DebugWindows", "DisassemblyOpen",
+        OpenedWindow_KMod[DMODE_DISASSEMBLY - 1] ? "1" : "0", config);
+    DebugWindow_SaveGeometry(window, "DisassemblyRect", config);
+}
+
+void disassembly_restore_window(const char *config)
+{
+    BOOL visible = GetPrivateProfileInt("DebugWindows", "DisassemblyOpen", 0, config) != 0;
+    DebugWindow_RestoreGeometry(window, "DisassemblyRect", config);
+    OpenedWindow_KMod[DMODE_DISASSEMBLY - 1] = visible && window != NULL;
+    disassembly_show(visible);
 }

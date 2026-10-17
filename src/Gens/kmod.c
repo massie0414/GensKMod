@@ -221,6 +221,7 @@ void Init_KMod( )
 	s68kdebug_restore_window(config_file);
 	m68kdebug_restore_window(config_file);
 	z80debug_restore_window(config_file);
+	disassembly_restore_window(config_file);
 
    
 	//HandleWindow_KMod[0] = hM68K;
