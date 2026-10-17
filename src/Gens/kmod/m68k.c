@@ -61,6 +61,8 @@ static void SwitchM68kViewMode_KMod()
 {
 	SCROLLINFO si;
 
+	if (!GetDlgItem(hM68K, IDC_68K_SCROLL)) return;
+
 	ZeroMemory(&si, sizeof(SCROLLINFO));
 	si.cbSize = sizeof(si);
 	si.fMask = SIF_RANGE | SIF_PAGE | SIF_POS;
@@ -99,64 +101,67 @@ static void UpdateM68k_KMod()
 	
 
 
-	SendDlgItemMessage(hM68K, IDC_68K_DISAM, LB_RESETCONTENT, (WPARAM)0, (LPARAM)0);
-	if (M68_ViewMode == 0)
-	{
-		M68k_StartLineDisasm = GetScrollPos(GetDlgItem(hM68K, IDC_68K_SCROLL), SB_CTL);
-		Current_PC_M68K = M68k_StartLineDisasm; //main68k_context.pc;
-		for (i = 0; i < 13; i++)
+	/* The compact CPU panel has no disassembly or memory view. */
+	if (GetDlgItem(hM68K, IDC_68K_DISAM)) {
+		SendDlgItemMessage(hM68K, IDC_68K_DISAM, LB_RESETCONTENT, (WPARAM)0, (LPARAM)0);
+		if (M68_ViewMode == 0)
 		{
-			PC = Current_PC_M68K;
-			if (PC >= Rom_Size)
+			M68k_StartLineDisasm = GetScrollPos(GetDlgItem(hM68K, IDC_68K_SCROLL), SB_CTL);
+			Current_PC_M68K = M68k_StartLineDisasm; //main68k_context.pc;
+			for (i = 0; i < 13; i++)
 			{
-				wsprintf(debug_string, "%.6X", PC);
-				Current_PC_M68K += 2;
+				PC = Current_PC_M68K;
+				if (PC >= Rom_Size)
+				{
+					wsprintf(debug_string, "%.6X", PC);
+					Current_PC_M68K += 2;
+				}
+				else
+				{
+					wsprintf(debug_string, "%.6X    %-33s", PC, M68KDisasm(Next_Word_M68K, Next_Long_M68K));
+				}
+				SendDlgItemMessage(hM68K, IDC_68K_DISAM, LB_INSERTSTRING, i, (LPARAM)debug_string);
 			}
-			else
-			{
-				wsprintf(debug_string, "%.6X    %-33s", PC, M68KDisasm(Next_Word_M68K, Next_Long_M68K));
-			}
-			SendDlgItemMessage(hM68K, IDC_68K_DISAM, LB_INSERTSTRING, i, (LPARAM)debug_string);
 		}
-	}
-	else if (M68_ViewMode == 1)
-	{
-		Byte_Swap(Rom_Data, Rom_Size);
-		M68k_StartLineROM = GetScrollPos(GetDlgItem(hM68K, IDC_68K_SCROLL), SB_CTL);
-		for (i = 0; i < 13; i++)
+		else if (M68_ViewMode == 1)
 		{
-			if ((M68k_StartLineROM * 8 + i * 8) > Rom_Size)
+			Byte_Swap(Rom_Data, Rom_Size);
+			M68k_StartLineROM = GetScrollPos(GetDlgItem(hM68K, IDC_68K_SCROLL), SB_CTL);
+			for (i = 0; i < 13; i++)
 			{
-				wsprintf(debug_string, "%.6X ", M68k_StartLineROM * 8 + i * 8);
+				if ((M68k_StartLineROM * 8 + i * 8) > Rom_Size)
+				{
+					wsprintf(debug_string, "%.6X ", M68k_StartLineROM * 8 + i * 8);
+				}
+				else
+				{
+					wsprintf(tmp_string, "%.6X ", M68k_StartLineROM * 8 + i * 8);
+					tmp_string[6] = 0x20;
+					Hexview((unsigned char *)(Rom_Data + M68k_StartLineROM * 8 + i * 8), tmp_string + 7);
+					tmp_string[24] = 0x20;
+					Ansiview((unsigned char *)(Rom_Data + M68k_StartLineROM * 8 + i * 8), tmp_string + 25);
+					wsprintf(debug_string, "%s", tmp_string);
+				}
+				SendDlgItemMessage(hM68K, IDC_68K_DISAM, LB_INSERTSTRING, i, (LPARAM)debug_string);
 			}
-			else
+			Byte_Swap(Rom_Data, Rom_Size);
+		}
+		else if (M68_ViewMode == 2)
+		{
+			Byte_Swap(Ram_68k, Rom_Size);
+			M68k_StartLineRAM = GetScrollPos(GetDlgItem(hM68K, IDC_68K_SCROLL), SB_CTL);
+			for (i = 0; i < 13; i++)
 			{
-				wsprintf(tmp_string, "%.6X ", M68k_StartLineROM * 8 + i * 8);
+				wsprintf(tmp_string, "FF%.4X ", M68k_StartLineRAM * 8 + i * 8);
 				tmp_string[6] = 0x20;
-				Hexview((unsigned char *)(Rom_Data + M68k_StartLineROM * 8 + i * 8), tmp_string + 7);
+				Hexview((unsigned char *)(Ram_68k + M68k_StartLineRAM * 8 + i * 8), tmp_string + 7);
 				tmp_string[24] = 0x20;
-				Ansiview((unsigned char *)(Rom_Data + M68k_StartLineROM * 8 + i * 8), tmp_string + 25);
+				Ansiview((unsigned char *)(Ram_68k + M68k_StartLineRAM * 8 + i * 8), tmp_string + 25);
 				wsprintf(debug_string, "%s", tmp_string);
+				SendDlgItemMessage(hM68K, IDC_68K_DISAM, LB_INSERTSTRING, i, (LPARAM)debug_string);
 			}
-			SendDlgItemMessage(hM68K, IDC_68K_DISAM, LB_INSERTSTRING, i, (LPARAM)debug_string);
+			Byte_Swap(Ram_68k, Rom_Size);
 		}
-		Byte_Swap(Rom_Data, Rom_Size);
-	}
-	else if (M68_ViewMode == 2)
-	{
-		Byte_Swap(Ram_68k, Rom_Size);
-		M68k_StartLineRAM = GetScrollPos(GetDlgItem(hM68K, IDC_68K_SCROLL), SB_CTL);
-		for (i = 0; i < 13; i++)
-		{
-			wsprintf(tmp_string, "FF%.4X ", M68k_StartLineRAM * 8 + i * 8);
-			tmp_string[6] = 0x20;
-			Hexview((unsigned char *)(Ram_68k + M68k_StartLineRAM * 8 + i * 8), tmp_string + 7);
-			tmp_string[24] = 0x20;
-			Ansiview((unsigned char *)(Ram_68k + M68k_StartLineRAM * 8 + i * 8), tmp_string + 25);
-			wsprintf(debug_string, "%s", tmp_string);
-			SendDlgItemMessage(hM68K, IDC_68K_DISAM, LB_INSERTSTRING, i, (LPARAM)debug_string);
-		}
-		Byte_Swap(Ram_68k, Rom_Size);
 	}
 	wsprintf(debug_string, "X=%d N=%d Z=%d V=%d C=%d  SR=%.4X Cycles=%.10d", (main68k_context.sr & 0x10) ? 1 : 0, (main68k_context.sr & 0x8) ? 1 : 0, (main68k_context.sr & 0x4) ? 1 : 0, (main68k_context.sr & 0x2) ? 1 : 0, (main68k_context.sr & 0x1) ? 1 : 0, main68k_context.sr, main68k_context.odometer);
 	SendDlgItemMessage(hM68K, IDC_68K_STATUS_SR, WM_SETTEXT, 0, (LPARAM)debug_string);
@@ -259,7 +264,7 @@ void Dump68K_KMod(HWND hwnd)
 	Put_Info("68K RAM dumped", 1500);
 }
 
-/* Fit the actual fixed font before placing the graph beside the registers. */
+/* Fit the register text below the graph using the actual fixed font. */
 static void M68K_FitStatus(HWND hwnd)
 {
     const int ids[3] = {IDC_68K_STATUS_SR, IDC_68K_STATUS_ADR, IDC_68K_STATUS_DATA};
@@ -268,9 +273,9 @@ static void M68K_FitStatus(HWND hwnd)
         "A0=FFFFFFFF A1=FFFFFFFF A2=FFFFFFFF A3=FFFFFFFF",
         "D0=FFFFFFFF D1=FFFFFFFF D2=FFFFFFFF D3=FFFFFFFF"
     };
-    RECT r, group, client, outer;
+    RECT r, client, outer;
     HDC dc = GetDC(hwnd);
-    int i, top, right = 0, dx, dy;
+    int i, top, right = 0;
     GetWindowRect(GetDlgItem(hwnd, ids[0]), &r);
     MapWindowPoints(NULL, hwnd, (POINT *)&r, 2);
     top = r.top;
@@ -290,21 +295,14 @@ static void M68K_FitStatus(HWND hwnd)
         top += metrics.tmHeight * (i ? 2 : 1) + 6;
     }
     ReleaseDC(hwnd, dc);
-    GetWindowRect(GetDlgItem(hwnd, IDC_68K_USAGE_GROUP), &group);
-    MapWindowPoints(NULL, hwnd, (POINT *)&group, 2);
-    dx = max(0, right + 8 - group.left);
-    dy = max(0, top + 4 - group.bottom);
-    for (i = IDC_68K_USAGE; i <= IDC_68K_USAGE_NOTE; ++i) {
-        GetWindowRect(GetDlgItem(hwnd, i), &r);
-        MapWindowPoints(NULL, hwnd, (POINT *)&r, 2);
-        MoveWindow(GetDlgItem(hwnd, i), r.left + dx, r.top,
-            r.right - r.left, r.bottom - r.top + (i == IDC_68K_USAGE_GROUP ? dy : 0), FALSE);
-    }
+    GetWindowRect(GetDlgItem(hwnd, IDC_68K_PC), &r);
+    MapWindowPoints(NULL, hwnd, (POINT *)&r, 2);
+    right = max(right, r.right);
     GetClientRect(hwnd, &client);
     GetWindowRect(hwnd, &outer);
     SetWindowPos(hwnd, NULL, 0, 0,
-        outer.right - outer.left + max(0, group.right + dx + 8 - client.right),
-        outer.bottom - outer.top + max(0, group.bottom + dy + 8 - client.bottom),
+        outer.right - outer.left + max(0, right + 8 - client.right),
+        outer.bottom - outer.top + max(0, top + 8 - client.bottom),
         SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
 }
 

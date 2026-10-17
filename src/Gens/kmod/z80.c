@@ -32,6 +32,8 @@ void SwitchZ80ViewMode_KMod()
 {
 	SCROLLINFO si;
 
+	if (!GetDlgItem(hZ80, IDC_Z80_SCROLL)) return;
+
 	ZeroMemory(&si, sizeof(SCROLLINFO));
 	si.cbSize = sizeof(si);
 	si.fMask = SIF_RANGE | SIF_PAGE | SIF_POS;
@@ -59,35 +61,38 @@ void UpdateZ80_KMod()
 	unsigned char tmp_string[256];
 	InvalidateRect(GetDlgItem(hZ80, IDC_Z80_USAGE), NULL, FALSE);
 	
-	SendDlgItemMessage(hZ80, IDC_Z80_DISAM, LB_RESETCONTENT, (WPARAM)0, (LPARAM)0);
-	if (Z80_ViewMode == 0)
-	{
-		Z80_StartLineDisasm = GetScrollPos(GetDlgItem(hZ80, IDC_Z80_SCROLL), SB_CTL);
-		PC = Z80_StartLineDisasm; //z80_Get_PC(&M_Z80);
-		for (i = 0; i < 13; i++)
+	/* The compact CPU panel has no disassembly or memory view. */
+	if (GetDlgItem(hZ80, IDC_Z80_DISAM)) {
+		SendDlgItemMessage(hZ80, IDC_Z80_DISAM, LB_RESETCONTENT, (WPARAM)0, (LPARAM)0);
+		if (Z80_ViewMode == 0)
 		{
-			z80dis((unsigned char *)Ram_Z80, (int *)&PC, tmp_string);
-			// to skip the \n z80dis add
-			lstrcpyn(debug_string, tmp_string, lstrlen(tmp_string));
-			SendDlgItemMessage(hZ80, IDC_Z80_DISAM, LB_INSERTSTRING, i, (LPARAM)debug_string);
+			Z80_StartLineDisasm = GetScrollPos(GetDlgItem(hZ80, IDC_Z80_SCROLL), SB_CTL);
+			PC = Z80_StartLineDisasm; //z80_Get_PC(&M_Z80);
+			for (i = 0; i < 13; i++)
+			{
+				z80dis((unsigned char *)Ram_Z80, (int *)&PC, tmp_string);
+				// to skip the \n z80dis add
+				lstrcpyn(debug_string, tmp_string, lstrlen(tmp_string));
+				SendDlgItemMessage(hZ80, IDC_Z80_DISAM, LB_INSERTSTRING, i, (LPARAM)debug_string);
+			}
 		}
-	}
-	else
-	{
-		Z80_StartLineMem = GetScrollPos(GetDlgItem(hZ80, IDC_Z80_SCROLL), SB_CTL);
-		for (i = 0; i < 13; i++)
+		else
 		{
-			wsprintf(tmp_string, "%.4X ", Z80_StartLineMem * 8 + i * 8);
-			tmp_string[4] = 0x20;
-			Hexview((unsigned char *)(Ram_Z80 + Z80_StartLineMem * 8 + i * 8), tmp_string + 5);
-			tmp_string[22] = 0x20;
-			Ansiview((unsigned char *)(Ram_Z80 + Z80_StartLineMem * 8 + i * 8), tmp_string + 23);
-			wsprintf(debug_string, "%s", tmp_string);
-			SendDlgItemMessage(hZ80, IDC_Z80_DISAM, LB_INSERTSTRING, i, (LPARAM)debug_string);
+			Z80_StartLineMem = GetScrollPos(GetDlgItem(hZ80, IDC_Z80_SCROLL), SB_CTL);
+			for (i = 0; i < 13; i++)
+			{
+				wsprintf(tmp_string, "%.4X ", Z80_StartLineMem * 8 + i * 8);
+				tmp_string[4] = 0x20;
+				Hexview((unsigned char *)(Ram_Z80 + Z80_StartLineMem * 8 + i * 8), tmp_string + 5);
+				tmp_string[22] = 0x20;
+				Ansiview((unsigned char *)(Ram_Z80 + Z80_StartLineMem * 8 + i * 8), tmp_string + 23);
+				wsprintf(debug_string, "%s", tmp_string);
+				SendDlgItemMessage(hZ80, IDC_Z80_DISAM, LB_INSERTSTRING, i, (LPARAM)debug_string);
+			}
 		}
-	}
 
 
+	}
 	wsprintf(debug_string, "AF =%.4X BC =%.4X DE =%.4X HL =%.4X\nAF2=%.4X BC2=%.4X DE2=%.4X HL2=%.4X", z80_Get_AF(&M_Z80), M_Z80.BC.w.BC, M_Z80.DE.w.DE, M_Z80.HL.w.HL, z80_Get_AF2(&M_Z80), M_Z80.BC2.w.BC2, M_Z80.DE2.w.DE2, M_Z80.HL2.w.HL2);
 	SendDlgItemMessage(hZ80, IDC_Z80_STATUS_RS1, WM_SETTEXT, 0, (LPARAM)debug_string);
 
@@ -152,7 +157,7 @@ void DumpZ80_KMod(HWND hwnd)
 	Put_Info("Z80 Ram dumped", 1500);
 }
 
-/* Fit the actual fixed font before placing the graph beside the registers. */
+/* Fit the register text below the graph using the actual fixed font. */
 static void Z80_FitStatus(HWND hwnd)
 {
     const int ids[5] = {IDC_Z80_STATUS_RS1,IDC_Z80_STATUS_RS3,IDC_Z80_STATUS_MISC,IDC_Z80_STATUS_FLAG,IDC_Z80_STATUS_BANK};
@@ -163,9 +168,9 @@ static void Z80_FitStatus(HWND hwnd)
         "S=1 Z=1 Y=1 H=1 X=1 P=1 N=1 C=1",
         "Bank = FFFFFFFF State=03"
     };
-    RECT r, group, client, outer;
+    RECT r, client, outer;
     HDC dc = GetDC(hwnd);
-    int i, top, right = 0, dx, dy;
+    int i, top, right = 0;
     GetWindowRect(GetDlgItem(hwnd, ids[0]), &r);
     MapWindowPoints(NULL, hwnd, (POINT *)&r, 2);
     top = r.top;
@@ -185,21 +190,14 @@ static void Z80_FitStatus(HWND hwnd)
         top += metrics.tmHeight * (i ? 1 : 2) + 6;
     }
     ReleaseDC(hwnd, dc);
-    GetWindowRect(GetDlgItem(hwnd, IDC_Z80_USAGE_GROUP), &group);
-    MapWindowPoints(NULL, hwnd, (POINT *)&group, 2);
-    dx = max(0, right + 8 - group.left);
-    dy = max(0, top + 4 - group.bottom);
-    for (i = IDC_Z80_USAGE; i <= IDC_Z80_USAGE_NOTE; ++i) {
-        GetWindowRect(GetDlgItem(hwnd, i), &r);
-        MapWindowPoints(NULL, hwnd, (POINT *)&r, 2);
-        MoveWindow(GetDlgItem(hwnd, i), r.left + dx, r.top,
-            r.right - r.left, r.bottom - r.top + (i == IDC_Z80_USAGE_GROUP ? dy : 0), FALSE);
-    }
+    GetWindowRect(GetDlgItem(hwnd, IDC_Z80_PC), &r);
+    MapWindowPoints(NULL, hwnd, (POINT *)&r, 2);
+    right = max(right, r.right);
     GetClientRect(hwnd, &client);
     GetWindowRect(hwnd, &outer);
     SetWindowPos(hwnd, NULL, 0, 0,
-        outer.right - outer.left + max(0, group.right + dx + 8 - client.right),
-        outer.bottom - outer.top + max(0, group.bottom + dy + 8 - client.bottom),
+        outer.right - outer.left + max(0, right + 8 - client.right),
+        outer.bottom - outer.top + max(0, top + 8 - client.bottom),
         SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
