@@ -311,6 +311,17 @@ static unsigned char intensity_map[320 * 240];
 static unsigned int intensity_width, intensity_height;
 static BOOL intensity_valid, intensity_enabled;
 
+/* Snapshot scroll state while each line is rendered. Split-screen games
+ * change VSRAM during the frame, so the final register values are insufficient. */
+typedef struct PlaneScrollLine {
+    BOOL valid;
+    unsigned short horizontal[2];
+    unsigned short vertical[40];
+    unsigned int mode;
+} PlaneScrollLine;
+static PlaneScrollLine scroll_lines[240];
+static const unsigned int plane_scroll_masks[4] = {0, 7, 0x1f8, 0x1ff};
+
 void planes_capture_intensity(unsigned int line_offset)
 {
     unsigned int y = line_offset / 336, x;
@@ -325,6 +336,17 @@ void planes_capture_intensity(unsigned int line_offset)
         intensity_enabled = FALSE;
         intensity_width = width; intensity_height = height;
         intensity_valid = TRUE;
+    }
+    if (y == 0) memset(scroll_lines, 0, sizeof(scroll_lines));
+    {
+        PlaneScrollLine *line = &scroll_lines[y];
+        unsigned int address = (((VDP_Reg.H_Scr_Adr & 0x3f) << 10) +
+            (y & plane_scroll_masks[VDP_Reg.Set3 & 3]) * 4) & 0xffff;
+        line->valid = TRUE;
+        line->horizontal[0] = *(unsigned short *)&VRam[address];
+        line->horizontal[1] = *(unsigned short *)&VRam[(address + 2) & 0xffff];
+        memcpy(line->vertical, VSRam, sizeof(line->vertical));
+        line->mode = VDP_Reg.Set3;
     }
     intensity_enabled |= enabled;
     for (x = 0; x < width; x++)
@@ -374,24 +396,30 @@ static unsigned char viewport_mask[PLANE_BITMAP_WIDTH * PLANE_BITMAP_HEIGHT];
 
 static void PlaneExplorer_DrawViewport(PlaneExplorer *explorer, LPDRAWITEMSTRUCT item)
 {
-    static const unsigned int scroll_masks[4] = {0, 7, 0x1f8, 0x1ff};
-    int width = PlaneWidth(explorer->plane) * 8;
+    /* Window deliberately mirrors the Plane A overlay, including its wrap size. */
+    int scroll_plane = explorer->plane == 3 ? 0 : explorer->plane;
+    int width = PlaneWidth(scroll_plane) * 8;
     int scale = (VDP_Reg.Set4 & 6) == 6 ? 2 : 1;
-    int height = PlaneHeight(explorer->plane) * 8 * scale;
+    int height = PlaneHeight(scroll_plane) * 8 * scale;
     int sw = (VDP_Reg.Set4 & 1) ? 320 : 256;
     int sh = (VDP_Reg.Set2 & 8) ? 240 : 224;
     int x, y, sx, sy, dy, start;
     HBRUSH red;
     RECT run;
-    if (explorer->plane > 1 || !(VDP_Reg.Set2 & 0x40)) return;
+    if (explorer->plane == 2 || explorer->plane > 3 || !(VDP_Reg.Set2 & 0x40)) return;
     memset(viewport_mask, 0, sizeof(viewport_mask));
     for (y = 0; y < sh; ++y) {
         unsigned int address = (((VDP_Reg.H_Scr_Adr & 0x3f) << 10) +
-            (y & scroll_masks[VDP_Reg.Set3 & 3]) * 4 + explorer->plane * 2) & 0xffff;
-        int hs = *(unsigned short *)&VRam[address] & 0x3ff;
+            (y & plane_scroll_masks[VDP_Reg.Set3 & 3]) * 4 + scroll_plane * 2) & 0xffff;
+        PlaneScrollLine *line = &scroll_lines[y];
+        unsigned int mode = line->valid ? line->mode : VDP_Reg.Set3;
+        int hs = line->valid ?
+            line->horizontal[scroll_plane] & 0x3ff : *(unsigned short *)&VRam[address] & 0x3ff;
         for (x = 0; x < sw; ++x) {
-            int column = (VDP_Reg.Set3 & 4) ? (x / 16) * 4 : 0;
-            int vs = *(unsigned short *)&VSRam[column + explorer->plane * 2];
+            int column = (mode & 4) ? (x / 16) * 4 : 0;
+            int vs = line->valid ?
+                line->vertical[column / 2 + scroll_plane] :
+                *(unsigned short *)&VSRam[column + scroll_plane * 2];
             sx = ((x - hs) % width + width) % width;
             sy = ((y + (vs / scale)) * scale) % height;
             for (dy = 0; dy < scale; ++dy)
@@ -512,7 +540,7 @@ static void PlaneExplorerPaint_KMod(PlaneExplorer *explorer, LPDRAWITEMSTRUCT lp
     PlaneExplorer_DrawViewport(explorer, lpdi);
 	if (explorer->plane == 2) return;
  if (explorer->plane == 3) {
-  wsprintf(buffer, "Width: %d Height: %d  Window Base: 0x%04X  H: 0x%02X V: 0x%02X",
+  wsprintf(buffer, "Red: Plane A scroll | Width: %d Height: %d  Window Base: 0x%04X  H: 0x%02X V: 0x%02X",
    PlaneWidth(3), PlaneHeight(3), PlaneBase(3), VDP_Reg.Win_H_Pos, VDP_Reg.Win_V_Pos);
   SetDlgItemText(explorer->hwnd, IDC_PLANEEXPLORER_PROPS, buffer);
   return;
@@ -695,6 +723,7 @@ void planes_update()
 void planes_reset()
 {
     intensity_valid = FALSE;
+    memset(scroll_lines, 0, sizeof(scroll_lines));
 	int plane;
 	for (plane = 0; plane < PLANE_COUNT; ++plane)
 		if (explorers[plane].hwnd) PlaneExplorerInit_KMod(&explorers[plane]);

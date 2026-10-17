@@ -719,6 +719,32 @@ int Update_Emulation(HWND hWnd)
 	static int Over_Time = 0;
 	int current_div;
 
+	// Nonstandard speeds use wall time rather than the normal audio clock.
+	// Keep rendering at the host frame rate and discard audio for each frame.
+	if (Emulation_Speed != 1.0)
+	{
+		unsigned int now = GetTickCount();
+		unsigned int elapsed = now - (unsigned int)Last_Time;
+		Last_Time = now;
+		if (elapsed > 100) elapsed = 100;
+		Used_Time += elapsed * (CPU_Mode ? 50 : 60);
+		int interval = Emulation_Speed < 1.0 ? (int)(1000 / Emulation_Speed) : 1000;
+		int ticks = Used_Time / interval;
+		Used_Time %= interval;
+		int frames = ticks * (Emulation_Speed > 1.0 ? (int)Emulation_Speed : 1);
+		for (int frame = 0; frame < frames; ++frame)
+		{
+			Update_Controllers();
+			if (frame == frames - 1) Update_Frame();
+			else Update_Frame_Fast();
+			memset(Seg_L, 0, sizeof(Seg_L));
+			memset(Seg_R, 0, sizeof(Seg_R));
+		}
+		if (frames) Flip_GFX(hWnd);
+		else Sleep(Sleep_Time);
+		return 1;
+	}
+
 	if (Frame_Skip != -1)
 	{
 		if (Sound_Enable)

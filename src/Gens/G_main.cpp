@@ -1846,6 +1846,8 @@ int PASCAL WinMain(HINSTANCE hInst,	HINSTANCE hPrevInst, LPSTR lpCmdLine, int nC
 #endif
 				Flip_GFX(HWnd);
 				Sleep(100);
+				Last_Time = GetTickCount();
+				Used_Time = 0;
 			}
 		}
 		else if (GYM_Playing)			// PLAY GYM
@@ -2203,6 +2205,28 @@ long PASCAL WinProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 					Change_Blit_Style();
 					return 0;
 				
+				case ID_EMULATION_SPEED_1:
+				case ID_EMULATION_SPEED_2:
+				case ID_EMULATION_SPEED_4:
+				case ID_EMULATION_SPEED_HALF:
+				case ID_EMULATION_SPEED_QUARTER:
+				case ID_EMULATION_SPEED_EIGHTH:
+				case ID_EMULATION_SPEED_8:
+					Emulation_Speed = LOWORD(wParam) == ID_EMULATION_SPEED_EIGHTH ? 0.125 :
+						LOWORD(wParam) == ID_EMULATION_SPEED_8 ? 8.0 :
+						LOWORD(wParam) == ID_EMULATION_SPEED_QUARTER ? 0.25 :
+						LOWORD(wParam) == ID_EMULATION_SPEED_HALF ? 0.5 :
+						(double)(1 << (LOWORD(wParam) - ID_EMULATION_SPEED_1));
+					if (Sound_Initialised) Clear_Sound_Buffer();
+					memset(Seg_L, 0, sizeof(Seg_L));
+					memset(Seg_R, 0, sizeof(Seg_R));
+					Last_Time = GetTickCount();
+					Used_Time = 0;
+					Frame_Number = 0;
+					MESSAGE_NUM_L("Emulation speed: %gx", "Emulation speed: %gx", Emulation_Speed, 1500)
+					Build_Main_Menu();
+					return 0;
+
 				case ID_GRAPHICS_FRAMESKIP_AUTO:
 					Set_Frame_Skip(hWnd, -1);
 					return 0;
@@ -3118,6 +3142,7 @@ HMENU Build_Main_Menu(void)
 	HMENU FilesHistory;
 	HMENU GraphicsRender;
 	HMENU GraphicsFrameSkip;
+	HMENU EmulationSpeed;
 #ifdef GENS_DEBUG
 	HMENU CPUDebug;
 #ifdef GENS_KMOD
@@ -3163,6 +3188,7 @@ HMENU Build_Main_Menu(void)
 	FilesHistory = CreatePopupMenu();
 	GraphicsRender = CreatePopupMenu();
 	GraphicsFrameSkip = CreatePopupMenu();
+	EmulationSpeed = CreatePopupMenu();
 #ifdef GENS_DEBUG
 	CPUDebug = CreatePopupMenu();
 #ifdef GENS_KMOD
@@ -3346,6 +3372,14 @@ HMENU Build_Main_Menu(void)
 
 	InsertMenu(Graphics, i++, MF_SEPARATOR, NULL, NULL);
 	MENU_L(Graphics, i++, MF_BYPOSITION | MF_POPUP | MF_STRING, (UINT)GraphicsFrameSkip, "Frame Skip", "", "&Frame Skip");
+	AppendMenu(EmulationSpeed, MF_STRING | (Emulation_Speed == 0.125 ? MF_CHECKED : 0), ID_EMULATION_SPEED_EIGHTH, "0.125x");
+	AppendMenu(EmulationSpeed, MF_STRING | (Emulation_Speed == 0.25 ? MF_CHECKED : 0), ID_EMULATION_SPEED_QUARTER, "0.&25x");
+	AppendMenu(EmulationSpeed, MF_STRING | (Emulation_Speed == 0.5 ? MF_CHECKED : 0), ID_EMULATION_SPEED_HALF, "0.&5x");
+	AppendMenu(EmulationSpeed, MF_STRING | (Emulation_Speed == 1 ? MF_CHECKED : 0), ID_EMULATION_SPEED_1, "&1x (Normal)");
+	AppendMenu(EmulationSpeed, MF_STRING | (Emulation_Speed == 2 ? MF_CHECKED : 0), ID_EMULATION_SPEED_2, "&2x");
+	AppendMenu(EmulationSpeed, MF_STRING | (Emulation_Speed == 4 ? MF_CHECKED : 0), ID_EMULATION_SPEED_4, "&4x");
+	AppendMenu(EmulationSpeed, MF_STRING | (Emulation_Speed == 8 ? MF_CHECKED : 0), ID_EMULATION_SPEED_8, "&8x");
+	InsertMenu(Graphics, i++, MF_BYPOSITION | MF_POPUP | MF_STRING, (UINT)EmulationSpeed, "Emulation &Speed");
 	InsertMenu(Graphics, i++, MF_SEPARATOR, NULL, NULL);
 	MENU_L(Graphics, i++, Flags, ID_GRAPHICS_SHOT, "Screen Shot", "\tShift+Backspc", "&Screen Shot");
 

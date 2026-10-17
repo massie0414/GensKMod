@@ -217,8 +217,47 @@ int main(void)
         VDP_Reg.Set4 = 7; VDP_Reg.Set2 = 0x48;
         PlaneExplorer_DrawViewport(&explorers[0], &item);
         assert(viewport_mask[480 * 1024 + 496]);
+        /* Window must mirror Plane A even with different map dimensions. */
+        {
+            static unsigned char expected[sizeof(viewport_mask)];
+            int mode;
+            for (mode = 0; mode < 2; ++mode) {
+                VDP_Reg.Set4 = mode ? 7 : 0;
+                VDP_Reg.Set2 = mode ? 0x48 : 0x40;
+                VDP_Reg.Win_H_Pos = mode ? 0x82 : 0;
+                VDP_Reg.Win_V_Pos = mode ? 0x83 : 0;
+                PlaneExplorer_DrawViewport(&explorers[0], &item);
+                memcpy(expected, viewport_mask, sizeof(expected));
+                PlaneExplorer_DrawViewport(&explorers[3], &item);
+                assert(memcmp(expected, viewport_mask, sizeof(expected)) == 0);
+            }
+            VDP_Reg.Win_H_Pos = VDP_Reg.Win_V_Pos = 0;
+        }
         VDP_Reg.Set4 = VDP_Reg.Set2 = VDP_Reg.Set3 = VDP_Reg.Scr_Size = 0;
         memset(VSRam, 0, sizeof(VSRam));
+        /* Raster split: preserve top and bottom scrolls even after VSRAM changes. */
+        VDP_Reg.Set2 = 0x40; VDP_Reg.Scr_Size = 0x11;
+        *(unsigned short *)&VRam[0xfc00] = 0;
+        *(unsigned short *)&VRam[0xfc02] = 0;
+        *(unsigned short *)&VSRam[0] = 0;
+        *(unsigned short *)&VSRam[2] = 16;
+        planes_capture_intensity(0);
+        *(unsigned short *)&VSRam[0] = 128;
+        *(unsigned short *)&VSRam[2] = 256;
+        planes_capture_intensity(112 * 336);
+        memset(VSRam, 0, sizeof(VSRam));
+        PlaneExplorer_DrawViewport(&explorers[0], &item);
+        assert(viewport_mask[0] && viewport_mask[240 * 1024]);
+        assert(!viewport_mask[112 * 1024]);
+        PlaneExplorer_DrawViewport(&explorers[3], &item);
+        assert(viewport_mask[0] && viewport_mask[240 * 1024]);
+        assert(!viewport_mask[112 * 1024]);
+        PlaneExplorer_DrawViewport(&explorers[1], &item);
+        assert(viewport_mask[16 * 1024] && viewport_mask[368 * 1024]);
+        assert(!viewport_mask[0]);
+        memset(scroll_lines, 0, sizeof(scroll_lines));
+        VDP_Reg.Set2 = VDP_Reg.Scr_Size = 0;
+
     }
     paint(a, dc); assert(GetPixel(dc, 0, 0) == RGB(238, 0, 0));
     paint(b, dc); assert(GetPixel(dc, 0, 0) == RGB(0, 238, 0));

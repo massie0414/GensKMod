@@ -39,6 +39,7 @@
 
 int Debug;
 int Frame_Skip;
+double Emulation_Speed = 1.0;
 int Frame_Number;
 int DAC_Improv;
 int RMax_Level;

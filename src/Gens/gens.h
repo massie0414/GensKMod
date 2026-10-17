@@ -52,6 +52,7 @@ extern "C" {
 
 extern int Debug;
 extern int Frame_Skip;
+extern double Emulation_Speed;
 extern int Frame_Number;
 extern int DAC_Improv;
 extern int RMax_Level;
