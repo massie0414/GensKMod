@@ -108,6 +108,21 @@ python tests/run_cd_hle_tests.py --lunar rom/LUNAR/LUNAR.CUE
 各30000フレーム検証します。画面、CD音声を含むミキサー出力、フレームスキップ、
 リセット・終了を検査します。
 
+### ゆみみみっくす
+
+`rom/YUMIMI/YUMIMI.CUE` のBIOSなし起動時、サブCPUのQサブコード取得
+（SCDPQ、`0x93`）で停止する問題を修正しました。取得可能なデータがない場合は、
+SCDPQ／SCDPQLがキャリーを立てて失敗を返し、ゲームの処理を継続します。
+サブコード収集全般の実装ではありません。
+
+無操作とStart・決定・方向操作ありで各30000フレームを実行し、
+映像の変化、PCM・CD音声の出力、フレームスキップ、リセット・終了を検証します。
+通常設定（22050 Hz）と精密設定（44100 Hz）が対象です。全編クリアは未検証です。
+
+```powershell
+python tests/run_cd_hle_tests.py --yumimi rom/YUMIMI/YUMIMI.CUE
+```
+
 ## 開発者向け検証
 
 Visual Studio 2022のC++ツールとPythonが必要です。

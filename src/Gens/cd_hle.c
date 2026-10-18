@@ -382,6 +382,12 @@ static void subcall(void) {
     case 0x10: audio_track=-1; read_count=0; break;
     case 0x80: break;
     case 0x84: break; /* CDBPAUSE: image drives do not spin down in standby. */
+    case 0x93: case 0x94:
+        /* SCDPQ/SCDPQL: no queued Q subcode is available. A MODE1/2352
+         * image contains no raw subchannels; report the BIOS read failure
+         * without changing the caller's buffer or advancing A0. */
+        c->sr|=1;
+        break;
     case 0x96: /* CDCSETMODE: HLE transfers sectors through the sub CPU. */
         if(c->dreg[1]&0xffff) { c->sr|=1; unsupported(1,fn); break; }
         read_count=0; read_paused=0; break;

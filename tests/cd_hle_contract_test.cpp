@@ -161,6 +161,15 @@ int main(void) {
     CHECK(rw(Ram_Prg,0x5900)==1);
     // TOC times are BCD, but track numbers are binary, including tracks 10..22.
     S68000CONTEXT r=api(0x83,0,0,1); CHECK(r.dreg[0]==0x00020001 && (r.dreg[1]&255)==255);
+    // A Q-subcode probe before subcode collection has no buffered result.
+    // Return carry, leave A0 and its buffer intact, and keep running.
+    for(unsigned fn=0x93;fn<=0x94;fn++) {
+        for(unsigned j=0;j<16;j+=2)word(Ram_Prg,0x5200+j,0xa55a);
+        r=api(fn,0x5200,0x5300,0xfffe);
+        CHECK((r.sr&1) && !Paused && r.areg[0]==0x5200 && r.areg[1]==0x5300);
+        CHECK(r.dreg[0]==fn && r.dreg[1]==0xfffe);
+        for(unsigned j=0;j<16;j+=2)CHECK(rw(Ram_Prg,0x5200+j)==0xa55a);
+    }
     r=api(0x83,0,0,10); CHECK(r.dreg[0]==0x0004480a && !(r.dreg[1]&255));
     r=api(0x83,0,0,22); CHECK(r.dreg[0]==0x00046016 && !(r.dreg[1]&255));
     r=api(0x83,0,0,99); CHECK(r.dreg[0]==0x00020000);
