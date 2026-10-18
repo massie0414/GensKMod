@@ -14,6 +14,7 @@ def main():
     parser.add_argument("--quiz-scramble", type=Path, help="QUIZ SCRAMBLE CUE for boot and input tests")
     parser.add_argument("--thunder-storm", type=Path, help="THUNDER STORM CUE for streaming tests")
     parser.add_argument("--sega-classic", type=Path, help="SEGA CLASSIC CUE for menu and game tests")
+    parser.add_argument("--switch", type=Path, help="SWITCH CUE for opening and gameplay tests")
     parser.add_argument("--yumimi", type=Path, help="YUMIMI CUE for opening and input tests")
     parser.add_argument("--lunar", type=Path, help="LUNAR CUE for title, opening and input tests")
     parser.add_argument("--skip-build", action="store_true", help="reuse the Release emulator objects")
@@ -28,6 +29,9 @@ def main():
     lunar = args.lunar.resolve() if args.lunar else None
     yumimi = args.yumimi.resolve() if args.yumimi else None
     sega_classic = args.sega_classic.resolve() if args.sega_classic else None
+    switch = args.switch.resolve() if args.switch else None
+    if switch and not switch.is_file():
+        parser.error("SWITCH image does not exist")
     if sega_classic and not sega_classic.is_file():
         parser.error("SEGA CLASSIC image does not exist")
     if yumimi and not yumimi.is_file():
@@ -72,7 +76,7 @@ def main():
         subprocess.run(script, shell=True, cwd=root, env=env, check=True)
 
     compile_test("cd_cue_test", ["tests/cd_cue_test.c", "src/Gens/cd_cue.c"])
-    if image or sol_feace or tenka_fubu or quiz_scramble or lunar or thunder_storm or yumimi or sega_classic:
+    if image or sol_feace or tenka_fubu or quiz_scramble or lunar or thunder_storm or yumimi or sega_classic or switch:
         objects = sorted((root / "src/Gens/bin/obj/Release").rglob("*.obj"))
         if not objects:
             parser.error("Release objects are missing; omit --skip-build")
@@ -84,6 +88,8 @@ def main():
             "shell32.lib", "advapi32.lib", "comdlg32.lib"
         ]
         compile_test("cd_hle_contract_test", ["tests/cd_hle_contract_test.cpp"], objects, libraries)
+        if switch:
+            compile_test("cd_switch_test", ["tests/cd_switch_test.cpp"], objects, libraries)
         if sega_classic:
             compile_test("cd_sega_classic_test", ["tests/cd_sega_classic_test.cpp"], objects, libraries)
         if yumimi:
@@ -105,8 +111,14 @@ def main():
         return
     run = Path(tempfile.mkdtemp(prefix="run-", dir=out))
     subprocess.run([str(out / "cd_cue_test.exe")], cwd=run, env=env, check=True)
-    if image or sol_feace or tenka_fubu or quiz_scramble or lunar or thunder_storm or yumimi or sega_classic:
+    if image or sol_feace or tenka_fubu or quiz_scramble or lunar or thunder_storm or yumimi or sega_classic or switch:
         subprocess.run([str(out / "cd_hle_contract_test.exe")], cwd=run, env=env, check=True)
+    if switch:
+        for timing, rate in (("normal", 22050), ("accurate", 44100)):
+            for mode in ("opening", "play"):
+                folder = run / ("switch-" + timing + "-" + mode)
+                folder.mkdir()
+                subprocess.run([str(out / "cd_switch_test.exe"), str(switch), mode, timing, str(rate)], cwd=folder, env=env, check=True)
     if sega_classic:
         for timing, rate in (("normal", 22050), ("accurate", 44100)):
             for mode in ("opening", "goldenaxe", "streets", "columns", "shinobi"):

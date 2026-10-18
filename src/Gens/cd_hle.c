@@ -178,6 +178,26 @@ static void bramcall(void) {
     }
     case 5: if(found<0)c->sr|=1; else { saves[found].blocks=0; if(!write_saves())c->sr|=1; } break;
     case 6: memset(saves,0,sizeof(saves)); if(!write_saves())c->sr|=1; else saves_bad=0; break;
+    case 7: { /* BRMDIR: filtered directory, with skip/count in D1. */
+        unsigned skip=c->dreg[1]>>16, capacity=c->dreg[1]&0xffff, written=0, offset=0;
+        if(dest>=0x80000 || capacity>(0x80000-dest)/16) { c->sr|=1; break; }
+        for(i=0;i<16;i++) {
+            if(!saves[i].blocks)continue;
+            unsigned start=offset;
+            offset+=saves[i].blocks*64;
+            for(j=0;j<11 && name[j]!='*' && name[j]==saves[i].name[j];j++);
+            if(j<11 && name[j]!='*')continue;
+            if(skip) { skip--; continue; }
+            if(written==capacity) { c->sr|=1; break; }
+            copy_be(Ram_Prg,dest+written*16,saves[i].name,11);
+            Ram_Prg[(dest+written*16+11)^1]=0;
+            ww(Ram_Prg,dest+written*16+12,start);
+            ww(Ram_Prg,dest+written*16+14,saves[i].blocks);
+            written++;
+        }
+        for(j=written*16;j<capacity*16;j++)Ram_Prg[(dest+j)^1]=0;
+        break;
+    }
     default: unsupported(1,0xb000+fn); c->sr|=1; break;
     }
     if((fn==4 || fn==5 || fn==6) && (c->sr&1))memcpy(saves,previous_saves,sizeof(saves));
@@ -311,7 +331,9 @@ static void audio_tick(void) {
     short samples[1176];
     int clock_rate=Sound_Rate>0?Sound_Rate:44100;
     int frame_samples=Seg_Lenght>0?Seg_Lenght:clock_rate/(CPU_Mode?50:60);
-    if(audio_seek_delay && !--audio_seek_delay)audio_paused=0;
+    /* Seeking finishes in pause. MSCSEEK1 selects one-shot playback when
+     * MSCPAUSEOFF arrives; it must not start playback on its own. */
+    if(audio_seek_delay)audio_seek_delay--;
     if(audio_track<1 || audio_paused)return;
     /* Match the samples actually consumed by the mixer. At 22050 Hz NTSC,
      * each frame consumes 368 samples, not the nominal 367.5. Scheduling
@@ -366,11 +388,21 @@ static void subcall(void) {
     case 0x04: audio_paused=0; audio_seek_delay=0; break;
     case 0x11: case 0x12: case 0x13: case 0x15: case 0x19: {
         unsigned t=memr(1,a);
+        unsigned seek_frames=0;
         if(t<2 || t>(unsigned)SCD.TOC.Last_Track || Tracks[t-1].Type!=TYPE_CDDA) { c->sr|=1; unsupported(1,fn); break; }
-        /* MSCSEEK1 exposes the seek-complete pause before playing once.
+        if(fn==0x19) {
+            unsigned current=audio_track>=1?Tracks[audio_track].DiscStart+audio_sector:read_lba;
+            unsigned target=Tracks[t-1].DiscStart;
+            unsigned distance=current>target?current-target:target-current;
+            /* Use the image drive's existing CDD seek approximation (20
+             * ticks plus distance/4096 at 75 Hz), converted to video frames.
+             * Clients can finish their palette fade while the drive seeks. */
+            seek_frames=((20+(distance>>12))*(CPU_Mode?50:60)+74)/75;
+        }
+        /* MSCSEEK1 exposes seeking-for-play before playing once.
          * Keep it visible across a frame so callers can observe CDBSTAT. */
         audio_track=t-1; audio_sector=audio_clock=audio_paused=0;
-        audio_seek_delay=fn==0x19?2:0;
+        audio_seek_delay=seek_frames;
         if(fn==0x15 || fn==0x19)audio_paused=1;
         audio_mode=fn==0x19?0x12:fn; CD_Audio_Starting=1;
         if(trace)fprintf(trace,"CDDA track %u started\n",t);
@@ -391,10 +423,13 @@ static void subcall(void) {
     case 0x96: /* CDCSETMODE: HLE transfers sectors through the sub CPU. */
         if(c->dreg[1]&0xffff) { c->sr|=1; unsupported(1,fn); break; }
         read_count=0; read_paused=0; break;
-    case 0x81:
+    case 0x81: {
+        unsigned state=audio_seek_delay?0x800:
+            (audio_paused || (read_count && read_paused))?0x500:
+            (audio_track>=1 || read_count)?0x100:0;
         /* CDBSTAT returns a pointer, not a caller-provided output buffer. */
         c->areg[0]=0x1300; memset(Ram_Prg+0x1300,0,32);
-        ww(Ram_Prg,0x1300,((audio_paused || (read_count && read_paused))?0x500:((audio_track>=1 || read_count)?0x100:0))|(read_count?(read_paused?5:1):0));
+        ww(Ram_Prg,0x1300,state|(read_count?(read_paused?5:1):0));
         ww(Ram_Prg,0x1310,0x100|SCD.TOC.Last_Track);
         Ram_Prg[0x1307^1]=(unsigned char)(audio_track>=1?audio_track+1:1);
         /* The CDD table includes BCD absolute/track-relative MSF, not just
@@ -408,6 +443,7 @@ static void subcall(void) {
             wl(Ram_Prg,0x130c,(bcd(relative/4500)<<24)|(bcd(relative/75%60)<<16)|(bcd(relative%75)<<8)|flag);
         }
         break;
+    }
     case 0x83: { /* CDBTOCREAD: absolute BCD MSF/track and track type. */
         unsigned t=c->dreg[1]&0xffff, pos=0;
         if(t && t<=(unsigned)SCD.TOC.Last_Track)pos=Tracks[t-1].DiscStart;
@@ -530,6 +566,24 @@ static void maincall(unsigned fn) {
     struct S68000CONTEXT *c=&main68k_context;
     if(!main_seen[(fn>>2)&255]++&&trace)fprintf(trace,"main fn=%03x a0=%x a1=%x d0=%x d1=%x\n",fn,c->areg[0],c->areg[1],c->dreg[0],c->dreg[1]);
     switch(fn) {
+    case 0x338: case 0x33c: { /* BIOS LCG, including the writable seed. */
+        unsigned product=(unsigned)((int)(short)rw(Ram_68k,0xfe2a)*0x3619);
+        unsigned sum=(product&0xffff)+0x5d35, seed=sum&0xffff;
+        ww(Ram_68k,0xfe2a,seed);
+        if(fn==0x338) {
+            unsigned bound=c->dreg[0]&0xffff;
+            unsigned scaled, bias=(unsigned)((int)(bound<<16)>>1);
+            c->dreg[1]=(unsigned)((int)(short)seed*(int)(short)bound);
+            scaled=bias+c->dreg[1];
+            c->dreg[0]=(unsigned)(int)(short)(scaled>>16);
+            c->sr=(c->sr&~31)|(scaled<bias?16:0)|(c->dreg[0]==0?4:0)|(c->dreg[0]&0x80000000?8:0);
+        } else {
+            c->dreg[0]=(product&0xffff0000)|seed;
+            c->sr=(c->sr&~31)|(seed==0?4:0)|(seed&0x8000?8:0)|
+                ((~(product^0x5d35)&(product^seed)&0x8000)?2:0)|(sum>0xffff?17:0);
+        }
+        break;
+    }
     case 0x310: { /* Copy whole longwords, then tail-call A2 (used to replace IP). */
         unsigned n=c->dreg[0]>>2, src=c->areg[0], dst=c->areg[1], i, value=0;
         unsigned count=n+((n&0xffff)?0:65536);
@@ -678,6 +732,12 @@ static void maincall(unsigned fn) {
             Ram_68k[0xfe42^1]=Ram_68k[0xfdfe^1];
             Ram_68k[0xfdde^1]|=0x20;
         }
+        break;
+    }
+    case 0x350: case 0x354: case 0x358: { /* Queue a pair of words in a communication slot. */
+        unsigned offset=fn==0x350?0:fn==0x354?8:12;
+        ww(Ram_68k,0xfde0+offset,c->dreg[0]);
+        ww(Ram_68k,0xfde2+offset,c->dreg[1]);
         break;
     }
     case 0x35c: /* Queue the system command in the second communication slot. */

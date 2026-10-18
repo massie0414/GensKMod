@@ -30,6 +30,15 @@ static S68000CONTEXT api(unsigned fn,unsigned a0=0,unsigned a1=0,unsigned d1=0) 
     CD_HLE_SubExec((int)sub68k_context.odometer);
     S68000CONTEXT result=sub68k_context; sub68k_context=saved; return result;
 }
+static S68000CONTEXT bram_api(unsigned fn,unsigned a0=0,unsigned a1=0,unsigned d1=0) {
+    S68000CONTEXT saved=sub68k_context;
+    sub68k_context.pc=0x1216; sub68k_context.interrupts[0]=1;
+    sub68k_context.areg[7]=0x5600; sub68k_context.areg[0]=a0; sub68k_context.areg[1]=a1;
+    sub68k_context.dreg[0]=fn; sub68k_context.dreg[1]=d1;
+    word(Ram_Prg,0x5600,0x2010); longword(Ram_Prg,0x5602,0x1400);
+    CD_HLE_SubExec((int)sub68k_context.odometer);
+    S68000CONTEXT result=sub68k_context; sub68k_context=saved; return result;
+}
 static S68000CONTEXT main_api(unsigned fn,unsigned a0=0,unsigned a1=0,unsigned d0=0,unsigned d1=0,unsigned d2=0,unsigned sr=0x2010) {
     S68000CONTEXT saved=main68k_context;
     main68k_context.pc=0x2006+(fn-0x200)*2; main68k_context.interrupts[0]=0x10;
@@ -130,6 +139,22 @@ int main(void) {
     CHECK(!Paused && rw(Ram_68k,0xfde4)==4 && rw(Ram_68k,0xfde6)==4);
     CHECK(rw(Ram_68k,0xfde0)==0x19 && M68K_RB(0xa1200e)==0x80);
     CHECK(queued.dreg[0]==0x12340004 && queued.dreg[1]==0xabcd0004);
+    word(Ram_68k,0xfe2a,0);
+    queued=main_api(0x338,0,0,16);
+    CHECK(queued.dreg[0]==13 && queued.dreg[1]==0x5d350 && rw(Ram_68k,0xfe2a)==0x5d35 && !(queued.sr&31));
+    word(Ram_68k,0xfe2a,1);
+    queued=main_api(0x338,0,0,16);
+    CHECK(queued.dreg[0]==1 && queued.dreg[1]==0xfff934e0 && (queued.sr&31)==16);
+    word(Ram_68k,0xfe2a,0xffff);
+    queued=main_api(0x33c);
+    CHECK(queued.dreg[0]==0xffff271c && rw(Ram_68k,0xfe2a)==0x271c && (queued.sr&31)==17);
+    main_api(0x350,0,0,0x12345678,0xdeadbeef);
+    main_api(0x354,0,0,0x98765432,0xabcd1234);
+    queued=main_api(0x358,0,0,0x5555abcd,0x777789ab);
+    CHECK(rw(Ram_68k,0xfde0)==0x5678 && rw(Ram_68k,0xfde2)==0xbeef);
+    CHECK(rw(Ram_68k,0xfde8)==0x5432 && rw(Ram_68k,0xfdea)==0x1234);
+    CHECK(rw(Ram_68k,0xfdec)==0xabcd && rw(Ram_68k,0xfdee)==0x89ab);
+    CHECK(queued.dreg[0]==0x5555abcd && queued.dreg[1]==0x777789ab && M68K_RB(0xa1200e)==0x80);
     main_api(0x35c,0,0,1,8); CHECK(M68K_RB(0xa1200e)==0x84);
     // Disc-status decoding honors the exchange and status-ready flags.
     Ram_68k[0xfdde^1]=2; Ram_68k[0xfddf^1]=4;
@@ -273,6 +298,28 @@ int main(void) {
     r=api(0x8a); CHECK(!(r.sr&1)); api(0x8d);
     r=api(0x8a); CHECK(r.sr&1);
     CD_HLE_Frame(); r=api(0x8a); CHECK(!(r.sr&1));
+    // BRMDIR returns 16-byte names/offsets/block counts, supports prefix '*',
+    // pagination, a full-buffer carry, and never writes beyond capacity.
+    CHECK(!(bram_api(6).sr&1));
+    Ram_Prg[0x5200^1]='*'; Ram_Prg[0x5201^1]=0;
+    memset(Ram_Prg+0x5300,0xa5,48);
+    CHECK(!(bram_api(7,0x5200,0x5300,2).sr&1));
+    CHECK(rw(Ram_Prg,0x5300)==0 && rw(Ram_Prg,0x531e)==0 && rw(Ram_Prg,0x5320)==0xa5a5);
+    for(unsigned file=0;file<2;file++) {
+        const char *name=file?"SWITCH____2":"SWITCH____1";
+        for(unsigned j=0;j<11;j++)Ram_Prg[(0x5200+j)^1]=name[j];
+        Ram_Prg[0x520b^1]=file?255:0; word(Ram_Prg,0x520c,file+1);
+        CHECK(!(bram_api(4,0x5200,0x5400).sr&1));
+    }
+    Ram_Prg[0x520a^1]='*'; Ram_Prg[0x520b^1]=0;
+    CHECK(bram_api(7,0x5200,0x5300,1).sr&1);
+    CHECK(Ram_Prg[0x530a^1]=='1' && Ram_Prg[0x530b^1]==0 && rw(Ram_Prg,0x530e)==1);
+    CHECK(!(bram_api(7,0x5200,0x5300,0x10001).sr&1));
+    CHECK(Ram_Prg[0x530a^1]=='2' && rw(Ram_Prg,0x530e)==2);
+    Ram_Prg[0x5200^1]='X';
+    CHECK(!(bram_api(7,0x5200,0x5300,1).sr&1) && rw(Ram_Prg,0x5300)==0);
+    CHECK(bram_api(7,0x5200,0x7fff0,2).sr&1);
+    CHECK(!(bram_api(6).sr&1));
     // Pause is observable even before CDDA starts; seeks retain the track.
     api(0x03); api(0x81); CHECK((rw(Ram_Prg,0x1300)&0xff00)==0x500);
     word(Ram_Prg,0x5200,10); api(0x15,0x5200); api(0x81);
@@ -280,6 +327,17 @@ int main(void) {
     CHECK(rw(Ram_Prg,0x1308)==0x0004 && rw(Ram_Prg,0x130a)==0x4800);
     CHECK(rw(Ram_Prg,0x130c)==0 && rw(Ram_Prg,0x130e)==0);
     api(0x04); api(0x81); CHECK((rw(Ram_Prg,0x1300)&0xff00)==0x100);
+    api(0x19,0x5200); api(0x81);
+    CHECK((rw(Ram_Prg,0x1300)&0xff00)==0x800 && !CD_HLE_AudioPlaying());
+    CD_HLE_Frame(); api(0x81); CHECK((rw(Ram_Prg,0x1300)&0xff00)==0x800);
+    CD_HLE_Frame(); api(0x81); CHECK((rw(Ram_Prg,0x1300)&0xff00)==0x800 && !CD_HLE_AudioPlaying());
+    for(unsigned i=2;i<15;i++)CD_HLE_Frame();
+    api(0x81); CHECK((rw(Ram_Prg,0x1300)&0xff00)==0x800);
+    CD_HLE_Frame(); api(0x81); CHECK((rw(Ram_Prg,0x1300)&0xff00)==0x500 && !CD_HLE_AudioPlaying());
+    for(unsigned i=0;i<120;i++)CD_HLE_Frame();
+    api(0x81); CHECK((rw(Ram_Prg,0x1300)&0xff00)==0x500 && rw(Ram_Prg,0x130c)==0 && rw(Ram_Prg,0x130e)==0);
+    api(0x04); CD_HLE_Frame(); api(0x81);
+    CHECK((rw(Ram_Prg,0x1300)&0xff00)==0x100 && CD_HLE_AudioPlaying() && rw(Ram_Prg,0x130e)!=0);
     word(Ram_68k,0xfdae,0); word(Ram_Prg,0x5e90,0);
     Reset_SegaCD();
     CHECK(CD_HLE_Active && rw(Ram_68k,0xfdae)==0x4ef9 && rw(Ram_Prg,0x5e90)==0x0116);
