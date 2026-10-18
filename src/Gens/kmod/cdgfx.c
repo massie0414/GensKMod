@@ -32,6 +32,16 @@ static HWND hCD_GFX;
 
 static unsigned int selectedTile;
 static WNDPROC imageProc;
+static int displayedWordRamMode = -1;
+
+static void CD_GFXUpdateMode(HWND hwnd)
+{
+	/* States 0/1 are 2M; states 2/3 are the two 1M bank assignments. */
+	int mode = (Ram_Word_State & 2) ? 1 : 2;
+	if (mode == displayedWordRamMode) return;
+	SetWindowText(hwnd, mode == 1 ? "CD Word RAM (1M mode)" : "CD Word RAM (2M mode)");
+	displayedWordRamMode = mode;
+}
 
 static unsigned char CD_GFXPixel(unsigned int tile, unsigned int x, unsigned int y)
 {
@@ -425,6 +435,7 @@ void DrawCD_GFX_KMod(LPDRAWITEMSTRUCT hlDIS)
 void UpdateCD_GFX_KMod()
 {
 	if (OpenedWindow_KMod[DMODE_CD_GFX - 1] == FALSE) return;
+	CD_GFXUpdateMode(hCD_GFX);
 	RedrawWindow(GetDlgItem(hCD_GFX, IDC_CD_GFX), NULL, NULL, RDW_INVALIDATE);
 	InvalidateRect(GetDlgItem(hCD_GFX, CD_GFX_PREVIEW_ID), NULL, FALSE);
 }
@@ -436,6 +447,8 @@ void CD_GFXInit_KMod(HWND hwnd)
 	MONITORINFO monitor;
 	int width = CD_GFX_WIDTH, height = CD_GFX_HEIGHT;
 	int margin, clientWidth, clientHeight;
+
+	CD_GFXUpdateMode(hwnd);
 
 	GetWindowRect(GetDlgItem(hwnd, IDC_CD_GFX), &image);
 	MapWindowPoints(NULL, hwnd, (LPPOINT)&image, 2);
@@ -489,6 +502,7 @@ BOOL CALLBACK CD_GFXDlgProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lPara
 	{
 	case WM_INITDIALOG:
 		selectedTile = 0;
+		displayedWordRamMode = -1;
 		HandleWindow_KMod[DMODE_CD_GFX - 1] = hwnd;
 		CreateWindow("STATIC", "", WS_CHILD | WS_VISIBLE | SS_OWNERDRAW,
 			0, 0, 0, 0, hwnd, (HMENU)CD_GFX_PREVIEW_ID, GetModuleHandle(NULL), NULL);
@@ -532,6 +546,7 @@ void cdgfx_create(HINSTANCE hInstance, HWND hWndParent)
 
 void cdgfx_show(BOOL visibility)
 {
+	if (visibility) CD_GFXUpdateMode(hCD_GFX);
 	ShowWindow(hCD_GFX, visibility ? SW_SHOW : SW_HIDE);
 }
 

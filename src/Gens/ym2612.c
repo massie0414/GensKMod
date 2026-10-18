@@ -1,3 +1,6 @@
+#include <windows.h>
+#include "kmod/ym2612.h"
+static int levelMetering;
 /***********************************************************
  *                                                         *
  * YM2612.C : YM2612 emulator                              *
@@ -1042,7 +1045,8 @@ DO_LIMIT
 
 #define DO_OUTPUT						\
 buf[0][i] += CH->OUTd & CH->LEFT;		\
-buf[1][i] += CH->OUTd & CH->RIGHT;
+buf[1][i] += CH->OUTd & CH->RIGHT; \
+if (levelMetering) ym2612_level_sample((int)(CH-YM2612.CHANNEL), CH->OUTd & CH->LEFT, CH->OUTd & CH->RIGHT);
 
 
 #define DO_OUTPUT_INT0							\
@@ -1050,7 +1054,8 @@ if ((int_cnt += YM2612.Inter_Step) & 0x04000)	\
 {												\
 	int_cnt &= 0x3FFF;							\
 	buf[0][i] += CH->OUTd & CH->LEFT;			\
-	buf[1][i] += CH->OUTd & CH->RIGHT;			\
+	buf[1][i] += CH->OUTd & CH->RIGHT; \
+if (levelMetering) ym2612_level_sample((int)(CH-YM2612.CHANNEL), CH->OUTd & CH->LEFT, CH->OUTd & CH->RIGHT);			\
 }												\
 else i--;
 
@@ -1061,7 +1066,8 @@ if ((int_cnt += YM2612.Inter_Step) & 0x04000)	\
 {												\
 	int_cnt &= 0x3FFF;							\
 	buf[0][i] += CH->Old_OUTd & CH->LEFT;		\
-	buf[1][i] += CH->Old_OUTd & CH->RIGHT;		\
+	buf[1][i] += CH->Old_OUTd & CH->RIGHT; \
+if (levelMetering) ym2612_level_sample((int)(CH-YM2612.CHANNEL), CH->Old_OUTd & CH->LEFT, CH->Old_OUTd & CH->RIGHT);		\
 }												\
 else i--;
 
@@ -1072,7 +1078,8 @@ if ((int_cnt += YM2612.Inter_Step) & 0x04000)		\
 	int_cnt &= 0x3FFF;								\
 	CH->Old_OUTd = (CH->OUTd + CH->Old_OUTd) >> 1;	\
 	buf[0][i] += CH->Old_OUTd & CH->LEFT;			\
-	buf[1][i] += CH->Old_OUTd & CH->RIGHT;			\
+	buf[1][i] += CH->Old_OUTd & CH->RIGHT; \
+if (levelMetering) ym2612_level_sample((int)(CH-YM2612.CHANNEL), CH->Old_OUTd & CH->LEFT, CH->Old_OUTd & CH->RIGHT);			\
 }													\
 else i--;											\
 CH->Old_OUTd = CH->OUTd;
@@ -1084,7 +1091,8 @@ if ((int_cnt += YM2612.Inter_Step) & 0x04000)	\
 	int_cnt &= 0x3FFF;							\
 	CH->Old_OUTd = (((int_cnt ^ 0x3FFF) * CH->OUTd) + (int_cnt * CH->Old_OUTd)) >> 14;	\
 	buf[0][i] += CH->Old_OUTd & CH->LEFT;		\
-	buf[1][i] += CH->Old_OUTd & CH->RIGHT;		\
+	buf[1][i] += CH->Old_OUTd & CH->RIGHT; \
+if (levelMetering) ym2612_level_sample((int)(CH-YM2612.CHANNEL), CH->Old_OUTd & CH->LEFT, CH->Old_OUTd & CH->RIGHT);		\
 }												\
 else i--;										\
 CH->Old_OUTd = CH->OUTd;
@@ -2297,6 +2305,7 @@ int YM2612_Write(unsigned char adr, unsigned char data)
 void YM2612_Update(int **buf, int length)
 {
 	int i, j, algo_type;
+    levelMetering=YM2612_Enable && ym2612_level_active();
 
 #if YM_DEBUG_LEVEL > 1
 	fprintf(debug_file, "\n\nStarting generating sound...\n\n");
@@ -2433,10 +2442,12 @@ int YM2612_Restore(unsigned char SAVE[0x200])
 void YM2612_DacAndTimers_Update(int **buffer, int length)
 {
 	int *bufL, *bufR;
+    int metering=ym2612_level_active();
 	int i;
 
 	if (YM2612.DAC && YM2612.DACdata && DAC_Enable)
 	{
+        if (metering) ym2612_level_sample(5,YM2612.DACdata & YM2612.CHANNEL[5].LEFT,YM2612.DACdata & YM2612.CHANNEL[5].RIGHT);
 		bufL = buffer[0];
 		bufR = buffer[1];
 

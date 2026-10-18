@@ -7,6 +7,8 @@ extern "C" {
 
 void psg_create(HINSTANCE hInstance, HWND hWndParent);
 void psg_show(BOOL visibility);
+void psg_save_window(const char *config);
+void psg_restore_window(const char *config);
 void psg_update();
 void psg_reset();
 void psg_destroy();

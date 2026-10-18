@@ -2,6 +2,7 @@
 #include "../src/Gens/kmod/cdgfx.c"
 
 unsigned char Ram_Word_2M[256 * 1024];
+unsigned int Ram_Word_State;
 UCHAR pal_KMod;
 char Rom_Name[512];
 COLORREF vdpdebug_getColor(unsigned int palette, unsigned int color) { return RGB(color, color, color); }
@@ -112,6 +113,22 @@ int main(void)
         0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
     OpenedWindow_KMod[DMODE_CD_GFX - 1] = TRUE;
     cdgfx_show(TRUE);
+    {
+        char title[64];
+        unsigned int state;
+        for (state = 0; state < 4; ++state)
+        {
+            Ram_Word_State = state;
+            cdgfx_update();
+            GetWindowText(hCD_GFX, title, sizeof(title));
+            assert(!strcmp(title, state < 2 ? "CD Word RAM (2M mode)" : "CD Word RAM (1M mode)"));
+        }
+        cdgfx_show(FALSE);
+        Ram_Word_State = 0;
+        cdgfx_show(TRUE);
+        GetWindowText(hCD_GFX, title, sizeof(title));
+        assert(!strcmp(title, "CD Word RAM (2M mode)"));
+    }
     GetWindowRect(hCD_GFX, &saved);
     cdgfx_save_window(config);
     cdgfx_destroy();

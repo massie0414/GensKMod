@@ -12,6 +12,7 @@
 //TODO remove to use right header(s)
 //#include "../kmod.h"
 
+#include "window_geometry.h"
 #include "common.h"
 #include "utils.h"
 #include "psg.h"
@@ -135,4 +136,22 @@ void psg_reset()
 void psg_destroy()
 {
 	DestroyWindow(hPSG);
+}
+
+void psg_save_window(const char *config)
+{
+    WritePrivateProfileString("DebugWindows", "PSGOpen",
+        OpenedWindow_KMod[DMODE_PSG - 1] ? "1" : "0", config);
+    DebugWindow_SaveGeometry(hPSG, "PSGRect", config);
+}
+void psg_restore_window(const char *config)
+{
+    RECT rect;
+    BOOL visible = GetPrivateProfileInt("DebugWindows", "PSGOpen", 0, config) != 0;
+    GetWindowRect(hPSG, &rect);
+    DebugWindow_RestoreGeometry(hPSG, "PSGRect", config);
+    SetWindowPos(hPSG, NULL, 0, 0, rect.right - rect.left, rect.bottom - rect.top,
+        SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+    OpenedWindow_KMod[DMODE_PSG - 1] = visible && hPSG != NULL;
+    psg_show(visible);
 }

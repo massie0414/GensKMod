@@ -42,6 +42,7 @@
 #include "kmod/memory_32x.h"
 #include "kmod/sound_32x.h"
 #include "kmod/disassembly.h"
+#include "kmod/sound_cd.h"
 
 #define TIMER_CYCLES		66480	/* cycles used by timer call */
 
@@ -200,6 +201,7 @@ void Init_KMod( )
 	sdram32x_create(ghInstance, HWnd);
 	fps32x_create(ghInstance, HWnd);
 	sound32x_create(ghInstance, HWnd);
+    soundcd_create(ghInstance, HWnd);
 	memory32x_create(ghInstance, HWnd);
     disassembly_create(ghInstance, HWnd);
 
@@ -217,6 +219,9 @@ void Init_KMod( )
 	sdram32x_restore_window(config_file);
 	fps32x_restore_window(config_file);
 	sound32x_restore_window(config_file);
+    soundcd_restore_window(config_file);
+    ym2612_restore_window(config_file);
+    psg_restore_window(config_file);
 	memory32x_restore_window(config_file);
 	mSH2_restore_window(config_file);
 	sSH2_restore_window(config_file);
@@ -308,7 +313,9 @@ void kmod_close()
 		if (OpenedWindow_KMod[mode] && mode != (DMODE_MSG - 1) &&
 			mode != (DMODE_DISASSEMBLY - 1) && mode != (DMODE_SHADOW - 1) && mode != (DMODE_HIGHLIGHT - 1) && mode != (DMODE_WINDOW - 1) && mode != (DMODE_PLANE_A - 1) && mode != (DMODE_PLANE_B - 1) && mode != (DMODE_SPRITE_SCREEN - 1) &&
 			mode != (DMODE_VDP - 1) && mode != (DMODE_SPRITES - 1) &&
-			mode != (DMODE_32_MEMORY - 1) && mode != (DMODE_32_SOUND - 1) && mode != (DMODE_32_FPS - 1) && mode != (DMODE_32_SDRAM - 1) && mode != (DMODE_32_VDP - 1) && mode != (DMODE_32_REG - 1) &&
+			mode != (DMODE_CD_PCM - 1) && mode != (DMODE_CD_CDDA - 1) &&
+            mode != (DMODE_YM2612 - 1) && mode != (DMODE_PSG - 1) &&
+            mode != (DMODE_32_MEMORY - 1) && mode != (DMODE_32_SOUND - 1) && mode != (DMODE_32_FPS - 1) && mode != (DMODE_32_SDRAM - 1) && mode != (DMODE_32_VDP - 1) && mode != (DMODE_32_REG - 1) &&
 			mode != (DMODE_32_MSH2 - 1) && mode != (DMODE_32_SSH2 - 1) &&
 			mode != (DMODE_68K - 1) && mode != (DMODE_CD_68K - 1) && mode != (DMODE_CD_CDC - 1) && mode != (DMODE_CD_REG - 1) && mode != (DMODE_CD_GFX - 1) && mode != (DMODE_CD_PRG - 1) && mode != (DMODE_Z80 - 1))
 		{
@@ -319,6 +326,7 @@ void kmod_close()
 	fps32x_reset();
     disassembly_clear();
 	sound32x_reset();
+    soundcd_reset();
 	//start_tiles = 0;
 
 	watchers_reset();
@@ -362,6 +370,7 @@ void ResetDebug_KMod(  )
 	sdram32x_reset();
 	fps32x_reset();
 	sound32x_reset();
+    soundcd_reset();
 
 	if (KConf.pausedAtStart)
 	{

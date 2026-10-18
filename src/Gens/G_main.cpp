@@ -56,6 +56,9 @@
 #include "kmod/fps_32x.h"
 #include "kmod/memory_32x.h"
 #include "kmod/sound_32x.h"
+#include "kmod/sound_cd.h"
+#include "kmod/ym2612.h"
+#include "kmod/psg.h"
 #include "kmod/mSH2.h"
 #include "kmod/sSH2.h"
 #include "kmod/s68k.h"
@@ -1906,6 +1909,9 @@ int PASCAL WinMain(HINSTANCE hInst,	HINSTANCE hPrevInst, LPSTR lpCmdLine, int nC
 	sdram32x_save_window(Str_Tmp);
 	fps32x_save_window(Str_Tmp);
 	sound32x_save_window(Str_Tmp);
+    soundcd_save_window(Str_Tmp);
+    ym2612_save_window(Str_Tmp);
+    psg_save_window(Str_Tmp);
 	memory32x_save_window(Str_Tmp);
 	mSH2_save_window(Str_Tmp);
 	sSH2_save_window(Str_Tmp);
@@ -2413,7 +2419,13 @@ long PASCAL WinProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 					Change_Debug(hWnd, DMODE_CD_CDC);
 					return 0;
 
-				case ID_CPU_DEBUG_SEGACD_PRG:
+				case ID_CPU_DEBUG_SEGACD_PCM:
+                    Change_Debug(hWnd, DMODE_CD_PCM);
+                    break;
+                case ID_CPU_DEBUG_SEGACD_CDDA:
+                    Change_Debug(hWnd, DMODE_CD_CDDA);
+                    break;
+                case ID_CPU_DEBUG_SEGACD_PRG:
 #ifdef GENS_KMOD
 					MINIMIZE
 					Change_Debug(hWnd, DMODE_CD_PRG);
@@ -3670,6 +3682,8 @@ HMENU Build_Main_Menu(void)
 		MENU_L(DebugMCD, 2, Flags, ID_CPU_DEBUG_SEGACD_CDC, "CD Controler", "", "CD Controler");
 		MENU_L(DebugMCD, 3, Flags, ID_CPU_DEBUG_SEGACD_GFX, "CD Word RAM", "", "CD Word RAM");
 		MENU_L(DebugMCD, 4, Flags, ID_CPU_DEBUG_SEGACD_PRG, "CD Program RAM", "", "CD Program RAM");
+        MENU_L(DebugMCD, 5, Flags, ID_CPU_DEBUG_SEGACD_PCM, "Sound - PCM", "", "Sound - PCM");
+        MENU_L(DebugMCD, 6, Flags, ID_CPU_DEBUG_SEGACD_CDDA, "Sound - CDDA", "", "Sound - CDDA");
 #else
 		if (Debug == DMODE_CD_68K) Flags |= MF_CHECKED;
 		else Flags &= ~MF_CHECKED;

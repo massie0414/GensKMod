@@ -15,6 +15,7 @@
 
 int File_Add_Delay = 0;
 
+#include "kmod/sound_cd.h"
 int CDDA_Enable;
 
 int CD_Audio_Buffer_L[8192];
@@ -1043,6 +1044,13 @@ void Update_CD_Audio(int **buf, int lenght)
 
 	if (CDDA_Enable)
 	{
+        if (soundcd_active(1)) {
+            int i;
+            for(i=0;i<lenght;i++) {
+                int pos=(CD_Audio_Buffer_Read_Pos+i)&0xFFF;
+                soundcd_sample(1,CD_Audio_Buffer_L[pos],CD_Audio_Buffer_R[pos]);
+            }
+        }
 		__asm
 		{
 			mov ecx, lenght

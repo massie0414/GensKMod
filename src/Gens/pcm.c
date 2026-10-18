@@ -10,6 +10,7 @@
 
 #include <stdio.h>
 #include <memory.h>
+#include "kmod/sound_cd.h"
 #include "pcm.h"
 #include "cd_sys.h"
 #include "star_68k.h"
@@ -249,6 +250,7 @@ void Write_PCM_Reg(unsigned int Reg, unsigned int Data)
 int Update_PCM(int **buf, int Length)
 {
 	int i, j;
+    int metering = soundcd_active(0);
 	int *bufL, *bufR; //, *volL, *volR;
 	unsigned int Addr, k;
 	struct pcm_chan_ *CH;
@@ -375,6 +377,8 @@ int Update_PCM(int **buf, int Length)
 						bufL[j] += CH->Data * CH->MUL_L;
 						bufR[j] += CH->Data * CH->MUL_R;
 					}
+
+					if (metering) soundcd_pcm_sample(i, CH->Data * CH->MUL_L, CH->Data * CH->MUL_R);
 
 					// update address register
 					k = Addr + 1;

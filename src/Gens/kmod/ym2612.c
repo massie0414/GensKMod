@@ -4,6 +4,8 @@
 
 #include "../gens.h"
 #include "../G_main.h"
+#include "../G_dsound.h"
+#include <string.h>
 #include "../resource.h"
 #include "../ym2612.h"
 #include "../z80.h" //for M_Z80 & z80_Read_Odo
@@ -14,6 +16,7 @@
 //TODO remove to use right header(s)
 //#include "../kmod.h"
 
+#include "window_geometry.h"
 #include "common.h"
 #include "utils.h"
 #include "config.h"
@@ -44,6 +47,34 @@ struct ym2612_KMod {
 
 
 static HWND hYM2612;
+static unsigned levelPeaks[6][2];
+int ym2612_level_active(void)
+{
+    return hYM2612 && IsWindowVisible(hYM2612) && Game && !Paused && !Debug && Sound_Enable;
+}
+void ym2612_level_sample(int channel, int left, int right)
+{
+    unsigned l=left<0 ? 0u-(unsigned)left : (unsigned)left;
+    unsigned r=right<0 ? 0u-(unsigned)right : (unsigned)right;
+    if(l>levelPeaks[channel][0]) levelPeaks[channel][0]=l;
+    if(r>levelPeaks[channel][1]) levelPeaks[channel][1]=r;
+}
+static void RefreshLevels(void)
+{
+    int channel=TabCtrl_GetCurSel(GetDlgItem(hYM2612,IDC_YM2612_TAB));
+    unsigned l=0,r=0; char text[128];
+    if(channel>=0 && channel<6 && ym2612_level_active()) {
+        l=levelPeaks[channel][0]; r=levelPeaks[channel][1];
+    }
+    if(l>32768) l=32768;
+    if(r>32768) r=32768;
+    SendDlgItemMessage(hYM2612,IDC_YM_LEVEL_LEFT,PBM_SETPOS,l*1000/32768,0);
+    SendDlgItemMessage(hYM2612,IDC_YM_LEVEL_RIGHT,PBM_SETPOS,r*1000/32768,0);
+    sprintf(text,"CH %d   L: %.1f%%   R: %.1f%%   / Peak / 50 ms",channel+1,l*100.0/32768,r*100.0/32768);
+    SetDlgItemText(hYM2612,IDC_YM_LEVEL_TEXT,text);
+    memset(levelPeaks,0,sizeof(levelPeaks));
+}
+
 
 HWND hTabYM2612;
 UINT  notes[6][4];
@@ -542,6 +573,9 @@ BOOL CALLBACK YM2612DlgProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lPara
 
 		TabCtrl_SetImageList(hTabYM2612, himl);
 
+        SendDlgItemMessage(hwnd,IDC_YM_LEVEL_LEFT,PBM_SETRANGE32,0,1000);
+        SendDlgItemMessage(hwnd,IDC_YM_LEVEL_RIGHT,PBM_SETRANGE32,0,1000);
+        SetTimer(hwnd,2,50,NULL);
 		//enabled by default
 		CheckDlgButton(hwnd, IDC_YM2612_MUTE, BST_CHECKED);
 	}
@@ -564,11 +598,15 @@ BOOL CALLBACK YM2612DlgProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lPara
 		}
 		break;
 
+    case WM_TIMER:
+        if(wParam==2 && IsWindowVisible(hwnd)) RefreshLevels();
+        break;
 	case WM_CLOSE:
 		CloseWindow_KMod(DMODE_YM2612);
 		break;
 
 	case WM_DESTROY:
+        KillTimer(hwnd,2);
 		ym2612_destroy();
 		PostQuitMessage(0);
 		break;
@@ -586,7 +624,9 @@ void ym2612_create(HINSTANCE hInstance, HWND hWndParent)
 
 void ym2612_show(BOOL visibility)
 {
+	memset(levelPeaks,0,sizeof(levelPeaks));
 	ShowWindow(hYM2612, visibility ? SW_SHOW : SW_HIDE);
+    RefreshLevels();
 }
 
 void ym2612_update()
@@ -599,6 +639,7 @@ void ym2612_update()
 void ym2612_reset()
 {
 	char i,j;
+    memset(levelPeaks,0,sizeof(levelPeaks));
 	for (i = 0; i<6; i++)
 	{
 		EnabledChannels[i] = TRUE;
@@ -611,4 +652,22 @@ void ym2612_reset()
 void ym2612_destroy()
 {
 	DestroyWindow(hYM2612);
+}
+
+void ym2612_save_window(const char *config)
+{
+    WritePrivateProfileString("DebugWindows", "YM2612Open",
+        OpenedWindow_KMod[DMODE_YM2612 - 1] ? "1" : "0", config);
+    DebugWindow_SaveGeometry(hYM2612, "YM2612Rect", config);
+}
+void ym2612_restore_window(const char *config)
+{
+    RECT rect;
+    BOOL visible = GetPrivateProfileInt("DebugWindows", "YM2612Open", 0, config) != 0;
+    GetWindowRect(hYM2612, &rect);
+    DebugWindow_RestoreGeometry(hYM2612, "YM2612Rect", config);
+    SetWindowPos(hYM2612, NULL, 0, 0, rect.right - rect.left, rect.bottom - rect.top,
+        SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+    OpenedWindow_KMod[DMODE_YM2612 - 1] = visible && hYM2612 != NULL;
+    ym2612_show(visible);
 }

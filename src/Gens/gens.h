@@ -49,7 +49,9 @@ extern "C" {
 #define DMODE_SHADOW 28
 #define DMODE_HIGHLIGHT 29
 #define DMODE_CD_PRG 30
-#define WIN_NUMBER DMODE_CD_PRG
+#define DMODE_CD_PCM 31
+#define DMODE_CD_CDDA 32
+#define WIN_NUMBER DMODE_CD_CDDA
 
 extern int Debug;
 extern int Frame_Skip;

@@ -32,6 +32,7 @@
 #include "sdram_32x.h"
 #include "fps_32x.h"
 #include "sound_32x.h"
+#include "sound_cd.h"
 #include "memory_32x.h"
 
 
@@ -136,7 +137,13 @@ void CloseWindow_KMod(UCHAR mode)
 	case DMODE_32_MEMORY:
         memory32x_show(FALSE);
         break;
-	case DMODE_32_SOUND:
+	case DMODE_CD_PCM:
+        soundcd_show(0, FALSE);
+        break;
+    case DMODE_CD_CDDA:
+        soundcd_show(1, FALSE);
+        break;
+    case DMODE_32_SOUND:
         sound32x_show(FALSE);
         break;
 	case DMODE_32_FPS:
@@ -240,7 +247,13 @@ void OpenWindow_KMod(UCHAR mode)
 	case DMODE_32_MEMORY:
         memory32x_show(TRUE);
         break;
-	case DMODE_32_SOUND:
+	case DMODE_CD_PCM:
+        soundcd_show(0, TRUE);
+        break;
+    case DMODE_CD_CDDA:
+        soundcd_show(1, TRUE);
+        break;
+    case DMODE_32_SOUND:
         sound32x_show(TRUE);
         break;
 	case DMODE_32_FPS:
