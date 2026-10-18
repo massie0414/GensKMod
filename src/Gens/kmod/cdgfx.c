@@ -32,15 +32,20 @@ static HWND hCD_GFX;
 
 static unsigned int selectedTile;
 static WNDPROC imageProc;
-static int displayedWordRamMode = -1;
+static int displayedWordRamState = -1;
 
 static void CD_GFXUpdateMode(HWND hwnd)
 {
 	/* States 0/1 are 2M; states 2/3 are the two 1M bank assignments. */
-	int mode = (Ram_Word_State & 2) ? 1 : 2;
-	if (mode == displayedWordRamMode) return;
-	SetWindowText(hwnd, mode == 1 ? "CD Word RAM (1M mode)" : "CD Word RAM (2M mode)");
-	displayedWordRamMode = mode;
+	int state = Ram_Word_State & 3;
+	if (state == displayedWordRamState) return;
+	if (state & 2)
+		SetWindowText(hwnd, (state & 1)
+			? "CD Word RAM (1M mode) - Bank 0: Mega CD / Bank 1: Mega Drive"
+			: "CD Word RAM (1M mode) - Bank 0: Mega Drive / Bank 1: Mega CD");
+	else
+		SetWindowText(hwnd, "CD Word RAM (2M mode)");
+	displayedWordRamState = state;
 }
 
 static unsigned char CD_GFXPixel(unsigned int tile, unsigned int x, unsigned int y)
@@ -502,7 +507,7 @@ BOOL CALLBACK CD_GFXDlgProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lPara
 	{
 	case WM_INITDIALOG:
 		selectedTile = 0;
-		displayedWordRamMode = -1;
+		displayedWordRamState = -1;
 		HandleWindow_KMod[DMODE_CD_GFX - 1] = hwnd;
 		CreateWindow("STATIC", "", WS_CHILD | WS_VISIBLE | SS_OWNERDRAW,
 			0, 0, 0, 0, hwnd, (HMENU)CD_GFX_PREVIEW_ID, GetModuleHandle(NULL), NULL);

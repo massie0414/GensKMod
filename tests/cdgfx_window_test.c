@@ -114,14 +114,20 @@ int main(void)
     OpenedWindow_KMod[DMODE_CD_GFX - 1] = TRUE;
     cdgfx_show(TRUE);
     {
-        char title[64];
+        char title[128];
+        const char *titles[] = {
+            "CD Word RAM (2M mode)",
+            "CD Word RAM (2M mode)",
+            "CD Word RAM (1M mode) - Bank 0: Mega Drive / Bank 1: Mega CD",
+            "CD Word RAM (1M mode) - Bank 0: Mega CD / Bank 1: Mega Drive"
+        };
         unsigned int state;
         for (state = 0; state < 4; ++state)
         {
             Ram_Word_State = state;
             cdgfx_update();
             GetWindowText(hCD_GFX, title, sizeof(title));
-            assert(!strcmp(title, state < 2 ? "CD Word RAM (2M mode)" : "CD Word RAM (1M mode)"));
+            assert(!strcmp(title, titles[state]));
         }
         cdgfx_show(FALSE);
         Ram_Word_State = 0;
