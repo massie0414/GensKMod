@@ -123,6 +123,26 @@ SCDPQ／SCDPQLがキャリーを立てて失敗を返し、ゲームの処理を
 python tests/run_cd_hle_tests.py --yumimi rom/YUMIMI/YUMIMI.CUE
 ```
 
+### SEGA CLASSIC
+
+`rom/SEGA_CLASSIC/SEGA_CLASSIC.CUE` のBIOSなし起動とゲーム選択に対応しました。
+メニュー、ゴールデンアックス、ベア・ナックル、コラムス、ザ・スーパー忍の
+プレイ画面と音声を検証しています。全編クリアは未検証です。
+
+システムコマンド送信、通信バッファーからのディスク状態取得、プログラムの
+コピーとジャンプ、一覧形式のVDP転送を実装しました。
+ゲームのV-blank処理がBIOS経由でサブCPUへ割り込みを送る場合、HLEの定期通知を
+停止します。二重通知により、音源の切り替えや次のプログラムの読み込みが途中で
+打ち切られる問題を修正しました。
+
+```powershell
+python tests/run_cd_hle_tests.py --sega-classic rom/SEGA_CLASSIC/SEGA_CLASSIC.CUE
+```
+
+通常設定（22050 Hz）と精密設定（44100 Hz）で、無操作と4作品への入力を
+それぞれ12000フレーム（約3分20秒）検証します。映像・音声、フレームスキップ、
+リセット・終了に加え、合成ディスクで通信、転送境界、割り込みの二重送信を検査します。
+
 ## 開発者向け検証
 
 Visual Studio 2022のC++ツールとPythonが必要です。

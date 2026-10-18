@@ -349,9 +349,9 @@ void CD_HLE_Frame(void) {
     if(read_budget>2)read_budget=2;
     audio_tick();
     /* Older IPs rely on the BIOS heartbeat; IPs that assert IRQ2 themselves
-     * own its timing (notably during sound-driver handshakes). SET_VINT
-     * clients still use the BIOS-managed heartbeat. */
-    if(!native_irq2 || main_seen[0x368/4])sub68k_interrupt(2,-1);
+     * own its timing (notably during sound-driver handshakes). This includes
+     * custom SET_VINT handlers that call the BIOS IRQ2 entry. */
+    if(!native_irq2)sub68k_interrupt(2,-1);
     if(trace && frame%60==0) { fprintf(trace,"frame %u main=%06x sub=%06x comm=%04x/%04x word=%u sr=%x/%x sectors=%u\n",frame,main68k_context.pc,sub68k_context.pc,COMM.Command[1],COMM.Status[1],Ram_Word_State,main68k_context.sr,sub68k_context.sr,sectors_read); fflush(trace); }
 }
 static void subcall(void) {
@@ -394,7 +394,7 @@ static void subcall(void) {
     case 0x81:
         /* CDBSTAT returns a pointer, not a caller-provided output buffer. */
         c->areg[0]=0x1300; memset(Ram_Prg+0x1300,0,32);
-        ww(Ram_Prg,0x1300,(audio_paused?0x500:(audio_track>=1?0x100:0))|(read_count?(read_paused?5:1):0));
+        ww(Ram_Prg,0x1300,((audio_paused || (read_count && read_paused))?0x500:((audio_track>=1 || read_count)?0x100:0))|(read_count?(read_paused?5:1):0));
         ww(Ram_Prg,0x1310,0x100|SCD.TOC.Last_Track);
         Ram_Prg[0x1307^1]=(unsigned char)(audio_track>=1?audio_track+1:1);
         /* The CDD table includes BCD absolute/track-relative MSF, not just
@@ -530,6 +530,16 @@ static void maincall(unsigned fn) {
     struct S68000CONTEXT *c=&main68k_context;
     if(!main_seen[(fn>>2)&255]++&&trace)fprintf(trace,"main fn=%03x a0=%x a1=%x d0=%x d1=%x\n",fn,c->areg[0],c->areg[1],c->dreg[0],c->dreg[1]);
     switch(fn) {
+    case 0x310: { /* Copy whole longwords, then tail-call A2 (used to replace IP). */
+        unsigned n=c->dreg[0]>>2, src=c->areg[0], dst=c->areg[1], i, value=0;
+        unsigned count=n+((n&0xffff)?0:65536);
+        for(i=0;i<count;i++) { value=meml(0,src); memw(0,dst,value>>16); memw(0,dst+2,value); src+=4; dst+=4; }
+        c->areg[0]=src; c->areg[1]=dst;
+        c->dreg[0]=(n<<16)|0xffff; c->dreg[1]|=0xffff;
+        c->sr=(c->sr&~31)|((n&0xffff)?0:16)|(value==0?4:0)|(value&0x80000000?8:0);
+        c->pc=c->areg[2]&0xffffff; c->interrupts[0]&=~0x10;
+        return;
+    }
     case 0x304: case 0x308:
         Ram_68k[0xfe26^1]=(unsigned char)(fn==0x308?3:c->dreg[0]);
         c->sr &= 0xf8ff;
@@ -594,6 +604,20 @@ static void maincall(unsigned fn) {
         c->areg[1]=src; c->dreg[0]=cmd;
         break;
     }
+    case 0x394: { /* A1: zero-terminated list of word count, VDP command, source. */
+        unsigned a=c->areg[1], n, i, inc=rw(Ram_68k,0xfdd2)&255;
+        while((n=memr(0,a))!=0) {
+            unsigned cmd=meml(0,a+2)|0x40000000, src=meml(0,a+6);
+            a+=10;
+            Set_VDP_Reg(15,2);
+            Write_VDP_Ctrl((unsigned short)(cmd>>16)); Write_VDP_Ctrl((unsigned short)(cmd&~0x80));
+            for(i=0;i<n;i++)Write_Word_VDP_Data((unsigned short)memr(0,src+i*2));
+            Set_VDP_Reg(15,inc);
+            c->dreg[0]=cmd; c->dreg[1]=src;
+        }
+        c->dreg[2]&=0xffff0000; c->areg[1]=a+2;
+        break;
+    }
     case 0x2d0: case 0x2d4: {
         unsigned cmd=c->dreg[0]|0x40000000, src=c->dreg[1], n=c->dreg[2]&0xffff, i, inc=rw(Ram_68k,0xfdd2)&255;
         if(!n)n=65536;
@@ -634,6 +658,33 @@ static void maincall(unsigned fn) {
     case 0x2a4: vram_clear(0xa000,0xe00); vram_clear(0xb800,4); vram_clear(0xc000,0x4000); wl(Ram_68k,0xf900,0); break;
     case 0x2a8: memset(VSRam,0,80); break;
     case 0x368: wl(Ram_68k,0xfd08,c->areg[1]); break;
+    case 0x348: { /* Decode the sub CPU's buffered disc status after exchange. */
+        unsigned flags=Ram_68k[0xfdde^1], subflags=Ram_68k[0xfddf^1], status;
+        M68K_WB(0xa1200e,M68K_RB(0xa1200e)&~2);
+        if(!(flags&2) || !(subflags&4))break;
+        Ram_68k[0xfdde^1]|=4;
+        status=rw(Ram_68k,0xfdf4); ww(Ram_68k,0xfe3a,status);
+        if(status&0xa000)break;
+        Ram_68k[0xfe57^1]=Ram_68k[0xfdfb^1];
+        if(subflags&8) {
+            if(!(flags&0x20))break;
+            ww(Ram_68k,0xfe3c,rw(Ram_68k,0xfdf6));
+            ww(Ram_68k,0xfe3e,rw(Ram_68k,0xfdfc));
+            Ram_68k[0xfe43^1]=Ram_68k[0xfdfe^1];
+            Ram_68k[0xfdde^1]|=0x40;
+        } else {
+            ww(Ram_68k,0xfe44,rw(Ram_68k,0xfdf6));
+            ww(Ram_68k,0xfe40,rw(Ram_68k,0xfdfc));
+            Ram_68k[0xfe42^1]=Ram_68k[0xfdfe^1];
+            Ram_68k[0xfdde^1]|=0x20;
+        }
+        break;
+    }
+    case 0x35c: /* Queue the system command in the second communication slot. */
+        if((c->dreg[0]&0xffff)==1)M68K_WB(0xa1200e,M68K_RB(0xa1200e)|4);
+        ww(Ram_68k,0xfde4,c->dreg[0]);
+        ww(Ram_68k,0xfde6,c->dreg[1]);
+        break;
     case 0x344: { /* Exchange buffered commands with the sub CPU. */
         unsigned flags=M68K_RB(0xa1200e);
         M68K_WB(0xa1200e,flags|1);
@@ -670,7 +721,7 @@ static void maincall(unsigned fn) {
         memset(Ram_68k+0xfdde,0,18);
         break;
     }
-    case 0x360: sub68k_interrupt(2,-1); break;
+    case 0x360: if((c->sr&0x700)==0x600)native_irq2=1; sub68k_interrupt(2,-1); break;
     case 0x364: break; /* Boot presentation is intentionally omitted. */
     default: unsupported(0,fn); break;
     }

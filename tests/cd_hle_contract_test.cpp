@@ -30,12 +30,12 @@ static S68000CONTEXT api(unsigned fn,unsigned a0=0,unsigned a1=0,unsigned d1=0) 
     CD_HLE_SubExec((int)sub68k_context.odometer);
     S68000CONTEXT result=sub68k_context; sub68k_context=saved; return result;
 }
-static S68000CONTEXT main_api(unsigned fn,unsigned a0=0,unsigned a1=0,unsigned d0=0,unsigned d1=0,unsigned d2=0) {
+static S68000CONTEXT main_api(unsigned fn,unsigned a0=0,unsigned a1=0,unsigned d0=0,unsigned d1=0,unsigned d2=0,unsigned sr=0x2010) {
     S68000CONTEXT saved=main68k_context;
     main68k_context.pc=0x2006+(fn-0x200)*2; main68k_context.interrupts[0]=0x10;
     main68k_context.areg[7]=0xff5600; main68k_context.areg[0]=a0; main68k_context.areg[1]=a1;
     main68k_context.dreg[0]=d0; main68k_context.dreg[1]=d1; main68k_context.dreg[2]=d2;
-    word(Ram_68k,0x5600,0x2010); longword(Ram_68k,0x5602,0xff5400);
+    word(Ram_68k,0x5600,sr); longword(Ram_68k,0x5602,0xff5400);
     CD_HLE_MainExec((int)main68k_context.odometer);
     S68000CONTEXT result=main68k_context; main68k_context=saved; return result;
 }
@@ -124,6 +124,42 @@ int main(void) {
       }
       CHECK(rw(Ram_68k,0x5120)==0xa5a5); }
     main_api(0x378,0,0,0x50,12); CHECK(rw(Ram_68k,0xfde0)==0x19 && rw(Ram_68k,0xfde2)==12);
+    // System commands occupy slot 1; ordinary CD commands in slot 0 survive.
+    M68K_WB(0xa1200e,0x80);
+    S68000CONTEXT queued=main_api(0x35c,0,0,0x12340004,0xabcd0004);
+    CHECK(!Paused && rw(Ram_68k,0xfde4)==4 && rw(Ram_68k,0xfde6)==4);
+    CHECK(rw(Ram_68k,0xfde0)==0x19 && M68K_RB(0xa1200e)==0x80);
+    CHECK(queued.dreg[0]==0x12340004 && queued.dreg[1]==0xabcd0004);
+    main_api(0x35c,0,0,1,8); CHECK(M68K_RB(0xa1200e)==0x84);
+    // Disc-status decoding honors the exchange and status-ready flags.
+    Ram_68k[0xfdde^1]=2; Ram_68k[0xfddf^1]=4;
+    word(Ram_68k,0xfdf4,0x101); word(Ram_68k,0xfdf6,0x010c);
+    word(Ram_68k,0xfdfc,0x1234); word(Ram_68k,0xfdfe,0x5600);
+    main_api(0x348); CHECK(rw(Ram_68k,0xfe3a)==0x101 && rw(Ram_68k,0xfe44)==0x010c);
+    CHECK(rw(Ram_68k,0xfe40)==0x1234 && Ram_68k[0xfe42^1]==0x56);
+    Ram_68k[0xfddf^1]=12;
+    main_api(0x348); CHECK(rw(Ram_68k,0xfe3c)==0x010c && rw(Ram_68k,0xfe3e)==0x1234);
+    CHECK(Ram_68k[0xfe43^1]==0x56 && (Ram_68k[0xfdde^1]&0x40));
+    // DMA lists use explicit lengths and end at the first zero word.
+    word(Ram_68k,0x5200,2); longword(Ram_68k,0x5202,0x5c000001); longword(Ram_68k,0x5206,0xff5100);
+    word(Ram_68k,0x520a,1); longword(Ram_68k,0x520c,0x5c100001); longword(Ram_68k,0x5210,0xff5120);
+    word(Ram_68k,0x5214,0);
+    Set_VDP_Reg(15,64);
+    queued=main_api(0x394,0,0xff5200);
+    CHECK(!Paused && queued.areg[1]==0xff5216 && !(queued.dreg[2]&0xffff));
+    CHECK(VDP_Reg.Auto_Inc==(rw(Ram_68k,0xfdd2)&255));
+    for(unsigned j=0;j<4;j++)CHECK(VRam[0x5c00+j]==Ram_68k[0x5100+j]);
+    CHECK(VRam[0x5c10]==Ram_68k[0x5120] && VRam[0x5c11]==Ram_68k[0x5121]);
+    Set_VDP_Reg(15,64);
+    queued=main_api(0x394,0,0xff5214); CHECK(queued.areg[1]==0xff5216 && !Paused && VDP_Reg.Auto_Inc==64);
+    // The IP replacement helper tail-jumps to A2 and leaves the return on SP.
+    { unsigned saved=main68k_context.areg[2]; main68k_context.areg[2]=0xff5300;
+      memset(Ram_68k+0x5300,0x5a,12);
+      queued=main_api(0x310,0xff5100,0xff5300,8);
+      CHECK(!Paused && queued.pc==0xff5300 && queued.areg[7]==0xff5602);
+      CHECK(queued.areg[0]==0xff5108 && queued.areg[1]==0xff5308);
+      CHECK(!memcmp(Ram_68k+0x5300,Ram_68k+0x5100,8) && rw(Ram_68k,0x5308)==0x5a5a);
+      main68k_context.areg[2]=saved; }
     main_api(0x340); CHECK(rw(Ram_68k,0xfde0)==0 && M68K_RB(0xa1200e)==0);
     // Graphics/timer handlers patch the target only, retaining the BIOS JMP.
     for(unsigned level=1;level<=3;level+=2) {
@@ -177,6 +213,9 @@ int main(void) {
     // BIOS-only readers (without touching the host port) obey 75 sectors/s.
     longword(Ram_Prg,0x5200,33); longword(Ram_Prg,0x5204,3);
     api(0x20,0x5200);
+    api(0x81); CHECK(rw(Ram_Prg,0x1300)==0x0101);
+    api(0x08); api(0x81); CHECK(rw(Ram_Prg,0x1300)==0x0505);
+    api(0x09);
     while(!(api(0x8a).sr&1))api(0x8d); // Drain earlier frame credits.
     for(int pal=0;pal<2;pal++) {
         CPU_Mode=pal;
@@ -244,6 +283,20 @@ int main(void) {
     word(Ram_68k,0xfdae,0); word(Ram_Prg,0x5e90,0);
     Reset_SegaCD();
     CHECK(CD_HLE_Active && rw(Ram_68k,0xfdae)==0x4ef9 && rw(Ram_Prg,0x5e90)==0x0116);
+    // SET_VINT clients that send their own IRQ2 must not get a second
+    // heartbeat. A stale extra interrupt can abort the next CD read.
+    word(Ram_Prg,0x5900,0);
+    word(Ram_Prg,0x5500,0x5279); longword(Ram_Prg,0x5502,0x5900); word(Ram_Prg,0x5506,0x4e75);
+    longword(Ram_Prg,0x5f36,0x5500);
+    word(Ram_Prg,0x5400,0x60fe);
+    sub68k_context.pc=0x5400; sub68k_context.areg[7]=0x5700; sub68k_context.sr=0x2000;
+    sub68k_tripOdometer(); sub68k_context.interrupts[0]=0;
+    CD_HLE_Frame(); CD_HLE_SubExec(500); CHECK(rw(Ram_Prg,0x5900)==1);
+    main_api(0x368,0,0xff5400);
+    main_api(0x360,0,0,0,0,0,0x2600);
+    CD_HLE_SubExec(1000); CHECK(rw(Ram_Prg,0x5900)==2);
+    CD_HLE_Frame(); CD_HLE_SubExec(1500); CHECK(rw(Ram_Prg,0x5900)==2);
+
     Free_Rom(Game); FILE_End(); CHECK(!CD_HLE_Active);
     puts("PASS: HLE writable hooks, absent RAM cartridge, TOC/status times, 75 Hz BIOS/host transfers, Mode 1 transfers, reset and initial 1M banks");
     return 0;
