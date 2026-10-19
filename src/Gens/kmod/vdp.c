@@ -31,6 +31,8 @@ void vdpdebug_select_sprite(int index)
 static long palH, palV;
 static UCHAR zoomTile_KMod;
 static USHORT tile_KMod;
+static BOOL hasSelectedTile;
+static WNDPROC tileWindowProc;
 static CHAR debug_string[1024];
 
 static HWND hWndRedArrow;
@@ -143,6 +145,17 @@ void DrawVDP_Tiles_KMod(LPDRAWITEMSTRUCT hlDIS)
 		}
 	}
 
+	/* Outline the full 8x8 tile, including its outermost pixels. */
+	if (hasSelectedTile)
+	{
+		RECT frame;
+		HBRUSH yellow = CreateSolidBrush(RGB(255, 255, 0));
+		int x = (tile_KMod % VDP_TILE_COLUMNS) * 8;
+		int y = (tile_KMod / VDP_TILE_COLUMNS) * 8;
+		SetRect(&frame, x, y, x + 8, y + 8);
+		FrameRect(hDC, &frame, yellow);
+		DeleteObject(yellow);
+	}
 
 	BitBlt(
 		hlDIS->hDC, // handle to destination device context
@@ -399,6 +412,7 @@ static void VDPSelectTile_KMod(POINT pt)
 
 	pt.x -= rcTiles.left;
 	tile_KMod += (unsigned char)(pt.x / 8);
+	hasSelectedTile = TRUE;
 
 	wsprintf(debug_string, "Tile 0x%.4X", tile_KMod);
 	SendDlgItemMessage(hVDP, IDC_VDP_TILE_ZOOM_ADR, WM_SETTEXT, 0, (LPARAM)debug_string);
@@ -413,8 +427,36 @@ void VDPTile_Choose()
 	GetCursorPos(&pt);
 	ScreenToClient(hVDP, &pt);
 	VDPSelectTile_KMod(pt);
+	SetFocus(GetDlgItem(hVDP, IDC_VDP_TILES));
 }
 
+
+static BOOL VDPNavigateTile_KMod(WPARAM key)
+{
+	int x = tile_KMod % VDP_TILE_COLUMNS;
+	int y = tile_KMod / VDP_TILE_COLUMNS;
+	POINT pt;
+	switch (key)
+	{
+	case VK_LEFT:  if (x > 0) x--; break;
+	case VK_RIGHT: if (x < VDP_TILE_COLUMNS - 1) x++; break;
+	case VK_UP:    if (y > 0) y--; break;
+	case VK_DOWN:  if (y < VDP_TILE_ROWS - 1) y++; break;
+	default: return FALSE;
+	}
+	pt.x = rcTiles.left + x * 8;
+	pt.y = rcTiles.top + y * 8;
+	VDPSelectTile_KMod(pt);
+	return TRUE;
+}
+
+static LRESULT CALLBACK VDPTileWindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	if (message == WM_GETDLGCODE)
+		return CallWindowProc(tileWindowProc, hwnd, message, wParam, lParam) | DLGC_WANTARROWS;
+	if (message == WM_KEYDOWN && VDPNavigateTile_KMod(wParam)) return 0;
+	return CallWindowProc(tileWindowProc, hwnd, message, wParam, lParam);
+}
 
 void VDPInit_KMod(HWND hwnd)
 {
@@ -470,6 +512,8 @@ BOOL CALLBACK VDPDlgProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam)
 	switch (Message)
 	{
 	case WM_INITDIALOG:
+		tileWindowProc = (WNDPROC)SetWindowLongPtr(GetDlgItem(hwnd, IDC_VDP_TILES),
+			GWLP_WNDPROC, (LONG_PTR)VDPTileWindowProc);
 		VDPInit_KMod(hwnd);
 		{
 			RECT rect;
@@ -478,6 +522,9 @@ BOOL CALLBACK VDPDlgProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam)
 			minimumVDPSize.cy = rect.bottom - rect.top;
 		}
 		break;
+
+	case WM_KEYDOWN:
+		return VDPNavigateTile_KMod(wParam);
 
 	case WM_GETMINMAXINFO:
 		if (minimumVDPSize.cx && minimumVDPSize.cy)
