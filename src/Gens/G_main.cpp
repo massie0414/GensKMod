@@ -49,6 +49,7 @@
 #include "kmod/config.h"
 #include "kmod/planes.h"
 #include "kmod/vdp.h"
+#include "kmod/vdp_reg.h"
 #include "kmod/sprites.h"
 #include "kmod/vdp_32x.h"
 #include "kmod/s32x_reg.h"
@@ -1903,6 +1904,7 @@ int PASCAL WinMain(HINSTANCE hInst,	HINSTANCE hPrevInst, LPSTR lpCmdLine, int nC
 	strcat(Str_Tmp, "GensKMod.cfg");
 	planes_save_visibility(Str_Tmp);
 	vdpdebug_save_window(Str_Tmp);
+	vdpreg_save_window(Str_Tmp);
 	sprites_save_window(Str_Tmp);
 	vdp32x_save_window(Str_Tmp);
 	s32xreg_save_window(Str_Tmp);

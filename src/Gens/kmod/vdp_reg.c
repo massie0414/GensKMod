@@ -16,10 +16,12 @@
 #include "common.h"
 #include "utils.h"
 #include "vdp_reg.h"
+#include "window_geometry.h"
 
 static HWND hRegister;
 static HWND hVDPReg_List;
 static CHAR debug_string[1024];
+static BOOL registers_valid = FALSE;
 
 void VDPRegInit_KMod(HWND hwnd)
 {
@@ -30,6 +32,7 @@ void VDPRegInit_KMod(HWND hwnd)
 
 	hVDPReg_List = GetDlgItem(hwnd, IDC_VDP_REG_LIST);
 	ListView_DeleteAllItems(hVDPReg_List);
+	while (ListView_DeleteColumn(hVDPReg_List, 0)) {}
 
 	lvColumn.mask = LVCF_FMT | LVCF_WIDTH | LVCF_TEXT /*| LVCF_SUBITEM*/;
 	lvColumn.fmt = LVCFMT_LEFT;
@@ -73,10 +76,11 @@ void UpdateVDPReg_KMod()
 	LVITEM		lvItem;
 	static struct Reg_VDP_Type old_regs = { 0, };
 
-	if (!memcmp(&old_regs, &VDP_Reg, sizeof(old_regs)))
+	if (registers_valid && !memcmp(&old_regs, &VDP_Reg, sizeof(old_regs)))
 		return;
 
 	memcpy(&old_regs, &VDP_Reg, sizeof(old_regs));
+	registers_valid = TRUE;
 
 	lvItem.mask = LVIF_TEXT;
 
@@ -499,6 +503,7 @@ BOOL CALLBACK VDPRegDlgProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lPara
 	switch (Message)
 	{
 	case WM_INITDIALOG:
+		hRegister = hwnd;
 		vdpreg_reset();
 		break;
 
@@ -539,8 +544,31 @@ void vdpreg_update()
 void vdpreg_reset()
 {
 	VDPRegInit_KMod(hRegister);
+	registers_valid = FALSE;
+	UpdateVDPReg_KMod();
 }
 void vdpreg_destroy()
 {
 	DestroyWindow(hRegister);
+}
+
+void vdpreg_save_window(const char *config_file)
+{
+    WritePrivateProfileString("DebugWindows", "VDPRegOpen",
+        OpenedWindow_KMod[DMODE_VDP_REG - 1] ? "1" : "0", config_file);
+    DebugWindow_SaveGeometry(hRegister, "VDPRegRect", config_file);
+}
+
+void vdpreg_restore_window(const char *config_file)
+{
+    RECT rect;
+    BOOL visible = GetPrivateProfileInt("DebugWindows", "VDPRegOpen", 0, config_file) != 0;
+    if (!hRegister) return;
+    GetWindowRect(hRegister, &rect);
+    DebugWindow_RestoreGeometry(hRegister, "VDPRegRect", config_file);
+    /* Preserve the fixed dialog size at the current font and DPI. */
+    SetWindowPos(hRegister, NULL, 0, 0, rect.right - rect.left, rect.bottom - rect.top,
+        SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+    OpenedWindow_KMod[DMODE_VDP_REG - 1] = visible;
+    vdpreg_show(visible);
 }

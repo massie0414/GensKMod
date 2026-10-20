@@ -213,6 +213,7 @@ void Init_KMod( )
 	strcat(config_file, "GensKMod.cfg");
 	planes_restore_visibility(config_file);
 	vdpdebug_restore_window(config_file);
+	vdpreg_restore_window(config_file);
 	sprites_restore_window(config_file);
 	vdp32x_restore_window(config_file);
 	s32xreg_restore_window(config_file);
@@ -312,7 +313,7 @@ void kmod_close()
 		// Restored windows stay open when loading another ROM.
 		if (OpenedWindow_KMod[mode] && mode != (DMODE_MSG - 1) &&
 			mode != (DMODE_DISASSEMBLY - 1) && mode != (DMODE_SHADOW - 1) && mode != (DMODE_HIGHLIGHT - 1) && mode != (DMODE_WINDOW - 1) && mode != (DMODE_PLANE_A - 1) && mode != (DMODE_PLANE_B - 1) && mode != (DMODE_SPRITE_SCREEN - 1) &&
-			mode != (DMODE_VDP - 1) && mode != (DMODE_SPRITES - 1) &&
+			mode != (DMODE_VDP - 1) && mode != (DMODE_VDP_REG - 1) && mode != (DMODE_SPRITES - 1) &&
 			mode != (DMODE_CD_PCM - 1) && mode != (DMODE_CD_CDDA - 1) &&
             mode != (DMODE_YM2612 - 1) && mode != (DMODE_PSG - 1) &&
             mode != (DMODE_32_MEMORY - 1) && mode != (DMODE_32_SOUND - 1) && mode != (DMODE_32_FPS - 1) && mode != (DMODE_32_SDRAM - 1) && mode != (DMODE_32_VDP - 1) && mode != (DMODE_32_REG - 1) &&
