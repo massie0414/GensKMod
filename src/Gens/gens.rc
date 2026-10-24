@@ -351,7 +351,7 @@ BEGIN
     LTEXT           "Last 256 frames / newest at right",IDC_SH2_USAGE_NOTE,18,89,176,10
 END
 
-IDD_DEBUG32X_VDP DIALOG 0, 0, 346, 381
+IDD_DEBUG32X_VDP DIALOG 0, 0, 790, 381
 STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME
 CAPTION "32X VDP"
 FONT 8, "MS Sans Serif"
@@ -361,8 +361,9 @@ BEGIN
     CONTROL         "Raw",IDC_32XVDP_FB1,"Button",BS_AUTORADIOBUTTON,166,358,29,10
     CONTROL         "Line table",IDC_32XVDP_FB2,"Button",BS_AUTORADIOBUTTON,205,358,48,10
     CONTROL         "tilesVDP",IDC_32XVDP_TILES,"Static",SS_OWNERDRAW | SS_NOTIFY,7,15,214,148
-    PUSHBUTTON      "Dump FB",IDC_32XVDP_DUMP,287,352,52,22
-    PUSHBUTTON      "Dump CRAM",IDC_32XVDP_CRAM,7,352,52,22
+    LTEXT           "Line table (256 entries / bank) - all addresses are bank-relative byte offsets",IDC_STATIC,350,7,432,12
+    CONTROL         "",IDC_32XVDP_LINETABLE,"SysListView32",LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | WS_BORDER | WS_TABSTOP,350,22,432,300
+    LTEXT           "Select a row or hover over a framebuffer. Value = WORD offset; target = value x 2.\r\nRows beyond the visible height are inactive. Delta is in words.",IDC_32XVDP_LINEINFO,350,328,432,46
     LTEXT           "FB0",IDC_32XVDP_LABEL0,7,7,214,8
     LTEXT           "FB1",IDC_32XVDP_LABEL1,7,174,214,8
     LTEXT           "Color Palette",IDC_STATIC,241,7,41,8

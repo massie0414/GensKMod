@@ -143,6 +143,37 @@ static void framebuffer_hover(void)
     vdp32x_destroy();
     puts("PASS: framebuffer hover, both banks, live updates, shift, RLE, direct/raw modes and bounds");
 }
+static void line_table_inspection(void)
+{
+    WORD *fb0 = (WORD *)_32X_VDP_Ram;
+    WORD *fb1 = (WORD *)(_32X_VDP_Ram + 0x20000);
+    HWND list;
+    char text[512];
+    vdp32x_create(GetModuleHandle(NULL), NULL);
+    list = GetDlgItem(h32X_VDP, IDC_32XVDP_LINETABLE);
+    assert(list && ListView_GetItemCount(list) == 256);
+    fb0[0] = 0x110; fb0[1] = 0x1d0;
+    fb1[0] = 0xffff; fb1[1] = 0x100;
+    fb0[255] = 0x1234;
+    Update32X_VDP_KMod();
+    ListView_GetItemText(list, 1, 1, text, sizeof(text)); assert(!strcmp(text, "+0x00002"));
+    ListView_GetItemText(list, 0, 2, text, sizeof(text)); assert(!strcmp(text, "0x0110"));
+    ListView_GetItemText(list, 0, 3, text, sizeof(text)); assert(!strcmp(text, "+0x00220"));
+    ListView_GetItemText(list, 1, 4, text, sizeof(text)); assert(!strcmp(text, "+192"));
+    ListView_GetItemText(list, 0, 6, text, sizeof(text)); assert(!strcmp(text, "+0x1FFFE"));
+    ListView_GetItemText(list, 1, 7, text, sizeof(text)); assert(!strcmp(text, "-65279"));
+    ListView_GetItemText(list, 255, 2, text, sizeof(text)); assert(!strcmp(text, "0x1234"));
+    SendMessage(GetDlgItem(h32X_VDP, IDC_32XVDP_TILES2), WM_MOUSEMOVE, 0, MAKELPARAM(2, 1));
+    assert(ListView_GetNextItem(list, -1, LVNI_SELECTED) == 1);
+    fb1[1] = 0x3456; Update32X_VDP_KMod();
+    GetDlgItemText(h32X_VDP, IDC_32XVDP_LINEINFO, text, sizeof(text));
+    assert(strstr(text, "FB1: [0x00002] = 0x3456 -> FB1 +0x068AC"));
+    ListView_SetItemState(list, 255, LVIS_SELECTED, LVIS_SELECTED);
+    GetDlgItemText(h32X_VDP, IDC_32XVDP_LINEINFO, text, sizeof(text));
+    assert(strstr(text, "Y=255 (inactive)"));
+    vdp32x_destroy();
+    puts("PASS: 256 line entries, byte/word units, both banks, signed deltas, live detail and hover selection");
+}
 int main(void)
 {
     unsigned i;
@@ -153,6 +184,7 @@ int main(void)
     DWORD *output, handles;
     DRAWITEMSTRUCT d={0};
     LARGE_INTEGER f,a,z;
+    InitCommonControls();
     for(i=0;i<65536;i++)
         _32X_Palette_16B[i]=(WORD)(((i&31)<<11)|(((i>>5)&31)<<6)|((i>>10)&31));
     _32X_VDP_CRam[1]=31; _32X_VDP_CRam[2]=31<<5; _32X_VDP_CRam[3]=31<<10;
@@ -223,5 +255,5 @@ int main(void)
     printf("PASS: two-panel paint, raw modes, crop, GDI lifetime; %.3f ms per pair\n",1000.0*(z.QuadPart-a.QuadPart)/f.QuadPart/200);
     vdp32x_destroy();SelectObject(dc,old);DeleteObject(bm);DeleteDC(dc);
     framebuffer_hover();
-    persistence();return 0;
+    persistence();line_table_inspection();return 0;
 }

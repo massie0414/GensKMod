@@ -28,6 +28,77 @@ static int hoverBank = -1, hoverX, hoverY;
 static WNDPROC framebufferWindowProc[2];
 static BOOL Sample32XPixel(unsigned bank, int x, int y, int *index, unsigned *color, unsigned *offset);
 
+/* The first 256 host WORDs are logical 16-bit line-table entries. */
+static void Update32XLineInfo(void)
+{
+    HWND list = GetDlgItem(h32X_VDP, IDC_32XVDP_LINETABLE);
+    int row = ListView_GetNextItem(list, -1, LVNI_SELECTED);
+    char text[512], old[512];
+    const WORD *fb0 = (const WORD *)_32X_VDP_Ram;
+    const WORD *fb1 = (const WORD *)(_32X_VDP_Ram + 0x20000);
+    if (row < 0) return;
+    sprintf(text, "Y=%d (%s) | entry: FB +0x%05X (16-bit) | displayed: FB%u\r\n"
+        "FB0: [0x%05X] = 0x%04X -> FB0 +0x%05X bytes\r\n"
+        "FB1: [0x%05X] = 0x%04X -> FB1 +0x%05X bytes | value x 2 = target",
+        row, ((_32X_Started || CD_32X_Active) && (_32X_VDP.Mode & 3) && row < VDP_Num_Vis_Lines) ? "visible" : "inactive",
+        row * 2, _32X_VDP.State & 1, row * 2, fb0[row], fb0[row] * 2,
+        row * 2, fb1[row], fb1[row] * 2);
+    GetDlgItemText(h32X_VDP, IDC_32XVDP_LINEINFO, old, sizeof(old));
+    if (strcmp(text, old)) SetDlgItemText(h32X_VDP, IDC_32XVDP_LINEINFO, text);
+}
+
+static void Update32XLineTable(void)
+{
+    HWND list = GetDlgItem(h32X_VDP, IDC_32XVDP_LINETABLE);
+    unsigned row, bank, col;
+    char text[40], old[40];
+    for (row = 0; row < 256; ++row)
+        for (bank = 0; bank < 2; ++bank)
+        {
+            const WORD *fb = (const WORD *)(_32X_VDP_Ram + bank * 0x20000);
+            for (col = 0; col < 3; ++col)
+            {
+                int column = 2 + bank * 3 + col;
+                if (col == 0) sprintf(text, "0x%04X", fb[row]);
+                else if (col == 1) sprintf(text, "+0x%05X", fb[row] * 2);
+                else if (row) sprintf(text, "%+d", (int)fb[row] - (int)fb[row - 1]);
+                else strcpy(text, "--");
+                ListView_GetItemText(list, row, column, old, sizeof(old));
+                if (strcmp(text, old)) ListView_SetItemText(list, row, column, text);
+            }
+        }
+    Update32XLineInfo();
+}
+
+static void Init32XLineTable(void)
+{
+    HWND list = GetDlgItem(h32X_VDP, IDC_32XVDP_LINETABLE);
+    char *names[] = { "Y", "Entry (byte)", "FB0 word", "FB0 target", "Delta", "FB1 word", "FB1 target", "Delta" };
+    int widths[] = { 38, 82, 75, 85, 62, 75, 85, 62 };
+    unsigned i;
+    char text[32];
+    LVCOLUMN column;
+    LVITEM item;
+    ListView_SetExtendedListViewStyle(list, LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES | LVS_EX_DOUBLEBUFFER);
+    for (i = 0; i < 8; ++i)
+    {
+        memset(&column, 0, sizeof(column));
+        column.mask = LVCF_TEXT | LVCF_WIDTH;
+        column.pszText = names[i]; column.cx = widths[i];
+        ListView_InsertColumn(list, i, &column);
+    }
+    for (i = 0; i < 256; ++i)
+    {
+        memset(&item, 0, sizeof(item));
+        sprintf(text, "%u", i);
+        item.mask = LVIF_TEXT; item.iItem = i; item.pszText = text;
+        ListView_InsertItem(list, &item);
+        sprintf(text, "+0x%05X", i * 2);
+        ListView_SetItemText(list, i, 1, text);
+    }
+    Update32XLineTable();
+}
+
 static void Update32XPaletteInfo(void)
 {
     char text[128], old[128], indexText[32];
@@ -84,6 +155,7 @@ void Update32X_VDP_KMod()
     char label[100], old[100];
     unsigned bank;
     Update32XPaletteInfo();
+    Update32XLineTable();
     for (bank = 0; bank < 2; ++bank)
     {
         int id = bank ? IDC_32XVDP_LABEL1 : IDC_32XVDP_LABEL0;
@@ -282,6 +354,13 @@ static LRESULT CALLBACK Framebuffer32XWindowProc(HWND hwnd, UINT message, WPARAM
         hoverBank = bank;
         hoverX = (short)LOWORD(lParam);
         hoverY = (short)HIWORD(lParam);
+        if (hoverY >= 0 && hoverY < 240 && hoverX >= 0 && hoverX < 320)
+        {
+            HWND list = GetDlgItem(h32X_VDP, IDC_32XVDP_LINETABLE);
+            ListView_SetItemState(list, hoverY, LVIS_SELECTED, LVIS_SELECTED);
+            ListView_EnsureVisible(list, hoverY, FALSE);
+            Update32XLineInfo();
+        }
         Update32XPaletteInfo();
     }
     return CallWindowProc(framebufferWindowProc[bank], hwnd, message, wParam, lParam);
@@ -424,6 +503,7 @@ BOOL CALLBACK _32X_VDPDlgProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lPa
 		h32X_VDP = hwnd;
         paletteIndex = -1;
         hoverBank = -1;
+        Init32XLineTable();
         framebufferWindowProc[0] = (WNDPROC)SetWindowLongPtr(
             GetDlgItem(hwnd, IDC_32XVDP_TILES), GWLP_WNDPROC, (LONG_PTR)Framebuffer32XWindowProc);
         framebufferWindowProc[1] = (WNDPROC)SetWindowLongPtr(
@@ -439,6 +519,12 @@ BOOL CALLBACK _32X_VDPDlgProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lPa
 		}
 		CheckRadioButton(hwnd, IDC_32XVDP_FB0, IDC_32XVDP_FB2, IDC_32XVDP_FB0);
 		break;
+
+    case WM_NOTIFY:
+        if (((NMHDR *)lParam)->idFrom == IDC_32XVDP_LINETABLE &&
+            ((NMHDR *)lParam)->code == LVN_ITEMCHANGED)
+            Update32XLineInfo();
+        break;
 
 	case WM_GETMINMAXINFO:
 		if (minimum32XVDPSize.cx && minimum32XVDPSize.cy)
