@@ -1,6 +1,7 @@
 #include <windows.h>
 #include <stdio.h>
 #include <string.h>
+#include <stddef.h>
 #include "../src/Gens/Cpu_Z80.h"
 #include "../src/Gens/Mem_Z80.h"
 #include "../src/Gens/Mem_M68k.h"
@@ -84,6 +85,31 @@ int main() {
  }
  const unsigned char usefulPush[]={0xe5,0xe1,0x0b,0x79,0xb7,0x77,0xc2,0,0};
  start(usefulPush,sizeof(usefulPush)); CHECK(!Z80_Polling_Loop(&M_Z80));
+ /* MD_FM's complete scanline-debt poll, with its dispatch exit at $40. */
+ const unsigned char clockWait[]={0x3a,0x08,0x7f,0xb8,0x28,0x0d,0x57,0x90,0x42,
+  0xfe,0xfa,0x38,0x02,0xd6,0xfa,0x57,0x79,0x92,0x4f,0x79,0xb7,
+  0xfa,0x40,0,0xca,0x40,0,0x18,0xe3};
+ const unsigned phases[]={0,3,4,6,7,8,9,11,13,15,16,17,18,19,20,21,24,27};
+ for(unsigned i=0;i<sizeof(phases)/sizeof(phases[0]);++i) {
+  start(clockWait,sizeof(clockWait)); M_Z80.BC.w.BC=100; M_Z80.DE.w.DE=0;
+  z80_Set_AF(&M_Z80,(phases[i]==17 || phases[i]==18 || phases[i]>=20)?0x6400:0);
+  z80_Set_PC(&M_Z80,phases[i]); Z80_CONTEXT beforeClock=M_Z80;
+  unsigned clockResult=z80_Exec(&M_Z80,200); Z80_CONTEXT afterClock=M_Z80;
+  M_Z80=beforeClock; Z80_Usage_Begin_Frame(); CHECK(Z80_Exec_Profiled(&M_Z80,200)==clockResult);
+  /* CycleTD/temporary fields describe the last host call, not Z80 state. */
+  CHECK(!memcmp(&afterClock,&M_Z80,offsetof(Z80_CONTEXT,TmpSav0)));
+  if(afterClock.CycleCnt!=M_Z80.CycleCnt || Z80_UsageBusyCycles)
+   printf("clock phase=%u cycles=%u/%u busy=%u status=%u\n",phases[i],afterClock.CycleCnt,M_Z80.CycleCnt,Z80_UsageBusyCycles,M_Z80.Status);
+  CHECK(afterClock.CycleCnt==M_Z80.CycleCnt && Z80_UsageBusyCycles==0);
+ }
+ start(clockWait,sizeof(clockWait)); M_Z80.BC.w.BC=0;
+ const unsigned char clockWork[]={0x3e,0x55,0x32,0,1,0xc3,0x40,0};
+ memcpy(Ram_Z80+0x40,clockWork,sizeof(clockWork));
+ Z80_Exec_Profiled(&M_Z80,1000);
+ CHECK(Ram_Z80[0x100]==0x55 && Z80_UsageBusyCycles>0);
+ start(clockWait,sizeof(clockWait)); Ram_Z80[6]=0x77; /* Memory write: not a wait. */
+ M_Z80.HL.w.HL=0x100; M_Z80.BC.w.BC=100; Z80_Exec_Profiled(&M_Z80,200);
+ CHECK(Z80_UsageBusyCycles>0);
  puts("PASS: extended Z80 waits: register/indexed bit polling and countdown delays; writes/traversal excluded");
  puts("PASS: Z80 usage: busy, HALT entry/halted, bus-held, ring rollover/reset, polling, unchanged execution, wait exit");
  z80debug_create(GetModuleHandle(NULL),NULL); HWND panel=HandleWindow_KMod[DMODE_Z80-1]; CHECK(panel);

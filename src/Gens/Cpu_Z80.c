@@ -209,8 +209,53 @@ unsigned Z80_Polling_Loop(Z80_CONTEXT *cpu)
     }
     return 0;
 }
+/* Scanline-debt wait used by MD_FM. Unlike a simple polling loop this
+ * updates B/C/D and has forward branches. Match the complete read-only
+ * routine, including both exits, rather than treating arbitrary arithmetic
+ * or backward branches as idle. Return only at instruction boundaries. */
+static unsigned Z80_Scanline_Wait(Z80_CONTEXT *cpu)
+{
+    static const unsigned char body[]={
+        0x3a,0x08,0x7f,0xb8,0x28,0x0d,0x57,0x90,0x42,
+        0xfe,0xfa,0x38,0x02,0xd6,0xfa,0x57,0x79,0x92,
+        0x4f,0x79,0xb7,0xfa
+    };
+    static const unsigned char offsets[]={0,3,4,6,7,8,9,11,13,15,16,17,18,19,20,21,24,27};
+    unsigned pc=z80_Get_PC(cpu), i;
+    if(cpu!=&M_Z80 || pc>=0x4000) return 0;
+    for(i=0;i<sizeof(offsets);++i) {
+        unsigned start, exit;
+        const unsigned char *code;
+        if(pc<offsets[i]) continue;
+        start=pc-offsets[i];
+        if((start&8191)+29>8192) continue;
+        code=Ram_Z80+(start&8191);
+        if(memcmp(code,body,sizeof(body)) || code[24]!=0xca ||
+            code[27]!=0x18 || code[28]!=0xe3 ||
+            code[22]!=code[25] || code[23]!=code[26]) continue;
+        exit=code[22]|(code[23]<<8);
+        if(exit>=start && exit<start+29) continue;
+        return start+1;
+    }
+    return 0;
+}
 unsigned FASTCALL Z80_Exec_Profiled(Z80_CONTEXT *cpu, int target)
 {
+    if(cpu->CycleCnt>=(unsigned)target) return z80_Exec(cpu,target);
+    /* Execute recognized clock waits normally, one instruction at a time.
+     * Account only those instructions: an exit followed by sound writes in
+     * the same scheduler slice must still count as work. Never skip MMIO.
+     * Pending interrupts stay on the normal accounting path. A wait entered
+     * later in an ordinary slice remains busy until the next call, so this
+     * conservative estimate can still overstate the actual sound work. */
+    while(cpu->CycleCnt<(unsigned)target && Z80_Scanline_Wait(cpu) &&
+        !(cpu->IntLine & (0x80 | cpu->IFF.b.IFF1)) && !cpu->Status) {
+        unsigned beforeWait=Z80_UsageBusyCycles, cycles=cpu->CycleCnt;
+        unsigned waitResult=z80_Exec(cpu,cycles+1);
+        Z80_UsageBusyCycles=beforeWait;
+        if(waitResult || cpu->CycleCnt<=cycles) return waitResult;
+    }
+    if(cpu->CycleCnt>=(unsigned)target) return 0;
     unsigned loop=Z80_Polling_Loop(cpu), before=Z80_UsageBusyCycles, result;
     Z80_CONTEXT saved;
     if(loop) saved=*cpu;
