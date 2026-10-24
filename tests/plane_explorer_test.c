@@ -233,22 +233,22 @@ int main(void)
         VDP_Reg.Set4 = 7; VDP_Reg.Set2 = 0x48;
         PlaneExplorer_DrawViewport(&explorers[0], &item);
         assert(viewport_mask[480 * 1024 + 496]);
-        /* Window must mirror Plane A even with different map dimensions. */
-        {
-            static unsigned char expected[sizeof(viewport_mask)];
-            int mode;
-            for (mode = 0; mode < 2; ++mode) {
-                VDP_Reg.Set4 = mode ? 7 : 0;
-                VDP_Reg.Set2 = mode ? 0x48 : 0x40;
-                VDP_Reg.Win_H_Pos = mode ? 0x82 : 0;
-                VDP_Reg.Win_V_Pos = mode ? 0x83 : 0;
-                PlaneExplorer_DrawViewport(&explorers[0], &item);
-                memcpy(expected, viewport_mask, sizeof(expected));
-                PlaneExplorer_DrawViewport(&explorers[3], &item);
-                assert(memcmp(expected, viewport_mask, sizeof(expected)) == 0);
-            }
-            VDP_Reg.Win_H_Pos = VDP_Reg.Win_V_Pos = 0;
-        }
+        /* H40 Window spans 320 pixels even with a 256-pixel Plane A map. */
+        VDP_Reg.Set4 = 1; VDP_Reg.Set2 = 0x40; VDP_Reg.Scr_Size = 0;
+        VDP_Reg.Win_H_Pos = 0; VDP_Reg.Win_V_Pos = 0x80;
+        PlaneExplorer_DrawViewport(&explorers[3], &item);
+        assert(viewport_mask[0] && viewport_mask[223 * 1024 + 319]);
+        assert(!viewport_mask[320] && !viewport_mask[224 * 1024]);
+        /* Right of x=32 OR below y=24; no scrolling or wrapping. */
+        VDP_Reg.Win_H_Pos = 0x82; VDP_Reg.Win_V_Pos = 0x83;
+        PlaneExplorer_DrawViewport(&explorers[3], &item);
+        assert(!viewport_mask[23 * 1024 + 31]);
+        assert(viewport_mask[23 * 1024 + 32] && viewport_mask[24 * 1024]);
+        VDP_Reg.Set4 = 6;
+        PlaneExplorer_DrawViewport(&explorers[3], &item);
+        assert(viewport_mask[48 * 1024] && viewport_mask[49 * 1024]);
+        assert(!viewport_mask[47 * 1024 + 31] && !viewport_mask[256]);
+        VDP_Reg.Win_H_Pos = VDP_Reg.Win_V_Pos = 0;
         VDP_Reg.Set4 = VDP_Reg.Set2 = VDP_Reg.Set3 = VDP_Reg.Scr_Size = 0;
         memset(VSRam, 0, sizeof(VSRam));
         /* Raster split: preserve top and bottom scrolls even after VSRAM changes. */
@@ -266,8 +266,7 @@ int main(void)
         assert(viewport_mask[0] && viewport_mask[240 * 1024]);
         assert(!viewport_mask[112 * 1024]);
         PlaneExplorer_DrawViewport(&explorers[3], &item);
-        assert(viewport_mask[0] && viewport_mask[240 * 1024]);
-        assert(!viewport_mask[112 * 1024]);
+        assert(!viewport_mask[0] && !viewport_mask[240 * 1024]);
         PlaneExplorer_DrawViewport(&explorers[1], &item);
         assert(viewport_mask[16 * 1024] && viewport_mask[368 * 1024]);
         assert(!viewport_mask[0]);

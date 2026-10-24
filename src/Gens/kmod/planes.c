@@ -400,11 +400,11 @@ static unsigned char viewport_mask[PLANE_BITMAP_WIDTH * PLANE_BITMAP_HEIGHT];
 
 static void PlaneExplorer_DrawViewport(PlaneExplorer *explorer, LPDRAWITEMSTRUCT item)
 {
-    /* Window deliberately mirrors the Plane A overlay, including its wrap size. */
+    /* Window uses screen coordinates and ignores Plane A scrolling. */
     int scroll_plane = explorer->plane == 3 ? 0 : explorer->plane;
-    int width = PlaneWidth(scroll_plane) * 8;
+    int width = PlaneWidth(explorer->plane) * 8;
     int scale = (VDP_Reg.Set4 & 6) == 6 ? 2 : 1;
-    int height = PlaneHeight(scroll_plane) * 8 * scale;
+    int height = PlaneHeight(explorer->plane) * 8 * scale;
     int sw = (VDP_Reg.Set4 & 1) ? 320 : 256;
     int sh = (VDP_Reg.Set2 & 8) ? 240 : 224;
     int x, y, sx, sy, dy, start;
@@ -424,8 +424,17 @@ static void PlaneExplorer_DrawViewport(PlaneExplorer *explorer, LPDRAWITEMSTRUCT
             int vs = line->valid ?
                 line->vertical[column / 2 + scroll_plane] :
                 *(unsigned short *)&VSRam[column + scroll_plane * 2];
-            sx = ((x - hs) % width + width) % width;
-            sy = ((y + (vs / scale)) * scale) % height;
+            if (explorer->plane == 3) {
+                int horizontal = (VDP_Reg.Win_H_Pos & 31) * 16;
+                int vertical = (VDP_Reg.Win_V_Pos & 31) * 8;
+                BOOL in_h = (VDP_Reg.Win_H_Pos & 0x80) ? x >= horizontal : x < horizontal;
+                BOOL in_v = (VDP_Reg.Win_V_Pos & 0x80) ? y >= vertical : y < vertical;
+                if (!in_h && !in_v) continue;
+                sx = x; sy = y * scale;
+            } else {
+                sx = ((x - hs) % width + width) % width;
+                sy = ((y + (vs / scale)) * scale) % height;
+            }
             for (dy = 0; dy < scale; ++dy)
                 viewport_mask[(sy + dy) * PLANE_BITMAP_WIDTH + sx] = 1;
         }
@@ -544,7 +553,7 @@ static void PlaneExplorerPaint_KMod(PlaneExplorer *explorer, LPDRAWITEMSTRUCT lp
     PlaneExplorer_DrawViewport(explorer, lpdi);
 	if (explorer->plane == 2) return;
  if (explorer->plane == 3) {
-  wsprintf(buffer, "Red: Plane A scroll | Width: %d Height: %d  Window Base: 0x%04X  H: 0x%02X V: 0x%02X",
+  wsprintf(buffer, "Red: Window visible area | Width: %d Height: %d  Window Base: 0x%04X  H: 0x%02X V: 0x%02X",
    PlaneWidth(3), PlaneHeight(3), PlaneBase(3), VDP_Reg.Win_H_Pos, VDP_Reg.Win_V_Pos);
   SetDlgItemText(explorer->hwnd, IDC_PLANEEXPLORER_PROPS, buffer);
   return;
