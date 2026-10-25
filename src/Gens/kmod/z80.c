@@ -361,14 +361,9 @@ void z80debug_save_window(const char *config_file)
 
 void z80debug_restore_window(const char *config_file)
 {
-    RECT rect;
     BOOL visible = GetPrivateProfileInt("DebugWindows", "Z80Open", 0, config_file) != 0;
     if (!hZ80) return;
-    GetWindowRect(hZ80, &rect);
     DebugWindow_RestoreGeometry(hZ80, "Z80Rect", config_file);
-    /* Keep the size measured from the current font and graph layout. */
-    SetWindowPos(hZ80, NULL, 0, 0, rect.right - rect.left, rect.bottom - rect.top,
-        SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
     OpenedWindow_KMod[DMODE_Z80 - 1] = visible;
     z80debug_show(visible);
 }

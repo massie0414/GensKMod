@@ -483,14 +483,9 @@ void m68kdebug_save_window(const char *config_file)
 
 void m68kdebug_restore_window(const char *config_file)
 {
-    RECT rect;
     BOOL visible = GetPrivateProfileInt("DebugWindows", "M68KOpen", 0, config_file) != 0;
     if (!hM68K) return;
-    GetWindowRect(hM68K, &rect);
     DebugWindow_RestoreGeometry(hM68K, "M68KRect", config_file);
-    /* Keep the size measured from the current font and graph layout. */
-    SetWindowPos(hM68K, NULL, 0, 0, rect.right - rect.left, rect.bottom - rect.top,
-        SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
     OpenedWindow_KMod[DMODE_68K - 1] = visible;
     m68kdebug_show(visible);
 }

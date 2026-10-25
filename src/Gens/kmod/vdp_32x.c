@@ -18,7 +18,6 @@
 #include "window_geometry.h"
 
 static HWND h32X_VDP;
-static SIZE minimum32XVDPSize;
 #define PALETTE32X_COLUMNS 8
 #define PALETTE32X_ROWS 32
 static long palH, palV;
@@ -511,12 +510,6 @@ BOOL CALLBACK _32X_VDPDlgProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lPa
         paletteWindowProc = (WNDPROC)SetWindowLongPtr(
             GetDlgItem(hwnd, IDC_32XVDP_PAL), GWLP_WNDPROC, (LONG_PTR)Palette32XWindowProc);
         Update32XPaletteInfo();
-		{
-			RECT rect;
-			GetWindowRect(hwnd, &rect);
-			minimum32XVDPSize.cx = rect.right - rect.left;
-			minimum32XVDPSize.cy = rect.bottom - rect.top;
-		}
 		CheckRadioButton(hwnd, IDC_32XVDP_FB0, IDC_32XVDP_FB2, IDC_32XVDP_FB0);
 		break;
 
@@ -525,14 +518,6 @@ BOOL CALLBACK _32X_VDPDlgProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lPa
             ((NMHDR *)lParam)->code == LVN_ITEMCHANGED)
             Update32XLineInfo();
         break;
-
-	case WM_GETMINMAXINFO:
-		if (minimum32XVDPSize.cx && minimum32XVDPSize.cy)
-		{
-			((MINMAXINFO *)lParam)->ptMinTrackSize.x = minimum32XVDPSize.cx;
-			((MINMAXINFO *)lParam)->ptMinTrackSize.y = minimum32XVDPSize.cy;
-		}
-		break;
 
 	case WM_DRAWITEM:
 		if ((UINT)wParam == IDC_32XVDP_TILES)
@@ -576,7 +561,6 @@ BOOL CALLBACK _32X_VDPDlgProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lPa
 
 void vdp32x_create(HINSTANCE hInstance, HWND hWndParent)
 {
-	minimum32XVDPSize.cx = minimum32XVDPSize.cy = 0;
 	h32X_VDP = CreateDialog(hInstance, MAKEINTRESOURCE(IDD_DEBUG32X_VDP), hWndParent, _32X_VDPDlgProc);
 }
 

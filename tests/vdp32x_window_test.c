@@ -20,7 +20,10 @@ void CloseWindow_KMod(UCHAR mode) { OpenedWindow_KMod[mode-1]=0; vdp32x_show(FAL
 static void persistence(void)
 {
     char dir[MAX_PATH], config[MAX_PATH];
-    RECT saved, restored;
+    RECT saved, restored, initial, before, after;
+    MINMAXINFO limits = {0};
+    int width = max(180, GetSystemMetrics(SM_CXMINTRACK));
+    int height = max(120, GetSystemMetrics(SM_CYMINTRACK));
     MSG msg;
     assert(GetTempPath(sizeof(dir),dir));
     assert(GetTempFileName(dir,"32x",0,config));
@@ -28,8 +31,18 @@ static void persistence(void)
     vdp32x_restore_window(config);
     assert(!IsWindowVisible(h32X_VDP));
     assert(GetWindowLong(h32X_VDP,GWL_STYLE)&WS_THICKFRAME);
-    SetWindowPos(h32X_VDP,NULL,20,20,minimum32XVDPSize.cx+80,minimum32XVDPSize.cy+20,SWP_NOZORDER|SWP_NOACTIVATE);
+    GetWindowRect(h32X_VDP,&initial);
+    GetWindowRect(GetDlgItem(h32X_VDP,IDC_32XVDP_TILES),&before);
+    MapWindowPoints(NULL,h32X_VDP,(POINT*)&before,2);
+    SendMessage(h32X_VDP,WM_GETMINMAXINFO,0,(LPARAM)&limits);
+    assert(limits.ptMinTrackSize.x<=width && limits.ptMinTrackSize.y<=height);
+    SetWindowPos(h32X_VDP,NULL,20,20,width,height,SWP_NOZORDER|SWP_NOACTIVATE);
     GetWindowRect(h32X_VDP,&saved);
+    assert(saved.right-saved.left==width && saved.bottom-saved.top==height);
+    assert(width<initial.right-initial.left && height<initial.bottom-initial.top);
+    GetWindowRect(GetDlgItem(h32X_VDP,IDC_32XVDP_TILES),&after);
+    MapWindowPoints(NULL,h32X_VDP,(POINT*)&after,2);
+    assert(EqualRect(&before,&after));
     OpenedWindow_KMod[DMODE_32_VDP-1]=TRUE;
     vdp32x_save_window(config);
     vdp32x_destroy(); assert(!h32X_VDP);
@@ -44,10 +57,15 @@ static void persistence(void)
     GetWindowRect(h32X_VDP,&restored);
     assert(EqualRect(&saved,&restored));
     assert(!IsWindowVisible(h32X_VDP) && !OpenedWindow_KMod[DMODE_32_VDP-1]);
+    SetWindowPos(h32X_VDP,NULL,0,0,initial.right-initial.left+80,initial.bottom-initial.top+20,
+                 SWP_NOMOVE|SWP_NOZORDER|SWP_NOACTIVATE);
+    GetWindowRect(GetDlgItem(h32X_VDP,IDC_32XVDP_TILES),&after);
+    MapWindowPoints(NULL,h32X_VDP,(POINT*)&after,2);
+    assert(EqualRect(&before,&after));
     vdp32x_destroy();
     assert(!PeekMessage(&msg,NULL,WM_QUIT,WM_QUIT,PM_REMOVE));
     DeleteFile(config);
-    puts("PASS: open/closed persistence, position/size, safe window destruction");
+    puts("PASS: shrink with clipped content, restore small size, expand, open/closed persistence, safe destruction");
 }
 static DWORD decoded[320*240];
 static void palette_hover(void)

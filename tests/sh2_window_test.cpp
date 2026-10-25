@@ -10,6 +10,9 @@ extern "C" {
 }
 #include "../src/Gens/kmod/mSH2.h"
 #include "../src/Gens/kmod/sSH2.h"
+#include "../src/Gens/kmod/m68k.h"
+#include "../src/Gens/kmod/s68k.h"
+#include "../src/Gens/kmod/z80.h"
 #include "../src/Gens/kmod/sh2_usage_graph.h"
 static void check_text_bounds(HWND hwnd, int mode) {
     int ids[3] = {mode == DMODE_32_MSH2 ? IDC_MSH2_STATUS_SR : IDC_SSH2_STATUS_SR,
@@ -99,7 +102,7 @@ static void check(int mode, int list, void (*create)(HINSTANCE, HWND),
     GetWindowRect(GetDlgItem(hwnd,IDC_SH2_USAGE_GROUP),&before);
     MapWindowPoints(NULL,hwnd,(POINT*)&before,2);
     SendMessage(hwnd,WM_GETMINMAXINFO,0,(LPARAM)&limits);
-    assert(limits.ptMinTrackSize.x==initial.right-initial.left);
+    assert(limits.ptMinTrackSize.x<initial.right-initial.left);
     SetWindowPos(hwnd,NULL,40,50,initial.right-initial.left+120,
                  initial.bottom-initial.top+80,SWP_NOZORDER|SWP_NOACTIVATE);
     GetWindowRect(GetDlgItem(hwnd,IDC_SH2_USAGE_GROUP),&after);
@@ -123,9 +126,50 @@ static void check(int mode, int list, void (*create)(HINSTANCE, HWND),
     assert(EqualRect(&saved,&actual)); assert(!IsWindowVisible(hwnd));
     destroy(); DeleteFile(config);
 }
+static void check_small_window(int mode, int graph, void (*create)(HINSTANCE, HWND),
+                               void (*destroy)(), void (*save)(const char *), void (*restore)(const char *)) {
+    char dir[MAX_PATH], config[MAX_PATH];
+    RECT original, compactBounds, restored, before, after;
+    MINMAXINFO limits={0};
+    assert(GetTempPath(sizeof(dir),dir));
+    assert(GetTempFileName(dir,"cpu",0,config));
+    create(GetModuleHandle(NULL),NULL);
+    HWND hwnd=HandleWindow_KMod[mode-1];
+    assert(GetWindowLong(hwnd,GWL_STYLE)&WS_THICKFRAME);
+    GetWindowRect(hwnd,&original);
+    GetWindowRect(GetDlgItem(hwnd,graph),&before);
+    MapWindowPoints(NULL,hwnd,(POINT*)&before,2);
+    SendMessage(hwnd,WM_GETMINMAXINFO,0,(LPARAM)&limits);
+    int width=max(180,GetSystemMetrics(SM_CXMINTRACK));
+    int height=max(120,GetSystemMetrics(SM_CYMINTRACK));
+    assert(limits.ptMinTrackSize.x<=width && limits.ptMinTrackSize.y<=height);
+    SetWindowPos(hwnd,NULL,40,50,width,height,SWP_NOZORDER|SWP_NOACTIVATE);
+    GetWindowRect(hwnd,&compactBounds);
+    assert(compactBounds.right-compactBounds.left==width && compactBounds.bottom-compactBounds.top==height);
+    assert(width<original.right-original.left && height<original.bottom-original.top);
+    GetWindowRect(GetDlgItem(hwnd,graph),&after);
+    MapWindowPoints(NULL,hwnd,(POINT*)&after,2);
+    assert(EqualRect(&before,&after)); // fixed contents are clipped, not squeezed
+    save(config); destroy();
+    create(GetModuleHandle(NULL),NULL); restore(config);
+    hwnd=HandleWindow_KMod[mode-1]; GetWindowRect(hwnd,&restored);
+    if(!EqualRect(&compactBounds,&restored)) fprintf(stderr,"mode=%d saved=%ld,%ld,%ld,%ld restored=%ld,%ld,%ld,%ld\n",mode,compactBounds.left,compactBounds.top,compactBounds.right,compactBounds.bottom,restored.left,restored.top,restored.right,restored.bottom);
+    assert(EqualRect(&compactBounds,&restored));
+    SetWindowPos(hwnd,NULL,0,0,original.right-original.left,original.bottom-original.top,
+                 SWP_NOMOVE|SWP_NOZORDER|SWP_NOACTIVATE);
+    GetWindowRect(GetDlgItem(hwnd,graph),&after);
+    MapWindowPoints(NULL,hwnd,(POINT*)&after,2);
+    assert(EqualRect(&before,&after));
+    destroy(); DeleteFile(config);
+}
 int main() {
     InitCommonControls();
     check(DMODE_32_MSH2,IDC_MSH2_DISAM,mSH2_create,mSH2_destroy,mSH2_save_window,mSH2_restore_window);
     check(DMODE_32_SSH2,IDC_SSH2_DISAM,sSH2_create,sSH2_destroy,sSH2_save_window,sSH2_restore_window);
-    puts("PASS: both SH2 dialogs resize, enforce minimum size, restore bounds and open/closed state, destroy without WM_QUIT");
+    check_small_window(DMODE_68K,IDC_68K_USAGE,m68kdebug_create,m68kdebug_destroy,m68kdebug_save_window,m68kdebug_restore_window);
+    check_small_window(DMODE_Z80,IDC_Z80_USAGE,z80debug_create,z80debug_destroy,z80debug_save_window,z80debug_restore_window);
+    check_small_window(DMODE_CD_68K,IDC_S68K_USAGE,s68kdebug_create,s68kdebug_destroy,s68kdebug_save_window,s68kdebug_restore_window);
+    check_small_window(DMODE_32_MSH2,IDC_MSH2_USAGE,mSH2_create,mSH2_destroy,mSH2_save_window,mSH2_restore_window);
+    check_small_window(DMODE_32_SSH2,IDC_SSH2_USAGE,sSH2_create,sSH2_destroy,sSH2_save_window,sSH2_restore_window);
+    puts("PASS: all five CPU panels shrink, clip content, restore small bounds and expand; SH2 layout and lifecycle checks pass");
 }

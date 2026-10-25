@@ -365,12 +365,6 @@ BOOL CALLBACK MSH2DlgProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam)
             if (windowLayout.count && (_32X_Started || CD_32X_Active)) UpdateMSH2_KMod();
         }
         break;
-    case WM_GETMINMAXINFO:
-        if (windowLayout.minimum.cx) {
-            ((MINMAXINFO *)lParam)->ptMinTrackSize.x = windowLayout.minimum.cx;
-            ((MINMAXINFO *)lParam)->ptMinTrackSize.y = windowLayout.minimum.cy;
-        }
-        break;
 	case WM_SHOWWINDOW:
 		SwitchMSH2ViewMode_KMod();
 		break;

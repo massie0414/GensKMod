@@ -4,7 +4,7 @@
 /* Both SH2 dialogs share the same resource layout. Keep original pixel
  * bounds so repeated resize operations never accumulate rounding errors. */
 typedef struct {
-    SIZE minimum, client;
+    SIZE client;
     int count, listId, scrollId, rightEdge, bottomEdge;
     struct { HWND hwnd; RECT rect; } controls[20];
 } SH2WindowLayout;
@@ -63,9 +63,6 @@ static void SH2Window_InitLayout(HWND hwnd, SH2WindowLayout *layout, int listId,
     HWND child;
     ZeroMemory(layout, sizeof(*layout));
     layout->listId = listId; layout->scrollId = scrollId;
-    GetWindowRect(hwnd, &rect);
-    layout->minimum.cx = rect.right - rect.left;
-    layout->minimum.cy = rect.bottom - rect.top;
     GetClientRect(hwnd, &rect);
     layout->client.cx = rect.right; layout->client.cy = rect.bottom;
     MapDialogRect(hwnd, &anchors);
