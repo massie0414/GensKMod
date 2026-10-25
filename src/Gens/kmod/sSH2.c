@@ -33,7 +33,7 @@ void UpdateSSH2_KMod()
 	unsigned char tmp_string[256];
 
 	usage = S_SH2.Usage_PerMille;
-	if (_32X_Started && usage >= 1 && usage <= 1001)
+	if ((_32X_Started || CD_32X_Active) && usage >= 1 && usage <= 1001)
 		wsprintf(debug_string, "%u.%u %%", (usage - 1) / 10, (usage - 1) % 10);
 	else
 		lstrcpy(debug_string, "--");
@@ -276,14 +276,14 @@ BOOL CALLBACK SSH2DlgProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam)
 
     case WM_DRAWITEM:
         if (wParam == IDC_SSH2_USAGE) {
-            SH2Usage_DrawGraph((DRAWITEMSTRUCT *)lParam, &S_SH2, _32X_Started);
+            SH2Usage_DrawGraph((DRAWITEMSTRUCT *)lParam, &S_SH2, _32X_Started || CD_32X_Active);
             return TRUE;
         }
         return FALSE;
 	case WM_SIZE:
         if (wParam != SIZE_MINIMIZED) {
             SH2Window_Resize(hwnd, &windowLayout);
-            if (windowLayout.count && _32X_Started) UpdateSSH2_KMod();
+            if (windowLayout.count && (_32X_Started || CD_32X_Active)) UpdateSSH2_KMod();
         }
         break;
     case WM_GETMINMAXINFO:

@@ -746,7 +746,8 @@ void SH2_Usage_End_Frame(SH2_CONTEXT *sh2)
 /* Inspect instruction fetch memory only: debug sampling must never read MMIO.
  * Return loop address + 1 (zero means unknown). Deliberately conservative:
  * fixed-address loads, tests/comparisons and a backward conditional branch;
- * no stores, postincrements, arithmetic, calls, or useful delay-slot work.
+ * no postincrements, arithmetic or calls. A narrowly matched SDRAM stack
+ * write-back and constant delay-slot assignment are also allowed (see below).
  */
 static int SH2_Profile_Opcode(SH2_CONTEXT *sh2, UINT32 pc, UINT32 *op)
 {
@@ -762,14 +763,19 @@ static int SH2_Profile_Opcode(SH2_CONTEXT *sh2, UINT32 pc, UINT32 *op)
     }
     return 0;
 }
-UINT32 SH2_Polling_Loop(SH2_CONTEXT *sh2)
+static UINT32 SH2_Polling_Loop_Details(SH2_CONTEXT *sh2, UINT32 *scratch)
 {
     UINT32 pc = sh2->PC - sh2->Base_PC - 4;
-    UINT32 branch, op, start, end, at, dest, sources, writes;
+    UINT32 branch, op, start, end, at, dest, sources, writes, derived, delay;
     int displacement, loaded, tested, valid;
+    *scratch = 0;
     if (sh2->Status & 0x17) return 0;
-    for (branch = pc; branch <= pc + 14; branch += 2) {
-        if (!SH2_Profile_Opcode(sh2, branch, &op)) break;
+    /* Include a branch immediately before a sampled delay slot. */
+    for (branch = pc >= 2 ? pc - 2 : pc; branch <= pc + 14; branch += 2) {
+        if (!SH2_Profile_Opcode(sh2, branch, &op)) {
+            if (branch < pc) continue;
+            break;
+        }
         /* BRA to itself, with NOP delay slot, is an explicit spin wait. */
         if (op == 0xaffe && branch == pc) {
             if (SH2_Profile_Opcode(sh2, branch + 2, &op) && op == 9)
@@ -782,46 +788,85 @@ UINT32 SH2_Polling_Loop(SH2_CONTEXT *sh2)
         if (displacement >= -1 || displacement < -8) continue;
         start = branch + 4 + displacement * 2;
         end = branch;
+        delay = 9;
         if (op & 0x0400) {
-            if (!SH2_Profile_Opcode(sh2, branch + 2, &op) || op != 9) continue;
+            if (!SH2_Profile_Opcode(sh2, branch + 2, &delay)) continue;
             end += 2;
         }
         if (pc < start || pc > end) continue;
-        loaded = tested = 0; valid = 1; sources = writes = 0;
+        /* GCC frame-tick wait: stack load, poll, EXTU.W, CMP/EQ,
+         * BT/S back, stack store. On the taken edge the store writes the
+         * original value back. Only this exact pattern in SDRAM is allowed;
+         * arbitrary stores and MMIO writes must never count as idle. */
+        if (op == 0x8dfa && delay == 0x0f46 && branch == start + 8) {
+            static const UINT32 pattern[4] = {0x02fe,0x6371,0x643d,0x3240};
+            UINT32 address = (sh2->R[0] + sh2->R[15]) & ~0x20000000UL;
+            valid = address >= 0x06000000 && address <= 0x0603fffc && !(address & 3);
+            for (at = 0; valid && at < 4; ++at)
+                if (!SH2_Profile_Opcode(sh2, start + at * 2, &op) || op != pattern[at]) valid = 0;
+            if (valid) return start + 1;
+        }
+        loaded = tested = 0; valid = 1; sources = writes = derived = 0;
         for (at = start; at < branch; at += 2) {
             if (!SH2_Profile_Opcode(sh2, at, &op)) { valid = 0; break; }
             dest = (op >> 8) & 15;
             if ((op & 0xf00f) >= 0x6000 && (op & 0xf00f) <= 0x6002) {
                 sources |= 1UL << ((op >> 4) & 15);
-                writes |= 1UL << dest; loaded = 1;
+                writes |= 1UL << dest; derived |= 1UL << dest; loaded = 1;
             } else if ((op & 0xf000) == 0x5000) {
                 sources |= 1UL << ((op >> 4) & 15);
-                writes |= 1UL << dest; loaded = 1;
+                writes |= 1UL << dest; derived |= 1UL << dest; loaded = 1;
+            } else if ((op & 0xf00f) == 0x600c || (op & 0xf00f) == 0x600d) {
+                /* Only zero extension of a loaded value. */
+                if (!(derived & (1UL << ((op >> 4) & 15)))) { valid = 0; break; }
+                writes |= 1UL << dest; derived |= 1UL << dest;
+            } else if ((op & 0xff00) == 0xc900) {
+                if (!(derived & 1)) { valid = 0; break; }
+                writes |= 1; /* AND #imm,R0 */
             } else if ((op & 0xf00f) == 0x2008 || /* TST Rm,Rn */
                        (op & 0xf00f) == 0x3000 || /* CMP/EQ Rm,Rn */
                        (op & 0xff00) == 0x8800 || /* CMP/EQ #imm,R0 */
-                       (op & 0xff00) == 0xc800) { /* TST #imm,R0 */
+                       (op & 0xff00) == 0xc800 || /* TST #imm,R0 */
+                       (op & 0xf0ff) == 0x4011 || /* CMP/PZ Rn */
+                       (op & 0xf0ff) == 0x4015) { /* CMP/PL Rn */
                 tested = 1;
             } else if (op != 9) { valid = 0; break; }
         }
-        if (valid && loaded && tested && !(sources & writes)) return start + 1;
+        /* Permit a constant delay-slot assignment only to a value replaced
+         * by this loop. Address registers remain protected by sources/writes. */
+        if (delay != 9 && ((delay & 0xf000) != 0xe000 ||
+                          !(derived & (1UL << ((delay >> 8) & 15))))) valid = 0;
+        if (valid && loaded && tested && !(sources & writes)) {
+            *scratch = writes;
+            return start + 1;
+        }
     }
     return 0;
 }
+UINT32 SH2_Polling_Loop(SH2_CONTEXT *sh2)
+{
+    UINT32 scratch;
+    return SH2_Polling_Loop_Details(sh2, &scratch);
+}
 UINT32 SH2_Exec_Profiled(SH2_CONTEXT *sh2, UINT32 target)
 {
-    UINT32 loop, before, idle, result, elapsed, sleeping;
+    UINT32 loop, before, idle, result, elapsed, sleeping, scratch, afterScratch, n;
     UINT32 registers[16];
     if (target <= sh2->Odometer) return SH2_Exec(sh2, target);
-    loop = SH2_Polling_Loop(sh2);
+    loop = SH2_Polling_Loop_Details(sh2, &scratch);
     before = sh2->Odometer; idle = sh2->Idle_Cycles;
     if (loop) memcpy(registers, sh2->R, sizeof(registers));
     result = SH2_Exec(sh2, target);
-    /* Both ends must remain in the same wait loop with unchanged registers.
+    /* Polled values may change while the wait condition remains true (e.g.
+     * HBlank bits during a VBlank wait). Only scratch registers overwritten
+     * by the recognized load/transform sequence may differ. Address and
+     * persistent registers must stay unchanged. The stack-store exception
+     * deliberately retains the stricter all-register comparison.
      * Sampling changes statistics only, never execution or interrupt timing.
      */
-    if (loop && loop == SH2_Polling_Loop(sh2) &&
-        !memcmp(registers, sh2->R, sizeof(registers))) {
+    if (loop && loop == SH2_Polling_Loop_Details(sh2, &afterScratch) && scratch == afterScratch) {
+        for (n = 0; n < 16; ++n)
+            if (!(scratch & (1UL << n)) && registers[n] != sh2->R[n]) return result;
         elapsed = sh2->Odometer - before;
         sleeping = sh2->Idle_Cycles - idle;
         if (elapsed > sleeping) sh2->Idle_Cycles += elapsed - sleeping;

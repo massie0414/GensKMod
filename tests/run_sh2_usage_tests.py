@@ -9,6 +9,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--skip-build", action="store_true", help="reuse the Release emulator objects")
     parser.add_argument("--build-only", action="store_true")
+    parser.add_argument("--template-image", type=Path, help="optional CD32X_Template ISO integration test")
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     env = {key.upper(): value for key, value in os.environ.items()}
@@ -56,11 +57,25 @@ def main():
         "dxguid.lib", "winmm.lib", "vfw32.lib", "user32.lib", "gdi32.lib",
         "shell32.lib", "advapi32.lib", "comdlg32.lib"
     ])
+    if args.template_image:
+        compile_test("sh2_template_usage_test", ["tests/sh2_template_usage_test.cpp"], objects, [
+            "/LIBPATH:" + str(root / "src/dx70_min/lib"),
+            str(root / "src/Gens/libs/zlib.lib"), str(root / "src/Gens/libs/htmlhelp.lib"),
+            "wsock32.lib", "comctl32.lib", "ddraw.lib", "dsound.lib", "dinput.lib",
+            "dxguid.lib", "winmm.lib", "vfw32.lib", "user32.lib", "gdi32.lib",
+            "shell32.lib", "advapi32.lib", "comdlg32.lib"
+        ])
     if args.build_only:
         print("Test executables:", out)
         return
     subprocess.run([str(out / "sh2_usage_test.exe")], check=True, timeout=15)
     subprocess.run([str(out / "sh2_window_test.exe")], check=True, timeout=15)
+    if args.template_image:
+        for mode in ("normal", "fast"):
+            folder = out / ("template-" + mode)
+            folder.mkdir(exist_ok=True)
+            subprocess.run([str(out / "sh2_template_usage_test.exe"), str(args.template_image.resolve()), mode],
+                           cwd=folder, check=True, timeout=60)
     print("PASS: SH2 usage and window tests")
 
 

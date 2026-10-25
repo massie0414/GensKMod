@@ -13,7 +13,68 @@ static void setup(unsigned short op) {
     SH2_Set_PC(&cpu,0x06000004);
 }
 static UINT32 FASTCALL poll_read(UINT32 address) { return 0; }
+static unsigned changing_flags, reads;
+static UINT16 FASTCALL poll_read_word(UINT32 address) {
+    ++reads;
+    return changing_flags ? ((reads & 1) ? 0x6003 : 1) : 0;
+}
 static void put(unsigned i, unsigned op) { code[i]=(op>>8)|(op<<8); }
+static unsigned stores;
+static void FASTCALL poll_write(UINT32 address, UINT32 value) {
+    assert(address==0x06010044 && value==0); ++stores;
+}
+static void verify_wait(unsigned instructions) {
+    for (unsigned i=0;i<instructions;++i) {
+        SH2_Set_PC(&cpu,0x06000004+i*2);
+        assert(SH2_Polling_Loop(&cpu)==0x06000001);
+    }
+    SH2_Set_PC(&cpu,0x06000004);
+    SH2_CONTEXT raw=cpu;
+    for(unsigned i=1;i<=100;++i) {
+        stores=reads=0; SH2_Exec_Profiled(&cpu,i*101); unsigned profiledStores=stores, profiledReads=reads;
+        stores=reads=0; SH2_Exec(&raw,i*101);
+        assert(stores==profiledStores);
+        assert(reads==profiledReads);
+        assert(cpu.PC==raw.PC && cpu.Odometer==raw.Odometer);
+        assert(!memcmp(cpu.R,raw.R,sizeof(cpu.R)));
+        assert(!memcmp(&cpu.SR,&raw.SR,sizeof(cpu.SR)));
+    }
+    SH2_Usage_End_Frame(&cpu);
+    assert(cpu.Usage_PerMille<900); // wait recognized even across different instruction phases
+}
+static void template_polling_tests() {
+    setup(0x6211); put(1,0x4211); put(2,0x89fc); // MOV.W; CMP/PZ; BT
+    cpu.R[1]=0x07000000; SH2_Add_ReadW(&cpu,7,7,poll_read_word);
+    verify_wait(3);
+    // VDP bits vary while bit 15 stays clear: still a VBlank wait.
+    setup(0x6211); put(1,0x4211); put(2,0x89fc);
+    cpu.R[1]=0x07000000; SH2_Add_ReadW(&cpu,7,7,poll_read_word);
+    changing_flags=1;
+    verify_wait(3);
+    assert(cpu.Usage_PerMille<50);
+    changing_flags=0;
+
+    setup(0x6011); put(1,0xc901); put(2,0x3020); put(3,0x8ffb); put(4,0xe05c);
+    cpu.R[1]=0x07000000; cpu.R[2]=1; SH2_Add_ReadW(&cpu,7,7,poll_read_word);
+    verify_wait(5); // masked framebuffer flag, constant delay slot
+    SH2_Set_PC(&cpu,0x06000004);
+    put(4,0xe100); assert(!SH2_Polling_Loop(&cpu)); // changes load address
+    put(4,0x2102); assert(!SH2_Polling_Loop(&cpu)); // arbitrary store
+
+    setup(0x02fe); put(1,0x6371); put(2,0x643d); put(3,0x3240);
+    put(4,0x8dfa); put(5,0x0f46);
+    cpu.R[0]=0x44; cpu.R[15]=0x06010000; cpu.R[7]=0x07000000;
+    SH2_Add_ReadL(&cpu,6,6,poll_read); SH2_Add_ReadW(&cpu,7,7,poll_read_word);
+    SH2_Add_WriteL(&cpu,6,6,poll_write);
+    verify_wait(6); // unchanged stack value on the equal/taken edge
+    SH2_Set_PC(&cpu,0x06000004);
+    cpu.R[15]=0x20004000; assert(!SH2_Polling_Loop(&cpu)); // MMIO forbidden
+    cpu.R[15]=0x06010001; assert(!SH2_Polling_Loop(&cpu)); // unaligned
+    cpu.R[15]=0x06010000;
+    put(4,0x8ffa); assert(!SH2_Polling_Loop(&cpu)); // unequal edge changes stack
+    put(4,0x8dfa); put(5,0x0f36); assert(!SH2_Polling_Loop(&cpu)); // wrong stored value
+    puts("PASS: template VBlank, masked flag and stack tick waits; unchanged execution and store counts; unsafe patterns excluded");
+}
 static void polling_tests() {
     SH2_CONTEXT raw;
     setup(0x6012); // MOV.L @R1,R0; TST R0,R0; BT back to load
@@ -81,6 +142,7 @@ int main() {
     SH2_Usage_End_Frame(&cpu); assert(cpu.Usage_PerMille==501);
     cpu.Odometer=0; SH2_Usage_End_Frame(&cpu); assert(!cpu.Usage_PerMille);
     polling_tests();
+    template_polling_tests();
     history_tests();
     puts("PASS: busy, sleep entry, halted, disabled, resumed, 50%, empty sample");
 }

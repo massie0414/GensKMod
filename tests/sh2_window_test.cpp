@@ -5,6 +5,7 @@
 #include "../src/Gens/resource.h"
 extern "C" {
 #include "../src/Gens/gens.h"
+#include "../src/Gens/vdp_io.h"
 #include "../src/Gens/kmod/common.h"
 }
 #include "../src/Gens/kmod/mSH2.h"
@@ -65,6 +66,16 @@ static void check_graph(HWND hwnd, int mode) {
     assert(GetPixel(dc,100,110)==RGB(0,0,255));
     SH2Usage_DrawGraph(&item,cpu,0);
     assert(GetPixel(dc,100,110)==GetSysColor(COLOR_WINDOW));
+    // Exercise the actual dialog handler: CD+32X has no cartridge-started flag.
+    int old32X = _32X_Started, oldCD32X = CD_32X_Active;
+    item.CtlType = ODT_STATIC; item.CtlID = id; item.itemAction = ODA_DRAWENTIRE;
+    for (int activeMode=0; activeMode<3; ++activeMode) {
+        _32X_Started = activeMode == 1;
+        CD_32X_Active = activeMode == 2;
+        SendMessage(hwnd,WM_DRAWITEM,id,(LPARAM)&item);
+        assert(GetPixel(dc,100,110)==(activeMode ? RGB(0,0,255) : GetSysColor(COLOR_WINDOW)));
+    }
+    _32X_Started = old32X; CD_32X_Active = oldCD32X;
     SelectObject(dc,old); DeleteObject(bitmap); DeleteDC(dc); ReleaseDC(control,screen);
     SH2_Usage_ClearHistory(cpu);
 }
