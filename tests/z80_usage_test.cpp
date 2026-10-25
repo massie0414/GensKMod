@@ -110,6 +110,37 @@ int main() {
  start(clockWait,sizeof(clockWait)); Ram_Z80[6]=0x77; /* Memory write: not a wait. */
  M_Z80.HL.w.HL=0x100; M_Z80.BC.w.BC=100; Z80_Exec_Profiled(&M_Z80,200);
  CHECK(Z80_UsageBusyCycles>0);
+ /* CD32X_Template clock at $00e0: RET M / RET Z, including both exits. */
+ const unsigned char returnWait[]={0x3a,0x08,0x7f,0xb8,0x28,0x0d,0x57,0x90,0x42,
+  0xfe,0xfa,0x38,0x02,0xd6,0xfa,0x57,0x79,0x92,0x4f,0x79,0xb7,
+  0xf8,0xc8,0x18,0xe7};
+ const unsigned returnPhases[]={0,3,4,6,7,8,9,11,13,15,16,17,18,19,20,21,22,23};
+ for(unsigned i=0;i<sizeof(returnPhases)/sizeof(returnPhases[0]);++i) {
+  start(returnWait,sizeof(returnWait)); M_Z80.BC.w.BC=100;
+  z80_Set_AF(&M_Z80,returnPhases[i]>=17?0x6400:0);
+  z80_Set_PC(&M_Z80,returnPhases[i]); Z80_CONTEXT beforeReturn=M_Z80;
+  unsigned nativeResult=z80_Exec(&M_Z80,200); Z80_CONTEXT afterReturn=M_Z80;
+  M_Z80=beforeReturn; Z80_Usage_Begin_Frame();
+  CHECK(Z80_Exec_Profiled(&M_Z80,200)==nativeResult);
+  CHECK(!memcmp(&afterReturn,&M_Z80,offsetof(Z80_CONTEXT,TmpSav0)));
+  CHECK(afterReturn.CycleCnt==M_Z80.CycleCnt && Z80_UsageBusyCycles==0);
+ }
+ for(unsigned debt=0;debt<2;++debt) {
+  start(returnWait,sizeof(returnWait)); M_Z80.BC.w.BC=debt?0xff:0;
+  M_Z80.SP.w.SP=0x1fee; Ram_Z80[0x1fee]=0x40; Ram_Z80[0x1fef]=0;
+  memcpy(Ram_Z80+0x40,clockWork,sizeof(clockWork));
+  Z80_CONTEXT beforeExit=M_Z80;
+  unsigned nativeResult=z80_Exec(&M_Z80,1000); Z80_CONTEXT afterExit=M_Z80;
+  M_Z80=beforeExit; Ram_Z80[0x100]=0; Z80_Usage_Begin_Frame();
+  CHECK(Z80_Exec_Profiled(&M_Z80,1000)==nativeResult);
+  CHECK(!memcmp(&afterExit,&M_Z80,offsetof(Z80_CONTEXT,TmpSav0)));
+  CHECK(afterExit.CycleCnt==M_Z80.CycleCnt);
+  CHECK(Ram_Z80[0x100]==0x55 && Z80_UsageBusyCycles>0);
+ }
+ start(returnWait,sizeof(returnWait)); Ram_Z80[6]=0x77;
+ M_Z80.HL.w.HL=0x100; M_Z80.BC.w.BC=100; Z80_Exec_Profiled(&M_Z80,200);
+ CHECK(Z80_UsageBusyCycles>0);
+ puts("PASS: CD32X RET clock waits: all boundaries, both exits, unchanged execution, writes counted");
  puts("PASS: extended Z80 waits: register/indexed bit polling and countdown delays; writes/traversal excluded");
  puts("PASS: Z80 usage: busy, HALT entry/halted, bus-held, ring rollover/reset, polling, unchanged execution, wait exit");
  z80debug_create(GetModuleHandle(NULL),NULL); HWND panel=HandleWindow_KMod[DMODE_Z80-1]; CHECK(panel);

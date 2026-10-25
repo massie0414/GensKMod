@@ -220,7 +220,7 @@ static unsigned Z80_Scanline_Wait(Z80_CONTEXT *cpu)
         0xfe,0xfa,0x38,0x02,0xd6,0xfa,0x57,0x79,0x92,
         0x4f,0x79,0xb7,0xfa
     };
-    static const unsigned char offsets[]={0,3,4,6,7,8,9,11,13,15,16,17,18,19,20,21,24,27};
+    static const unsigned char offsets[]={0,3,4,6,7,8,9,11,13,15,16,17,18,19,20,21,22,23,24,27};
     unsigned pc=z80_Get_PC(cpu), i;
     if(cpu!=&M_Z80 || pc>=0x4000) return 0;
     for(i=0;i<sizeof(offsets);++i) {
@@ -228,8 +228,17 @@ static unsigned Z80_Scanline_Wait(Z80_CONTEXT *cpu)
         const unsigned char *code;
         if(pc<offsets[i]) continue;
         start=pc-offsets[i];
-        if((start&8191)+29>8192) continue;
+        if((start&8191)+25>8192) continue;
         code=Ram_Z80+(start&8191);
+        /* CD32X_Template calls this routine for each scanline. Its exits
+         * are RET M / RET Z rather than jumps to the command dispatcher.
+         * Match every byte and boundary; update_clock is useful accounting
+         * work and must not be mistaken for this timing wait. */
+        if(offsets[i]<=23 &&
+            !memcmp(code,body,21) && code[21]==0xf8 && code[22]==0xc8 &&
+            code[23]==0x18 && code[24]==0xe7)
+            return start+1;
+        if(offsets[i]==22 || offsets[i]==23 || (start&8191)+29>8192) continue;
         if(memcmp(code,body,sizeof(body)) || code[24]!=0xca ||
             code[27]!=0x18 || code[28]!=0xe3 ||
             code[22]!=code[25] || code[23]!=code[26]) continue;
