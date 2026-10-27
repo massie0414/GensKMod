@@ -10,6 +10,7 @@
 #include "sh2_dma_transfer.h"
 #include "sdram_transfer.h"
 #include "vram32x_transfer.h"
+#include "pwm_fifo_transfer.h"
 #include "sh2.h"
 #include "z80.h"
 #include "Cpu_Z80.h"
@@ -201,6 +202,7 @@ int Load_State(char *Name)
 		SH2DMATransfer_Reset();
 		SDRAMTransfer_Reset();
 		VRAM32XTransfer_Reset();
+		PWMFIFOTransfer_Reset();
 		Z80_Usage_ClearHistory();
 		z80_Reset(&M_Z80);
 //		main68k_reset();

@@ -1,3 +1,4 @@
+%include "pwm_fifo_transfer.inc"
 %include "vram32x_transfer.inc"
 %define PWM_BUF_SIZE 4
 
@@ -1320,6 +1321,7 @@
 		test byte [PWM_FULL_TAB + ecx * PWM_BUF_SIZE + ebx], 0x80
 		jnz short .32X_PWM_Pulse_L_full
 
+		COUNT_PWM_FIFO_SAMPLE 1
 		mov [PWM_FIFO_L + ebx * 2], ax
 		inc ebx
 		and ebx, byte (PWM_BUF_SIZE - 1)
@@ -1352,6 +1354,7 @@
 		test byte [PWM_FULL_TAB + ecx * PWM_BUF_SIZE + ebx], 0x80
 		jnz short .32X_PWM_Pulse_R_full
 
+		COUNT_PWM_FIFO_SAMPLE 1
 		mov [PWM_FIFO_R + ebx * 2], ax
 		inc ebx
 		and ebx, byte (PWM_BUF_SIZE - 1)
@@ -1384,7 +1387,9 @@
 		test byte [PWM_FULL_TAB + ecx * PWM_BUF_SIZE + ebx], 0x80
 		jnz short .32X_PWM_Pulse_C_full
 
+		COUNT_PWM_FIFO_SAMPLE 1
 		mov [PWM_FIFO_L + ebx * 2], ax
+		COUNT_PWM_FIFO_SAMPLE 1
 		mov [PWM_FIFO_R + ebx * 2], ax
 		inc ebx
 		and ebx, byte (PWM_BUF_SIZE - 1)
@@ -2022,6 +2027,7 @@
 		test byte [PWM_FULL_TAB + ecx * PWM_BUF_SIZE + ebx], 0x80
 		jnz short .32X_PWM_Pulse_L_full
 
+		COUNT_PWM_FIFO_SAMPLE 1
 		mov [PWM_FIFO_L + ebx * 2], ax
 		inc ebx
 		and ebx, byte (PWM_BUF_SIZE - 1)
@@ -2045,6 +2051,7 @@
 		test byte [PWM_FULL_TAB + ecx * PWM_BUF_SIZE + ebx], 0x80
 		jnz short .32X_PWM_Pulse_R_full
 
+		COUNT_PWM_FIFO_SAMPLE 1
 		mov [PWM_FIFO_R + ebx * 2], ax
 		inc ebx
 		and ebx, byte (PWM_BUF_SIZE - 1)
@@ -2068,7 +2075,9 @@
 		test byte [PWM_FULL_TAB + ecx * PWM_BUF_SIZE + ebx], 0x80
 		jnz short .32X_PWM_Pulse_C_full
 
+		COUNT_PWM_FIFO_SAMPLE 1
 		mov [PWM_FIFO_L + ebx * 2], ax
+		COUNT_PWM_FIFO_SAMPLE 1
 		mov [PWM_FIFO_R + ebx * 2], ax
 		inc ebx
 		and ebx, byte (PWM_BUF_SIZE - 1)

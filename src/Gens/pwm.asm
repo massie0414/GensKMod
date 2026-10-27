@@ -1,4 +1,6 @@
 %include "nasmhead.inc"
+%include "pwm_fifo_transfer.inc"
+extern _PWMFIFOTransfer_Reset
 
 %define PWM_BUF_SIZE 4
 
@@ -100,6 +102,11 @@ section .text align=64
 
 	; void PWM_Init(void)
 	DECLF PWM_Init, 0
+		pushfd
+		pushad
+		call _PWMFIFOTransfer_Reset
+		popad
+		popfd
 
 		xor eax, eax
 		mov [PWM_Mode], eax
@@ -282,6 +289,7 @@ section .text align=64
 		cmp edx, [PWM_WP_L]
 		je short .Rx_LL_Empty
 
+		COUNT_PWM_FIFO_SAMPLE 0
 		mov ax, [PWM_FIFO_L + edx * 2]
 		inc edx
 		mov [PWM_Out_L], ax
@@ -306,6 +314,7 @@ section .text align=64
 		cmp edx, [PWM_WP_L]
 		je short .Rx_LR_Empty
 
+		COUNT_PWM_FIFO_SAMPLE 0
 		mov ax, [PWM_FIFO_L + edx * 2]
 		inc edx
 		mov [PWM_Out_R], ax
@@ -330,6 +339,7 @@ section .text align=64
 		cmp edx, [PWM_WP_R]
 		je short .RL_Lx_Empty
 
+		COUNT_PWM_FIFO_SAMPLE 0
 		mov ax, [PWM_FIFO_R + edx * 2]
 		inc edx
 		mov [PWM_Out_L], ax
@@ -354,6 +364,7 @@ section .text align=64
 		cmp edx, [PWM_WP_R]
 		je short .RR_Lx_Empty
 
+		COUNT_PWM_FIFO_SAMPLE 0
 		mov ax, [PWM_FIFO_R + edx * 2]
 		inc edx
 		mov [PWM_Out_R], ax
@@ -378,6 +389,7 @@ section .text align=64
 		cmp edx, [PWM_WP_L]
 		je short .RR_LL_Left_Empty
 
+		COUNT_PWM_FIFO_SAMPLE 0
 		mov ax, [PWM_FIFO_L + edx * 2]
 		inc edx
 		mov [PWM_Out_L], ax
@@ -389,6 +401,7 @@ section .text align=64
 		cmp edx, [PWM_WP_R]
 		je short .RR_LL_Right_Empty
 
+		COUNT_PWM_FIFO_SAMPLE 0
 		mov ax, [PWM_FIFO_R + edx * 2]
 		inc edx
 		mov [PWM_Out_R], ax
@@ -413,6 +426,7 @@ section .text align=64
 		cmp edx, [PWM_WP_L]
 		je short .RL_LR_Left_Empty
 
+		COUNT_PWM_FIFO_SAMPLE 0
 		mov ax, [PWM_FIFO_L + edx * 2]
 		inc edx
 		mov [PWM_Out_R], ax
@@ -424,6 +438,7 @@ section .text align=64
 		cmp edx, [PWM_WP_R]
 		je short .RL_LR_Right_Empty
 
+		COUNT_PWM_FIFO_SAMPLE 0
 		mov ax, [PWM_FIFO_R + edx * 2]
 		inc edx
 		mov [PWM_Out_L], ax

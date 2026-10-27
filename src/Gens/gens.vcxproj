@@ -268,6 +268,8 @@
     <ClCompile Include="sh2_dma_transfer.c" />
     <ClCompile Include="sdram_transfer.c" />
     <ClCompile Include="vram32x_transfer.c" />
+    <ClCompile Include="pwm_fifo_transfer.c" />
+    <ClCompile Include="kmod\pwm_fifo_transfer_panel.c" />
     <ClCompile Include="kmod\vram32x_transfer_panel.c" />
     <ClCompile Include="kmod\sdram_transfer_panel.c" />
     <ClCompile Include="kmod\program_ram_transfer_panel.c" />
@@ -333,13 +335,14 @@
       <Command Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">..\..\nasmw -w-orphan-labels -i %(RootDir)%(Directory) %(RootDir)%(Directory)\%(Filename).asm -f win32 -o $(IntDir)%(Filename).obj</Command>
       <Message Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Assembling %(Filename).asm</Message>
       <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(IntDir)%(Filename).obj;%(Outputs)</Outputs>
-      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">mem_m68k_32x.inc;mem_m68k_cd.inc;vram32x_transfer.inc;%(AdditionalInputs)</AdditionalInputs>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">mem_m68k_32x.inc;mem_m68k_cd.inc;vram32x_transfer.inc;pwm_fifo_transfer.inc;%(AdditionalInputs)</AdditionalInputs>
       <Command Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">..\..\nasmw -w-orphan-labels -i %(RootDir)%(Directory) %(RootDir)%(Directory)\%(Filename).asm -f win32 -o $(IntDir)%(Filename).obj</Command>
       <Message Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Assembling %(Filename).asm</Message>
       <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(IntDir)%(Filename).obj;%(Outputs)</Outputs>
-      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">mem_m68k_32x.inc;mem_m68k_cd.inc;vram32x_transfer.inc;%(AdditionalInputs)</AdditionalInputs>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">mem_m68k_32x.inc;mem_m68k_cd.inc;vram32x_transfer.inc;pwm_fifo_transfer.inc;%(AdditionalInputs)</AdditionalInputs>
     </CustomBuild>
     <None Include="vram32x_transfer.inc" />
+    <None Include="pwm_fifo_transfer.inc" />
     <CustomBuild Include="Mem_M68K_32X.inc">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
@@ -357,7 +360,7 @@
       <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(IntDir)%(Filename).obj;%(Outputs)</Outputs>
     </CustomBuild>
     <CustomBuild Include="Mem_SH2.asm">
-      <AdditionalInputs>vram32x_transfer.inc;%(AdditionalInputs)</AdditionalInputs>
+      <AdditionalInputs>vram32x_transfer.inc;pwm_fifo_transfer.inc;%(AdditionalInputs)</AdditionalInputs>
       <Command Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">..\..\nasmw -w-orphan-labels -i %(RootDir)%(Directory) %(RootDir)%(Directory)\%(Filename).asm -f win32 -o $(IntDir)%(Filename).obj</Command>
       <Message Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Assembling %(Filename).asm</Message>
       <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(IntDir)%(Filename).obj;%(Outputs)</Outputs>
@@ -385,6 +388,7 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
     </CustomBuild>
     <CustomBuild Include="pwm.asm">
+      <AdditionalInputs>pwm_fifo_transfer.inc;%(AdditionalInputs)</AdditionalInputs>
       <Command Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">..\..\nasmw -w-orphan-labels -i %(RootDir)%(Directory) %(RootDir)%(Directory)\%(Filename).asm -f win32 -o $(IntDir)%(Filename).obj</Command>
       <Message Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Assembling %(Filename).asm</Message>
       <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(IntDir)%(Filename).obj;%(Outputs)</Outputs>
@@ -486,6 +490,8 @@
     <ClInclude Include="sh2_dma_transfer.h" />
     <ClInclude Include="sdram_transfer.h" />
     <ClInclude Include="vram32x_transfer.h" />
+    <ClInclude Include="pwm_fifo_transfer.h" />
+    <ClInclude Include="kmod\pwm_fifo_transfer_panel.h" />
     <ClInclude Include="kmod\vram32x_transfer_panel.h" />
     <ClInclude Include="kmod\sdram_transfer_panel.h" />
     <ClInclude Include="kmod\program_ram_transfer_panel.h" />

@@ -1,3 +1,4 @@
+%include "pwm_fifo_transfer.inc"
 %include "vram32x_transfer.inc"
 %include "nasmhead.inc"
 extern _CD_32X_Active
@@ -1789,6 +1790,7 @@ section .text align=64
 		test byte [PWM_FULL_TAB + ecx * PWM_BUF_SIZE + eax], 0x80
 		jnz short .full
 
+		COUNT_PWM_FIFO_SAMPLE 1
 		mov [PWM_FIFO_L + eax * 2], dx
 		inc eax
 		and eax, byte (PWM_BUF_SIZE - 1)
@@ -1815,6 +1817,7 @@ section .text align=64
 		test byte [PWM_FULL_TAB + ecx * PWM_BUF_SIZE + eax], 0x80
 		jnz short .full
 
+		COUNT_PWM_FIFO_SAMPLE 1
 		mov [PWM_FIFO_R + eax * 2], dx
 		inc eax
 		and eax, byte (PWM_BUF_SIZE - 1)
@@ -1841,7 +1844,9 @@ section .text align=64
 		test byte [PWM_FULL_TAB + ecx * PWM_BUF_SIZE + eax], 0x80
 		jnz short .full
 
+		COUNT_PWM_FIFO_SAMPLE 1
 		mov [PWM_FIFO_L + eax * 2], dx
+		COUNT_PWM_FIFO_SAMPLE 1
 		mov [PWM_FIFO_R + eax * 2], dx
 		inc eax
 		and eax, byte (PWM_BUF_SIZE - 1)
@@ -2058,6 +2063,7 @@ section .text align=64
 		test byte [PWM_FULL_TAB + ecx * PWM_BUF_SIZE + eax], 0x80
 		jnz short .full
 
+		COUNT_PWM_FIFO_SAMPLE 1
 		mov [PWM_FIFO_L + eax * 2], dx
 		inc eax
 		and eax, byte (PWM_BUF_SIZE - 1)
@@ -2078,6 +2084,7 @@ section .text align=64
 		test byte [PWM_FULL_TAB + ecx * PWM_BUF_SIZE + eax], 0x80
 		jnz short .full
 
+		COUNT_PWM_FIFO_SAMPLE 1
 		mov [PWM_FIFO_R + eax * 2], dx
 		inc eax
 		and eax, byte (PWM_BUF_SIZE - 1)
@@ -2098,7 +2105,9 @@ section .text align=64
 		test byte [PWM_FULL_TAB + ecx * PWM_BUF_SIZE + eax], 0x80
 		jnz short .full
 
+		COUNT_PWM_FIFO_SAMPLE 1
 		mov [PWM_FIFO_L + eax * 2], dx
+		COUNT_PWM_FIFO_SAMPLE 1
 		mov [PWM_FIFO_R + eax * 2], dx
 		inc eax
 		and eax, byte (PWM_BUF_SIZE - 1)
