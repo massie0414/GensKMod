@@ -1,7 +1,7 @@
 #include <string.h>
 #include "main_word_ram_transfer.h"
 #include "Mem_M68K.h"
-#include "vram_transfer.h"
+#include "genesis_ram_transfer.h"
 
 extern int SegaCD_Started, CD_32X_Active;
 
@@ -76,18 +76,18 @@ unsigned long MainWordRAMTransfer_GetBytesPerSecond(int write)
 
 __declspec(naked) unsigned char M68K_Data_RB(unsigned int address)
 {
-    MEASURE_ACCESS(pending_read, 1, M68K_RB)
+    MEASURE_ACCESS(pending_read, 1, M68K_RAM_RB)
 }
 __declspec(naked) unsigned short M68K_Data_RW(unsigned int address)
 {
-    MEASURE_ACCESS(pending_read, 2, M68K_VRAM_RW)
+    MEASURE_ACCESS(pending_read, 2, M68K_RAM_RW)
 }
 __declspec(naked) void M68K_Data_WB(unsigned int address, unsigned char value)
 {
-    MEASURE_ACCESS(pending_write, 1, M68K_VRAM_WB)
+    MEASURE_ACCESS(pending_write, 1, M68K_RAM_WB)
 }
 __declspec(naked) void M68K_Data_WW(unsigned int address, unsigned short value)
 {
-    MEASURE_ACCESS(pending_write, 2, M68K_VRAM_WW)
+    MEASURE_ACCESS(pending_write, 2, M68K_RAM_WW)
 }
 #undef MEASURE_ACCESS

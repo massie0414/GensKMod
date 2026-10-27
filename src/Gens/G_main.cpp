@@ -72,6 +72,7 @@
 #include "kmod/main_word_ram_transfer_panel.h"
 #include "kmod/vram_transfer_panel.h"
 #include "kmod/vdp_transfer_panel.h"
+#include "kmod/genesis_ram_transfer_panel.h"
 #include "kmod/program_ram_transfer_panel.h"
 #include "kmod/m68k.h"
 #include "kmod/z80.h"
@@ -1930,6 +1931,7 @@ int PASCAL WinMain(HINSTANCE hInst,	HINSTANCE hPrevInst, LPSTR lpCmdLine, int nC
 	mainwordramtransfer_save_window(Str_Tmp);
 	vramtransfer_save_window(Str_Tmp);
 	vdptransfer_save_window(Str_Tmp);
+	genesisramtransfer_save_window(Str_Tmp);
 	programramtransfer_save_window(Str_Tmp);
 	cdreg_save_window(Str_Tmp);
 	cdgfx_save_window(Str_Tmp);
@@ -2458,6 +2460,20 @@ long PASCAL WinProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 #ifdef GENS_KMOD
                     MINIMIZE
                     Change_Debug(hWnd, DMODE_VDP_DMA_TRANSFER);
+#endif
+                    return 0;
+
+				case ID_CPU_DEBUG_MAIN_RAM_TRANSFER:
+#ifdef GENS_KMOD
+                    MINIMIZE
+                    Change_Debug(hWnd, DMODE_MAIN_RAM_TRANSFER);
+#endif
+                    return 0;
+
+				case ID_CPU_DEBUG_SUB_RAM_TRANSFER:
+#ifdef GENS_KMOD
+                    MINIMIZE
+                    Change_Debug(hWnd, DMODE_SUB_RAM_TRANSFER);
 #endif
                     return 0;
 
@@ -3725,7 +3741,9 @@ HMENU Build_Main_Menu(void)
 	MENU_L(DebugMD, 9, Flags, ID_CPU_DEBUG_CRAM_TRANSFER, "CRAM Transfer", "", "CRAM Transfer");
 	MENU_L(DebugMD, 10, Flags, ID_CPU_DEBUG_VSRAM_TRANSFER, "VSRAM Transfer", "", "VSRAM Transfer");
 	MENU_L(DebugMD, 11, Flags, ID_CPU_DEBUG_VDP_DMA_TRANSFER, "VDP DMA Transfer", "", "VDP DMA Transfer");
-	i = 12;
+	MENU_L(DebugMD, 12, Flags, ID_CPU_DEBUG_MAIN_RAM_TRANSFER, "Main RAM Transfer", "", "Main RAM Transfer");
+	MENU_L(DebugMD, 13, Flags, ID_CPU_DEBUG_SUB_RAM_TRANSFER, "Sub RAM Transfer", "", "Sub RAM Transfer");
+	i = 14;
 #else
 	if (Debug == DMODE_68K) Flags |= MF_CHECKED;
 	else Flags &= ~MF_CHECKED;

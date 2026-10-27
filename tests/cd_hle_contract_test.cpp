@@ -18,6 +18,7 @@
 #include "../src/Gens/program_ram_transfer.h"
 #include "../src/Gens/main_word_ram_transfer.h"
 #include "../src/Gens/vram_transfer.h"
+#include "../src/Gens/genesis_ram_transfer.h"
 
 #define CHECK(x) do { if(!(x)) { fprintf(stderr,"FAIL line %d: %s\n",__LINE__,#x); return 1; } } while(0)
 static void be32(unsigned char *p,unsigned v) { p[0]=v>>24; p[1]=v>>16; p[2]=v>>8; p[3]=v; }
@@ -197,6 +198,33 @@ int main(void) {
           CHECK(rw(Ram_68k,0x5100+i)==v && rw(Ram_68k,0x5102+i)==v);
       }
       CHECK(rw(Ram_68k,0x5120)==0xa5a5); }
+    // Main HLE data accesses include stack reads, direct RAM, and bus-mediated Z80 RAM.
+    {
+        unsigned long values[GENESIS_RAM_TRANSFER_HISTORY];
+        GenesisRAMTransfer_Reset(); GenesisRAMTransfer_BeginFrame(); main_api(0x338,0,0,16); GenesisRAMTransfer_EndFrame(60);
+        CHECK(GenesisRAMTransfer_GetHistory(0,0,values)==1 && values[0]==8);
+        CHECK(GenesisRAMTransfer_GetHistory(0,1,values)==1 && values[0]==2);
+        longword(Ram_68k,0x6000,0x12345678);longword(Ram_68k,0x6004,0x90abcdef);
+        GenesisRAMTransfer_BeginFrame(); main_api(0x310,0xff6000,0xff6100,8); GenesisRAMTransfer_EndFrame(60);
+        CHECK(GenesisRAMTransfer_GetHistory(0,0,values)==2 && values[1]==10);
+        CHECK(GenesisRAMTransfer_GetHistory(0,1,values)==2 && values[1]==8);
+        CHECK(!memcmp(Ram_68k+0x6000,Ram_68k+0x6100,8));
+        int saved_z80=Z80_State; Z80_State=0;
+        GenesisRAMTransfer_BeginFrame(); main_api(0x310,0xff6000,0xa00100,8); GenesisRAMTransfer_EndFrame(60);
+        CHECK(GenesisRAMTransfer_GetHistory(0,0,values)==3 && values[2]==10);
+        CHECK(GenesisRAMTransfer_GetHistory(1,1,values)==3 && values[2]==4);
+        CHECK(M68K_RB(0xa00100)==0x34 && M68K_RB(0xa00102)==0x78);
+        GenesisRAMTransfer_BeginFrame(); main_api(0x310,0xa00100,0xff6100,8); GenesisRAMTransfer_EndFrame(60);
+        CHECK(GenesisRAMTransfer_GetHistory(0,0,values)==4 && values[3]==2);
+        CHECK(GenesisRAMTransfer_GetHistory(0,1,values)==4 && values[3]==8);
+        CHECK(GenesisRAMTransfer_GetHistory(1,0,values)==4 && values[3]==4);
+        Z80_State=2;
+        GenesisRAMTransfer_BeginFrame(); main_api(0x310,0xff6000,0xa00100,8); GenesisRAMTransfer_EndFrame(60);
+        CHECK(GenesisRAMTransfer_GetHistory(1,1,values)==5 && values[4]==0); Z80_State=saved_z80;
+        GenesisRAMTransfer_BeginFrame(); main_api(0x340); GenesisRAMTransfer_EndFrame(60);
+        CHECK(GenesisRAMTransfer_GetHistory(0,0,values)==6 && values[5]==6);
+        CHECK(GenesisRAMTransfer_GetHistory(0,1,values)==6 && values[5]==18);
+    }
     main_api(0x378,0,0,0x50,12); CHECK(rw(Ram_68k,0xfde0)==0x19 && rw(Ram_68k,0xfde2)==12);
     // System commands occupy slot 1; ordinary CD commands in slot 0 survive.
     M68K_WB(0xa1200e,0x80);

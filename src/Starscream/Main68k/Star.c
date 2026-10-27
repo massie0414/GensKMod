@@ -530,6 +530,8 @@ static void gen_interface(void) {
 
 	emit("\n");
 	emit("\textern _M68K_Data_RB\n");
+	emit("\textern _GenesisRAMTransfer_InFrame\n");
+	emit("\textern _GenesisRAMTransfer_Pending\n");
 	emit("\textern _M68K_Data_RW\n");
 	emit("\textern _M68K_Data_WB\n");
 	emit("\textern _M68K_Data_WW\n");
@@ -1473,6 +1475,18 @@ static void supervisor(void){
 
 /***************************************************************************/
 
+/* Main RAM data accesses bypass M68K_Data_* in the optimized core.
+ * Count here without changing registers, condition flags or memory behavior. */
+static void count_main_ram(int write, int bytes)
+{
+    emit("\tpushfd\n");
+    emit("\tcmp dword [_GenesisRAMTransfer_InFrame], 0\n");
+    emit("\tje short .No_Main_RAM_Count\n");
+    emit("\tadd dword [_GenesisRAMTransfer_Pending + %d], %d\n", write * 4, bytes);
+    emit(".No_Main_RAM_Count:\n");
+    emit("\tpopfd\n");
+}
+
 static void gen_readbw(int size)
 {
 	align(32);
@@ -1487,6 +1501,7 @@ static void gen_readbw(int size)
 
 		emit("\tcmp edx, 0xE00000\n");
 		emit("\tjb short .Not_In_Ram\n");
+		count_main_ram(0, size);
 		emit("\tand edx, 0xFFFF\n");
 		emit("\txor edx, byte 1\n");
 		emit("\tmov cl, [Ram_68k + edx]\n");
@@ -1528,6 +1543,7 @@ static void gen_readbw(int size)
 
 		emit("\tcmp edx, 0xE00000\n");
 		emit("\tjb short .Not_In_Ram\n");
+		count_main_ram(0, size);
 		emit("\tand edx, 0xFFFF\n");
 		emit("\tmov cx, [Ram_68k + edx]\n");
 		emit("\tmov edx,[__access_address]\n");
@@ -1562,6 +1578,7 @@ static void gen_readl(void)
 
 	emit("\tcmp edx, 0xE00000\n");
 	emit("\tjb short .Not_In_Ram\n");
+	count_main_ram(0, 4);
 	emit("\tand edx, 0xFFFF\n");
 	emit("\tmov ecx, [Ram_68k + edx]\n");
 	emit("\trol ecx, 16\n");
@@ -1600,6 +1617,7 @@ static void gen_readdecl(void)
 
 	emit("\tcmp edx, 0xE00000\n");
 	emit("\tjb short .Not_In_Ram\n");
+	count_main_ram(0, 4);
 	emit("\tand edx, 0xFFFF\n");
 	emit("\tmov ecx, [Ram_68k + edx]\n");
 	emit("\trol ecx, 16\n");
@@ -1643,6 +1661,7 @@ static void gen_writebw(int size)
 		emit("\tand edx, 0xFFFFFF\n");
 		emit("\tcmp edx, 0xE00000\n");
 		emit("\tjb short .Not_In_Ram\n");
+		count_main_ram(1, size);
 		emit("\txor edx, 1\n");
 		emit("\tand edx, 0xFFFF\n");
 		emit("\tmov [Ram_68k + edx], cl\n");
@@ -1673,6 +1692,7 @@ static void gen_writebw(int size)
 		emit("\tand edx, 0xFFFFFF\n");
 		emit("\tcmp edx, 0xE00000\n");
 		emit("\tjb short .Not_In_Ram\n");
+		count_main_ram(1, size);
 		emit("\tand edx, 0xFFFF\n");
 		emit("\tmov [Ram_68k + edx], cx\n");
 		emit("\tmov edx, [__access_address]\n");
@@ -1707,6 +1727,7 @@ static void gen_writel(void)
 	emit("\trol ecx, 16\n");
 	emit("\tcmp edx, 0xE00000\n");
 	emit("\tjb short .Not_In_Ram\n");
+	count_main_ram(1, 4);
 	emit("\tand edx, 0xFFFF\n");
 	emit("\tmov [Ram_68k + edx], ecx\n");
 	emit("\tmov edx, [__access_address]\n");
@@ -1744,6 +1765,7 @@ static void gen_writedecl(void)
 	emit("\tand edx, 0xFFFFFF\n");
 	emit("\tcmp edx, 0xE00000\n");
 	emit("\tjb short .Not_In_Ram\n");
+	count_main_ram(1, 4);
 	emit("\trol ecx, 16\n");
 	emit("\tand edx, 0xFFFF\n");
 	emit("\tmov [Ram_68k + edx], ecx\n");
