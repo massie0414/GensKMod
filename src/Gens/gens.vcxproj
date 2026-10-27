@@ -256,9 +256,11 @@
     <ClCompile Include="cd_transfer.c" />
     <ClCompile Include="word_ram_transfer.c" />
     <ClCompile Include="main_word_ram_transfer.c" />
+    <ClCompile Include="vram_transfer.c" />
     <ClCompile Include="program_ram_transfer.c" />
     <ClCompile Include="kmod\word_ram_transfer_panel.c" />
     <ClCompile Include="kmod\main_word_ram_transfer_panel.c" />
+    <ClCompile Include="kmod\vram_transfer_panel.c" />
     <ClCompile Include="kmod\program_ram_transfer_panel.c" />
     <ClCompile Include="kmod\cd_transfer_panel.c" />
     <ClCompile Include="cd_hle.c" />
@@ -461,9 +463,11 @@
     <ClInclude Include="cd_transfer.h" />
     <ClInclude Include="word_ram_transfer.h" />
     <ClInclude Include="main_word_ram_transfer.h" />
+    <ClInclude Include="vram_transfer.h" />
     <ClInclude Include="program_ram_transfer.h" />
     <ClInclude Include="kmod\word_ram_transfer_panel.h" />
     <ClInclude Include="kmod\main_word_ram_transfer_panel.h" />
+    <ClInclude Include="kmod\vram_transfer_panel.h" />
     <ClInclude Include="kmod\program_ram_transfer_panel.h" />
     <ClInclude Include="kmod\cd_transfer_panel.h" />
     <ClInclude Include="kmod\frame_graph.h" />

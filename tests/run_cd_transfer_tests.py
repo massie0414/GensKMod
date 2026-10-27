@@ -1,4 +1,4 @@
-"""Build CD/Word RAM/Program RAM transfer, CPU, HLE and graph tests (no game ROM required)."""
+"""Build CD/RAM/VRAM transfer, CPU, HLE and graph tests (no game ROM required)."""
 import argparse
 import os
 from pathlib import Path
@@ -50,7 +50,7 @@ def main():
         "dxguid.lib", "winmm.lib", "vfw32.lib", "user32.lib", "gdi32.lib",
         "shell32.lib", "advapi32.lib", "comdlg32.lib"
     ]
-    names = ("main_word_ram_transfer_test", "program_ram_transfer_test", "word_ram_transfer_test", "cd_transfer_test", "cd_hle_contract_test", "m68k_trap_test", "z80_usage_test")
+    names = ("vram_transfer_test", "main_word_ram_transfer_test", "program_ram_transfer_test", "word_ram_transfer_test", "cd_transfer_test", "cd_hle_contract_test", "m68k_trap_test", "z80_usage_test")
     for name in names:
         compile_test(name, ["tests/" + name + ".cpp"], objects, libraries)
     if args.build_only:

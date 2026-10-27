@@ -70,6 +70,7 @@
 #include "kmod/cd_transfer_panel.h"
 #include "kmod/word_ram_transfer_panel.h"
 #include "kmod/main_word_ram_transfer_panel.h"
+#include "kmod/vram_transfer_panel.h"
 #include "kmod/program_ram_transfer_panel.h"
 #include "kmod/m68k.h"
 #include "kmod/z80.h"
@@ -1926,6 +1927,7 @@ int PASCAL WinMain(HINSTANCE hInst,	HINSTANCE hPrevInst, LPSTR lpCmdLine, int nC
 	cdtransfer_save_window(Str_Tmp);
 	wordramtransfer_save_window(Str_Tmp);
 	mainwordramtransfer_save_window(Str_Tmp);
+	vramtransfer_save_window(Str_Tmp);
 	programramtransfer_save_window(Str_Tmp);
 	cdreg_save_window(Str_Tmp);
 	cdgfx_save_window(Str_Tmp);
@@ -2433,6 +2435,13 @@ long PASCAL WinProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 #ifdef GENS_KMOD
                     MINIMIZE
                     Change_Debug(hWnd, DMODE_MAIN_WORD_RAM_TRANSFER);
+#endif
+                    return 0;
+
+				case ID_CPU_DEBUG_VRAM_TRANSFER:
+#ifdef GENS_KMOD
+                    MINIMIZE
+                    Change_Debug(hWnd, DMODE_VRAM_TRANSFER);
 #endif
                     return 0;
 
@@ -3689,7 +3698,8 @@ HMENU Build_Main_Menu(void)
 	MENU_L(DebugMD, 5, Flags, ID_CPU_DEBUG_GENESIS_YM2612, "Sound - YM2612", "", "Sound - YM2612");
 	MENU_L(DebugMD, 6, Flags, ID_CPU_DEBUG_GENESIS_PSG, "Sound - PSG", "", "Sound - PSG");
 	MENU_L(DebugMD, 7, Flags, ID_CPU_DEBUG_MAIN_WORD_RAM_TRANSFER, "Word RAM Transfer", "", "Word RAM Transfer");
-	i = 8;
+	MENU_L(DebugMD, 8, Flags, ID_CPU_DEBUG_VRAM_TRANSFER, "VRAM Transfer", "", "VRAM Transfer");
+	i = 9;
 #else
 	if (Debug == DMODE_68K) Flags |= MF_CHECKED;
 	else Flags &= ~MF_CHECKED;

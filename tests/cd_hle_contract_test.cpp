@@ -17,6 +17,7 @@
 #include "../src/Gens/LC89510.h"
 #include "../src/Gens/program_ram_transfer.h"
 #include "../src/Gens/main_word_ram_transfer.h"
+#include "../src/Gens/vram_transfer.h"
 
 #define CHECK(x) do { if(!(x)) { fprintf(stderr,"FAIL line %d: %s\n",__LINE__,#x); return 1; } } while(0)
 static void be32(unsigned char *p,unsigned v) { p[0]=v>>24; p[1]=v>>16; p[2]=v>>8; p[3]=v; }
@@ -135,14 +136,32 @@ int main(void) {
       main68k_context.areg[2]=0xff5100;
       // The VDP address is set by the caller, independently of D0.
       Set_VDP_Reg(15,2); Write_VDP_Ctrl(0x5800); Write_VDP_Ctrl(1);
+      unsigned long vram_values[VRAM_TRANSFER_HISTORY];
+      VRAMTransfer_Reset(); VRAMTransfer_BeginFrame();
       decoded=main_api(0x2ec,0xff5200,0xff5000,0x40000003);
+      VRAMTransfer_EndFrame(60);
+      CHECK(VRAMTransfer_GetHistory(0,vram_values)==1 && vram_values[0]==0);
+      CHECK(VRAMTransfer_GetHistory(1,vram_values)==1 && vram_values[0]==32);
       CHECK(decoded.areg[1]==0xff5000 && decoded.dreg[0]==0x40000003);
       for(unsigned i=0;i<32;i++)CHECK(VRam[0x5800+i]==Ram_68k[0x5100+i]);
       main68k_context.areg[2]=saved_a2;
-      // DMA helpers restore the BIOS register shadow, not a temporary increment.
+      // This HLE DMA helper uses CPU copies, so count its actual port writes.
+      // It restores the BIOS register shadow, not a temporary increment.
       Set_VDP_Reg(15,64);
+      VRAMTransfer_BeginFrame();
       main_api(0x2d4,0,0,0x5a000001,0xff5100,2);
+      VRAMTransfer_EndFrame(60);
+      CHECK(VRAMTransfer_GetHistory(0,vram_values)==2 && vram_values[1]==0);
+      CHECK(VRAMTransfer_GetHistory(1,vram_values)==2 && vram_values[1]==4);
+      CHECK(!memcmp(VRam+0x5a00,Ram_68k+0x5100,4));
       CHECK(VDP_Reg.Auto_Inc==(rw(Ram_68k,0xfdd2)&255));
+      // HLE fill actually uses VDP DMA; its seed and payload are excluded.
+      VRAMTransfer_BeginFrame();
+      main_api(0x2c0,0,0,0x5c000001,3,0xab);
+      VRAMTransfer_EndFrame(60);
+      CHECK(VRAMTransfer_GetHistory(0,vram_values)==3 && vram_values[2]==0);
+      CHECK(VRAMTransfer_GetHistory(1,vram_values)==3 && vram_values[2]==0);
+      CHECK(VRam[0x5c00]==0xab && VRam[0x5c02]==0xab);
       CHECK(!Paused);
       for(unsigned i=0;i<32;i+=4) {
           unsigned v=((i/4)%2==0)?0xaaaa:0;

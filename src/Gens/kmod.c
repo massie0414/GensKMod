@@ -34,9 +34,11 @@
 #include "kmod/cd_transfer_panel.h"
 #include "kmod/word_ram_transfer_panel.h"
 #include "kmod/main_word_ram_transfer_panel.h"
+#include "kmod/vram_transfer_panel.h"
 #include "kmod/program_ram_transfer_panel.h"
 #include "word_ram_transfer.h"
 #include "main_word_ram_transfer.h"
+#include "vram_transfer.h"
 #include "program_ram_transfer.h"
 #include "cd_transfer.h"
 #include "kmod\cd_reg.h"
@@ -201,6 +203,7 @@ void Init_KMod( )
 	cdtransfer_create(ghInstance, HWnd);
 	wordramtransfer_create(ghInstance, HWnd);
 	mainwordramtransfer_create(ghInstance, HWnd);
+	vramtransfer_create(ghInstance, HWnd);
 	programramtransfer_create(ghInstance, HWnd);
 	cdgfx_create(ghInstance, HWnd);
 	cdprg_create(ghInstance, HWnd);
@@ -243,6 +246,7 @@ void Init_KMod( )
 	cdtransfer_restore_window(config_file);
 	wordramtransfer_restore_window(config_file);
 	mainwordramtransfer_restore_window(config_file);
+	vramtransfer_restore_window(config_file);
 	programramtransfer_restore_window(config_file);
 	cdreg_restore_window(config_file);
 	cdgfx_restore_window(config_file);
@@ -330,7 +334,7 @@ void kmod_close()
 		if (OpenedWindow_KMod[mode] && mode != (DMODE_MSG - 1) &&
 			mode != (DMODE_DISASSEMBLY - 1) && mode != (DMODE_SHADOW - 1) && mode != (DMODE_HIGHLIGHT - 1) && mode != (DMODE_WINDOW - 1) && mode != (DMODE_PLANE_A - 1) && mode != (DMODE_PLANE_B - 1) && mode != (DMODE_SPRITE_SCREEN - 1) &&
 			mode != (DMODE_VDP - 1) && mode != (DMODE_VDP_REG - 1) && mode != (DMODE_SPRITES - 1) &&
-			mode != (DMODE_PROGRAM_RAM_TRANSFER - 1) && mode != (DMODE_MAIN_WORD_RAM_TRANSFER - 1) && mode != (DMODE_WORD_RAM_TRANSFER - 1) && mode != (DMODE_CD_TRANSFER - 1) && mode != (DMODE_CD_PCM - 1) && mode != (DMODE_CD_CDDA - 1) &&
+			mode != (DMODE_PROGRAM_RAM_TRANSFER - 1) && mode != (DMODE_VRAM_TRANSFER - 1) && mode != (DMODE_MAIN_WORD_RAM_TRANSFER - 1) && mode != (DMODE_WORD_RAM_TRANSFER - 1) && mode != (DMODE_CD_TRANSFER - 1) && mode != (DMODE_CD_PCM - 1) && mode != (DMODE_CD_CDDA - 1) &&
             mode != (DMODE_YM2612 - 1) && mode != (DMODE_PSG - 1) &&
             mode != (DMODE_32_MEMORY - 1) && mode != (DMODE_32_SOUND - 1) && mode != (DMODE_32_FPS - 1) && mode != (DMODE_32_SDRAM - 1) && mode != (DMODE_32_VDP - 1) && mode != (DMODE_32_REG - 1) &&
 			mode != (DMODE_32_MSH2 - 1) && mode != (DMODE_32_SSH2 - 1) &&
@@ -342,6 +346,8 @@ void kmod_close()
 
 	ProgramRAMTransfer_Reset();
 	programramtransfer_update();
+	VRAMTransfer_Reset();
+	vramtransfer_update();
 	MainWordRAMTransfer_Reset();
 	mainwordramtransfer_update();
 	WordRAMTransfer_Reset();
@@ -395,6 +401,8 @@ void ResetDebug_KMod(  )
 	sdram32x_reset();
 	ProgramRAMTransfer_Reset();
 	programramtransfer_update();
+	VRAMTransfer_Reset();
+	vramtransfer_update();
 	MainWordRAMTransfer_Reset();
 	mainwordramtransfer_update();
 	WordRAMTransfer_Reset();

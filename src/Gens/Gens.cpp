@@ -34,6 +34,7 @@
 #include "cd_transfer.h"
 #include "word_ram_transfer.h"
 #include "main_word_ram_transfer.h"
+#include "vram_transfer.h"
 #include "program_ram_transfer.h"
 #include "32x_boot.h"
 #define main68k_exec CD_HLE_MainExec
@@ -706,6 +707,7 @@ int Do_Genesis_Frame_No_VDP(void)
 	main68k_tripOdometer(); // Reads and then clears the odometer
 #endif
 	M68K_Usage_Begin_Frame();
+	VRAMTransfer_BeginFrame();
 
 	z80_Clear_Odo(&M_Z80);
 	Z80_Usage_Begin_Frame();
@@ -829,6 +831,7 @@ int Do_Genesis_Frame_No_VDP(void)
 	if (GYM_Dumping) Update_GYM_Dump((unsigned char) 0, (unsigned char) 0, (unsigned char) 0);
 
 	M68K_Usage_End_Frame(CPL_M68K * VDP_Num_Lines);
+	VRAMTransfer_EndFrame(CPU_Mode ? 50 : 60);
 	Z80_Usage_End_Frame(CPL_Z80 * VDP_Num_Lines);
 	return(1);
 }
@@ -856,6 +859,7 @@ int Do_Genesis_Frame()
 	main68k_tripOdometer(); // Reads and then clears the odometer
 #endif
 	M68K_Usage_Begin_Frame();
+	VRAMTransfer_BeginFrame();
 	z80_Clear_Odo(&M_Z80);
 	Z80_Usage_Begin_Frame();
 
@@ -980,6 +984,7 @@ int Do_Genesis_Frame()
 	if (GYM_Dumping) Update_GYM_Dump((unsigned char) 0, (unsigned char) 0, (unsigned char) 0);
 
 	M68K_Usage_End_Frame(CPL_M68K * VDP_Num_Lines);
+	VRAMTransfer_EndFrame(CPU_Mode ? 50 : 60);
 	Z80_Usage_End_Frame(CPL_Z80 * VDP_Num_Lines);
 	return(1);
 }
@@ -1262,6 +1267,7 @@ int Do_32X_Frame_No_VDP()
 	main68k_tripOdometer(); // Reads and then clears the odometer
 #endif
 	M68K_Usage_Begin_Frame();
+	VRAMTransfer_BeginFrame();
 	z80_Clear_Odo(&M_Z80);
 	Z80_Usage_Begin_Frame();
 	M_SH2.Idle_Cycles = S_SH2.Idle_Cycles = 0;
@@ -1536,6 +1542,7 @@ int Do_32X_Frame_No_VDP()
 	if (GYM_Dumping) Update_GYM_Dump((unsigned char) 0, (unsigned char) 0, (unsigned char) 0);
 
 	M68K_Usage_End_Frame(CPL_M68K * VDP_Num_Lines);
+	VRAMTransfer_EndFrame(CPU_Mode ? 50 : 60);
 	Z80_Usage_End_Frame(CPL_Z80 * VDP_Num_Lines);
 	return 1;
 }
@@ -1566,6 +1573,7 @@ int Do_32X_Frame()
 	main68k_tripOdometer(); // Reads and then clears the odometer
 #endif
 	M68K_Usage_Begin_Frame();
+	VRAMTransfer_BeginFrame();
 	z80_Clear_Odo(&M_Z80);
 	Z80_Usage_Begin_Frame();
 	M_SH2.Idle_Cycles = S_SH2.Idle_Cycles = 0;
@@ -1839,6 +1847,7 @@ int Do_32X_Frame()
 	if (GYM_Dumping) Update_GYM_Dump((unsigned char) 0, (unsigned char) 0, (unsigned char) 0);
 
 	M68K_Usage_End_Frame(CPL_M68K * VDP_Num_Lines);
+	VRAMTransfer_EndFrame(CPU_Mode ? 50 : 60);
 	Z80_Usage_End_Frame(CPL_Z80 * VDP_Num_Lines);
 	return 1;
 }
@@ -2130,6 +2139,7 @@ int Do_SegaCD_Frame_No_VDP(void)
 	main68k_tripOdometer(); // Reads and then clears the odometer
 #endif
 	M68K_Usage_Begin_Frame();
+	VRAMTransfer_BeginFrame();
 	sub68k_tripOdometer(); S68K_Usage_Begin_Frame();
 	CDTransfer_BeginFrame(); WordRAMTransfer_BeginFrame(); MainWordRAMTransfer_BeginFrame(); ProgramRAMTransfer_BeginFrame();
 	CD_HLE_Frame();
@@ -2258,6 +2268,7 @@ int Do_SegaCD_Frame_No_VDP(void)
 	S68K_Usage_End_Frame(CPL_S68K * VDP_Num_Lines);
 	CDTransfer_EndFrame(CPU_Mode ? 50 : 60); WordRAMTransfer_EndFrame(CPU_Mode ? 50 : 60); MainWordRAMTransfer_EndFrame(CPU_Mode ? 50 : 60); ProgramRAMTransfer_EndFrame(CPU_Mode ? 50 : 60);
 	M68K_Usage_End_Frame(CPL_M68K * VDP_Num_Lines);
+	VRAMTransfer_EndFrame(CPU_Mode ? 50 : 60);
 	Z80_Usage_End_Frame(CPL_Z80 * VDP_Num_Lines);
 	return(1);
 }
@@ -2287,6 +2298,7 @@ int Do_SegaCD_Frame_No_VDP_Cycle_Accurate(void)
 	main68k_tripOdometer(); // Reads and then clears the odometer
 #endif
 	M68K_Usage_Begin_Frame();
+	VRAMTransfer_BeginFrame();
 	sub68k_tripOdometer(); S68K_Usage_Begin_Frame();
 	CDTransfer_BeginFrame(); WordRAMTransfer_BeginFrame(); MainWordRAMTransfer_BeginFrame(); ProgramRAMTransfer_BeginFrame();
 	CD_HLE_Frame();
@@ -2531,6 +2543,7 @@ int Do_SegaCD_Frame_No_VDP_Cycle_Accurate(void)
 	S68K_Usage_End_Frame(CPL_S68K * VDP_Num_Lines);
 	CDTransfer_EndFrame(CPU_Mode ? 50 : 60); WordRAMTransfer_EndFrame(CPU_Mode ? 50 : 60); MainWordRAMTransfer_EndFrame(CPU_Mode ? 50 : 60); ProgramRAMTransfer_EndFrame(CPU_Mode ? 50 : 60);
 	M68K_Usage_End_Frame(CPL_M68K * VDP_Num_Lines);
+	VRAMTransfer_EndFrame(CPU_Mode ? 50 : 60);
 	Z80_Usage_End_Frame(CPL_Z80 * VDP_Num_Lines);
 	return(1);
 }
@@ -2562,6 +2575,7 @@ int Do_SegaCD_Frame(void)
 	main68k_tripOdometer(); // Reads and then clears the odometer
 #endif
 	M68K_Usage_Begin_Frame();
+	VRAMTransfer_BeginFrame();
 	sub68k_tripOdometer(); S68K_Usage_Begin_Frame();
 	CDTransfer_BeginFrame(); WordRAMTransfer_BeginFrame(); MainWordRAMTransfer_BeginFrame(); ProgramRAMTransfer_BeginFrame();
 	CD_HLE_Frame();
@@ -2719,6 +2733,7 @@ int Do_SegaCD_Frame(void)
 	S68K_Usage_End_Frame(CPL_S68K * VDP_Num_Lines);
 	CDTransfer_EndFrame(CPU_Mode ? 50 : 60); WordRAMTransfer_EndFrame(CPU_Mode ? 50 : 60); MainWordRAMTransfer_EndFrame(CPU_Mode ? 50 : 60); ProgramRAMTransfer_EndFrame(CPU_Mode ? 50 : 60);
 	M68K_Usage_End_Frame(CPL_M68K * VDP_Num_Lines);
+	VRAMTransfer_EndFrame(CPU_Mode ? 50 : 60);
 	Z80_Usage_End_Frame(CPL_Z80 * VDP_Num_Lines);
 	return(1);
 }
@@ -2748,6 +2763,7 @@ int Do_SegaCD_Frame_Cycle_Accurate(void)
 	main68k_tripOdometer(); // Reads and then clears the odometer
 #endif
 	M68K_Usage_Begin_Frame();
+	VRAMTransfer_BeginFrame();
 	sub68k_tripOdometer(); S68K_Usage_Begin_Frame();
 	CDTransfer_BeginFrame(); WordRAMTransfer_BeginFrame(); MainWordRAMTransfer_BeginFrame(); ProgramRAMTransfer_BeginFrame();
 	CD_HLE_Frame();
@@ -3021,6 +3037,7 @@ int Do_SegaCD_Frame_Cycle_Accurate(void)
 	S68K_Usage_End_Frame(CPL_S68K * VDP_Num_Lines);
 	CDTransfer_EndFrame(CPU_Mode ? 50 : 60); WordRAMTransfer_EndFrame(CPU_Mode ? 50 : 60); MainWordRAMTransfer_EndFrame(CPU_Mode ? 50 : 60); ProgramRAMTransfer_EndFrame(CPU_Mode ? 50 : 60);
 	M68K_Usage_End_Frame(CPL_M68K * VDP_Num_Lines);
+	VRAMTransfer_EndFrame(CPU_Mode ? 50 : 60);
 	Z80_Usage_End_Frame(CPL_Z80 * VDP_Num_Lines);
 	return 1;
 }

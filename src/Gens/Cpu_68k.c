@@ -5,6 +5,7 @@
 #include "mem_S68K.h"
 #include "word_ram_transfer.h"
 #include "main_word_ram_transfer.h"
+#include "vram_transfer.h"
 #include "program_ram_transfer.h"
 #include "mem_SH2.h"
 #include "save.h"
@@ -501,6 +502,7 @@ static struct {
 void M68K_Usage_ClearHistory(void)
 {
     MainWordRAMTransfer_Reset();
+    VRAMTransfer_Reset();
     memset(&m68kUsage, 0, sizeof(m68kUsage));
     main68k_idleCycles = 0;
 }

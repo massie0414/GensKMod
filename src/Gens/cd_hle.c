@@ -538,7 +538,7 @@ static void vram_clear(unsigned start,unsigned bytes) {
     Set_VDP_Reg(15,2);
     Write_VDP_Ctrl((unsigned short)(0x4000|(start&0x3fff)));
     Write_VDP_Ctrl((unsigned short)(start>>14));
-    for(i=0;i<bytes;i+=2)Write_Word_VDP_Data(0);
+    for(i=0;i<bytes;i+=2)M68K_Data_WW(0xc00000,0);
 }
 /* Nemesis tile streams contain a prefix table followed by nibble runs.
  * The six-one prefix encodes an inline run; bit 15 of the tile count selects
@@ -579,7 +579,7 @@ static int nemesis(unsigned source,unsigned destination,int to_ram) {
                 unsigned out=(header&0x8000)?row^previous:row;
                 previous=out;
                 if(to_ram) { memw(0,destination,out>>16); memw(0,destination+2,out); destination+=4; }
-                else { Write_Word_VDP_Data((unsigned short)(out>>16)); Write_Word_VDP_Data((unsigned short)out); }
+                else { M68K_Data_WW(0xc00000,(unsigned short)(out>>16)); M68K_Data_WW(0xc00000,(unsigned short)out); }
                 row=row_pixels=0;
             }
         }
@@ -650,21 +650,21 @@ static void maincall(unsigned fn) {
         Set_VDP_Reg(15,1); Set_VDP_Reg(1,set2|0x10);
         Set_VDP_Reg(19,n&255); Set_VDP_Reg(20,(n>>8)&255); Set_VDP_Reg(23,0x80);
         Write_VDP_Ctrl((unsigned short)(cmd>>16)); Write_VDP_Ctrl((unsigned short)cmd);
-        Write_Word_VDP_Data((unsigned short)(fn==0x2bc?0:(c->dreg[2]&255)*0x101));
+        M68K_Data_WW(0xc00000,(unsigned short)(fn==0x2bc?0:(c->dreg[2]&255)*0x101));
         Set_VDP_Reg(1,set2); Set_VDP_Reg(15,2);
         break;
     }
     case 0x2b4: case 0x2b8: {
         unsigned cmd=c->dreg[0],i,n=(c->dreg[1]&0xffff)+1,value=fn==0x2b8?0:c->dreg[2];
         Write_VDP_Ctrl((unsigned short)(cmd>>16)); Write_VDP_Ctrl((unsigned short)cmd);
-        for(i=0;i<n;i++)Write_Word_VDP_Data((unsigned short)value);
+        for(i=0;i<n;i++)M68K_Data_WW(0xc00000,(unsigned short)value);
         break;
     }
     case 0x30c: {
         unsigned i;
         if(!(Ram_68k[0xfe26^1]&1))break;
         Set_VDP_Reg(15,2); Write_VDP_Ctrl(0x7800); Write_VDP_Ctrl(2);
-        for(i=0;i<640;i+=2)Write_Word_VDP_Data((unsigned short)rw(Ram_68k,0xf900+i));
+        for(i=0;i<640;i+=2)M68K_Data_WW(0xc00000,(unsigned short)rw(Ram_68k,0xf900+i));
         break;
     }
     case 0x2c4: case 0x2c8: case 0x2cc: case 0x36c: case 0x334: {
@@ -674,7 +674,7 @@ static void maincall(unsigned fn) {
             for(x=0;x<cols;x++) {
                 if(fn==0x2c4) { tile=memr(0,src); src+=2; }
                 else if(fn==0x2c8) { tile=(tile&~255U)|M68K_Data_RB(src++); }
-                Write_Word_VDP_Data((unsigned short)(fn==0x334?tile+y+x*rows:tile));
+                M68K_Data_WW(0xc00000,(unsigned short)(fn==0x334?tile+y+x*rows:tile));
                 if(fn==0x36c)tile++;
             }
             cmd+=rw(Ram_68k,0xfe2e)<<16;
@@ -689,7 +689,7 @@ static void maincall(unsigned fn) {
             a+=10;
             Set_VDP_Reg(15,2);
             Write_VDP_Ctrl((unsigned short)(cmd>>16)); Write_VDP_Ctrl((unsigned short)(cmd&~0x80));
-            for(i=0;i<n;i++)Write_Word_VDP_Data((unsigned short)memr(0,src+i*2));
+            for(i=0;i<n;i++)M68K_Data_WW(0xc00000,(unsigned short)memr(0,src+i*2));
             Set_VDP_Reg(15,inc);
             c->dreg[0]=cmd; c->dreg[1]=src;
         }
@@ -701,7 +701,7 @@ static void maincall(unsigned fn) {
         if(!n)n=65536;
         if(fn==0x2d4)Set_VDP_Reg(15,2);
         Write_VDP_Ctrl((unsigned short)(cmd>>16)); Write_VDP_Ctrl((unsigned short)(cmd&~0x80));
-        for(i=0;i<n;i++)Write_Word_VDP_Data((unsigned short)memr(0,src+i*2));
+        for(i=0;i<n;i++)M68K_Data_WW(0xc00000,(unsigned short)memr(0,src+i*2));
         if(fn==0x2d4)Set_VDP_Reg(15,inc);
         break;
     }

@@ -26,6 +26,7 @@
 #include "cd_transfer_panel.h"
 #include "word_ram_transfer_panel.h"
 #include "main_word_ram_transfer_panel.h"
+#include "vram_transfer_panel.h"
 #include "program_ram_transfer_panel.h"
 #include "cd_reg.h"
 
@@ -128,6 +129,9 @@ void CloseWindow_KMod(UCHAR mode)
 		break;
 	case DMODE_MAIN_WORD_RAM_TRANSFER:
 		mainwordramtransfer_show(FALSE);
+		break;
+	case DMODE_VRAM_TRANSFER:
+		vramtransfer_show(FALSE);
 		break;
 	case DMODE_PROGRAM_RAM_TRANSFER:
 		programramtransfer_show(FALSE);
@@ -250,6 +254,9 @@ void OpenWindow_KMod(UCHAR mode)
 		break;
 	case DMODE_MAIN_WORD_RAM_TRANSFER:
 		mainwordramtransfer_show(TRUE);
+		break;
+	case DMODE_VRAM_TRANSFER:
+		vramtransfer_show(TRUE);
 		break;
 	case DMODE_PROGRAM_RAM_TRANSFER:
 		programramtransfer_show(TRUE);
