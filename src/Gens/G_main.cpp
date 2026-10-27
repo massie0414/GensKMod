@@ -75,6 +75,7 @@
 #include "kmod/genesis_ram_transfer_panel.h"
 #include "kmod/sh2_dma_transfer_panel.h"
 #include "kmod/sdram_transfer_panel.h"
+#include "kmod/vram32x_transfer_panel.h"
 #include "kmod/program_ram_transfer_panel.h"
 #include "kmod/m68k.h"
 #include "kmod/z80.h"
@@ -1936,6 +1937,7 @@ int PASCAL WinMain(HINSTANCE hInst,	HINSTANCE hPrevInst, LPSTR lpCmdLine, int nC
 	genesisramtransfer_save_window(Str_Tmp);
 	sh2dmatransfer_save_window(Str_Tmp);
 	sdramtransfer_save_window(Str_Tmp);
+	vram32xtransfer_save_window(Str_Tmp);
 	programramtransfer_save_window(Str_Tmp);
 	cdreg_save_window(Str_Tmp);
 	cdgfx_save_window(Str_Tmp);
@@ -2478,6 +2480,13 @@ long PASCAL WinProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 #ifdef GENS_KMOD
                     MINIMIZE
                     Change_Debug(hWnd, DMODE_SUB_RAM_TRANSFER);
+#endif
+                    return 0;
+
+				case ID_CPU_DEBUG_VRAM32X_TRANSFER:
+#ifdef GENS_KMOD
+                    MINIMIZE
+                    Change_Debug(hWnd, DMODE_VRAM32X_TRANSFER);
 #endif
                     return 0;
 
@@ -3848,6 +3857,7 @@ HMENU Build_Main_Menu(void)
         MENU_L(Debug32X, 8, Flags, ID_CPU_DEBUG_MASTER_SH2_DMA_TRANSFER, "Master SH2 DMA Transfer", "", "Master SH2 DMA Transfer");
         MENU_L(Debug32X, 9, Flags, ID_CPU_DEBUG_SLAVE_SH2_DMA_TRANSFER, "Slave SH2 DMA Transfer", "", "Slave SH2 DMA Transfer");
         MENU_L(Debug32X, 10, Flags, ID_CPU_DEBUG_SDRAM_TRANSFER, "Main RAM Transfer", "", "Main RAM Transfer");
+        MENU_L(Debug32X, 11, Flags, ID_CPU_DEBUG_VRAM32X_TRANSFER, "VRAM Write Transfer", "", "VRAM Write Transfer");
 #else
 /* KANEDA_BUG
 	this won't work :

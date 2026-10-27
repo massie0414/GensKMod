@@ -39,6 +39,7 @@
 #include "kmod/genesis_ram_transfer_panel.h"
 #include "kmod/sh2_dma_transfer_panel.h"
 #include "kmod/sdram_transfer_panel.h"
+#include "kmod/vram32x_transfer_panel.h"
 #include "kmod/program_ram_transfer_panel.h"
 #include "word_ram_transfer.h"
 #include "main_word_ram_transfer.h"
@@ -46,6 +47,7 @@
 #include "genesis_ram_transfer.h"
 #include "sh2_dma_transfer.h"
 #include "sdram_transfer.h"
+#include "vram32x_transfer.h"
 #include "program_ram_transfer.h"
 #include "cd_transfer.h"
 #include "kmod\cd_reg.h"
@@ -215,6 +217,7 @@ void Init_KMod( )
 	genesisramtransfer_create(ghInstance, HWnd);
 	sh2dmatransfer_create(ghInstance, HWnd);
 	sdramtransfer_create(ghInstance, HWnd);
+	vram32xtransfer_create(ghInstance, HWnd);
 	programramtransfer_create(ghInstance, HWnd);
 	cdgfx_create(ghInstance, HWnd);
 	cdprg_create(ghInstance, HWnd);
@@ -262,6 +265,7 @@ void Init_KMod( )
 	genesisramtransfer_restore_window(config_file);
 	sh2dmatransfer_restore_window(config_file);
 	sdramtransfer_restore_window(config_file);
+	vram32xtransfer_restore_window(config_file);
 	programramtransfer_restore_window(config_file);
 	cdreg_restore_window(config_file);
 	cdgfx_restore_window(config_file);
@@ -349,7 +353,7 @@ void kmod_close()
 		if (OpenedWindow_KMod[mode] && mode != (DMODE_MSG - 1) &&
 			mode != (DMODE_DISASSEMBLY - 1) && mode != (DMODE_SHADOW - 1) && mode != (DMODE_HIGHLIGHT - 1) && mode != (DMODE_WINDOW - 1) && mode != (DMODE_PLANE_A - 1) && mode != (DMODE_PLANE_B - 1) && mode != (DMODE_SPRITE_SCREEN - 1) &&
 			mode != (DMODE_VDP - 1) && mode != (DMODE_VDP_REG - 1) && mode != (DMODE_SPRITES - 1) &&
-			mode != (DMODE_PROGRAM_RAM_TRANSFER - 1) && mode != (DMODE_CRAM_TRANSFER - 1) && mode != (DMODE_VSRAM_TRANSFER - 1) && mode != (DMODE_VDP_DMA_TRANSFER - 1) && mode != (DMODE_MAIN_RAM_TRANSFER - 1) && mode != (DMODE_SUB_RAM_TRANSFER - 1) && mode != (DMODE_SDRAM_TRANSFER - 1) && mode != (DMODE_MASTER_SH2_DMA_TRANSFER - 1) && mode != (DMODE_SLAVE_SH2_DMA_TRANSFER - 1) && mode != (DMODE_VRAM_TRANSFER - 1) && mode != (DMODE_MAIN_WORD_RAM_TRANSFER - 1) && mode != (DMODE_WORD_RAM_TRANSFER - 1) && mode != (DMODE_CD_TRANSFER - 1) && mode != (DMODE_CD_PCM - 1) && mode != (DMODE_CD_CDDA - 1) &&
+			mode != (DMODE_PROGRAM_RAM_TRANSFER - 1) && mode != (DMODE_CRAM_TRANSFER - 1) && mode != (DMODE_VSRAM_TRANSFER - 1) && mode != (DMODE_VDP_DMA_TRANSFER - 1) && mode != (DMODE_MAIN_RAM_TRANSFER - 1) && mode != (DMODE_SUB_RAM_TRANSFER - 1) && mode != (DMODE_VRAM32X_TRANSFER - 1) && mode != (DMODE_SDRAM_TRANSFER - 1) && mode != (DMODE_MASTER_SH2_DMA_TRANSFER - 1) && mode != (DMODE_SLAVE_SH2_DMA_TRANSFER - 1) && mode != (DMODE_VRAM_TRANSFER - 1) && mode != (DMODE_MAIN_WORD_RAM_TRANSFER - 1) && mode != (DMODE_WORD_RAM_TRANSFER - 1) && mode != (DMODE_CD_TRANSFER - 1) && mode != (DMODE_CD_PCM - 1) && mode != (DMODE_CD_CDDA - 1) &&
             mode != (DMODE_YM2612 - 1) && mode != (DMODE_PSG - 1) &&
             mode != (DMODE_32_MEMORY - 1) && mode != (DMODE_32_SOUND - 1) && mode != (DMODE_32_FPS - 1) && mode != (DMODE_32_SDRAM - 1) && mode != (DMODE_32_VDP - 1) && mode != (DMODE_32_REG - 1) &&
 			mode != (DMODE_32_MSH2 - 1) && mode != (DMODE_32_SSH2 - 1) &&
@@ -368,8 +372,10 @@ void kmod_close()
 	genesisramtransfer_update();
 	SH2DMATransfer_Reset();
 	SDRAMTransfer_Reset();
+	VRAM32XTransfer_Reset();
 	sh2dmatransfer_update();
 	sdramtransfer_update();
+	vram32xtransfer_update();
 	MainWordRAMTransfer_Reset();
 	mainwordramtransfer_update();
 	WordRAMTransfer_Reset();
@@ -430,8 +436,10 @@ void ResetDebug_KMod(  )
 	genesisramtransfer_update();
 	SH2DMATransfer_Reset();
 	SDRAMTransfer_Reset();
+	VRAM32XTransfer_Reset();
 	sh2dmatransfer_update();
 	sdramtransfer_update();
+	vram32xtransfer_update();
 	MainWordRAMTransfer_Reset();
 	mainwordramtransfer_update();
 	WordRAMTransfer_Reset();

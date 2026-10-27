@@ -1,4 +1,5 @@
 %include "nasmhead.inc"
+extern _VRAM32XTransfer_Reset
 
 
 section .data align=64
@@ -37,6 +38,11 @@ section .text align=64
 
 	; void _32X_VDP_Reset()
 	DECLF _32X_VDP_Reset
+		pushfd
+		pushad
+		call _VRAM32XTransfer_Reset
+		popad
+		popfd
 
 		push ecx
 		push edi

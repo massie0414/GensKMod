@@ -25,6 +25,7 @@ extern "C" {
 #include "../src/Gens/genesis_ram_transfer.h"
 #include "../src/Gens/sh2_dma_transfer.h"
 #include "../src/Gens/sdram_transfer.h"
+#include "../src/Gens/vram32x_transfer.h"
 #include "../src/Gens/pwm.h"
 #include "../src/Gens/program_ram_transfer.h"
 #include "../src/Gens/LC89510.h"
@@ -248,13 +249,14 @@ static int hle_tests(void) {
     CHECK(ProgramRAMTransfer_GetHistory(1,ram_values)==2 && ram_values[0]>0 && ram_values[1]>0);
     Enable_CD_32X(); Z80_State=0;
     // Both SH2 CPUs continually read/write main SDRAM; code fetch must not add bytes.
-    const unsigned char ram_loop[]={0x60,0x10,0x22,0x00,0xaf,0xfc,0x00,0x09};
+    const unsigned char ram_loop[]={0x60,0x10,0x22,0x00,0x23,0x01,0xaf,0xfb,0x00,0x09};
     memcpy(_32X_Ram+0x4000,ram_loop,sizeof(ram_loop));
     for(int owner=0;owner<2;owner++) {
         SH2_CONTEXT *cpu=owner?&S_SH2:&M_SH2;
         cpu->Status=0;SH2_Set_SR(cpu,0xf0);SH2_Clear_Odo(cpu);SH2_Set_PC(cpu,0x06004004);
-        cpu->R[1]=0x06005000;cpu->R[2]=0x26006000;
+        cpu->R[1]=0x06005000;cpu->R[2]=0x26006000;cpu->R[3]=0x24000100;
     }
+    _32X_FM=0x80;_32X_Set_FB(); // Allow both SH2s to write the background framebuffer.
     // Real PWM requests drive both SH2 DMACs throughout rendered/skipped frames.
     PWM_Init(); PWM_Enable=1; _32X_MINT=_32X_SINT=0;
     for(int owner=0;owner<2;owner++) {
@@ -264,7 +266,7 @@ static int hle_tests(void) {
         SH2_Write_Long(cpu,0xffffff90,0x06001000); SH2_Write_Long(cpu,0xffffff94,0x20004034);
         SH2_Write_Long(cpu,0xffffff98,100000); SH2_Write_Long(cpu,0xffffff9c,0x08e1);
     }
-    PWM_Mode=0x185; PWM_Set_Cycle(32); PWM_Set_Int(1); SH2DMATransfer_Reset();SDRAMTransfer_Reset();
+    PWM_Mode=0x185; PWM_Set_Cycle(32); PWM_Set_Int(1); SH2DMATransfer_Reset();SDRAMTransfer_Reset();VRAM32XTransfer_Reset();
     CDTransfer_Reset(); VRAMTransfer_Reset(); GenesisRAMTransfer_Reset(); WordRAMTransfer_Reset(); MainWordRAMTransfer_Reset(); ProgramRAMTransfer_Reset(); Do_32X_Frame(); Do_32X_Frame_No_VDP(); CHECK(CDTransfer_GetHistory(values)==2);
     CHECK(WordRAMTransfer_GetHistory(0,ram_values)==2 && ram_values[0]>0 && ram_values[1]>0);
     CHECK(MainWordRAMTransfer_GetHistory(0,ram_values)==2 && ram_values[0]>0 && ram_values[1]>0);
@@ -285,9 +287,10 @@ static int hle_tests(void) {
         if(n!=2 || !ram_values[0] || !ram_values[1])printf("RAM frame dir=%d count=%u bytes=%lu/%lu CPUstatus=%lu/%lu PC=%lx/%lx CPL=%d/%d\n",write,n,ram_values[0],ram_values[1],M_SH2.Status,S_SH2.Status,SH2_Get_PC(&M_SH2),SH2_Get_PC(&S_SH2),CPL_MSH2,CPL_SSH2);
         CHECK(n==2 && ram_values[0]>0 && ram_values[1]>0);
     }
+    CHECK(VRAM32XTransfer_GetHistory(ram_values)==2 && ram_values[0]>0 && ram_values[1]>0);
     // The same Genesis VDP is sampled without the CD add-on as well.
     CD_32X_Active=SegaCD_Started=0; CD_HLE_Close(); _32X_Started=1; Init_Memory_M68K(1);
-    SH2DMATransfer_Reset();SDRAMTransfer_Reset();
+    SH2DMATransfer_Reset();SDRAMTransfer_Reset();VRAM32XTransfer_Reset();
     VRAMTransfer_Reset(); GenesisRAMTransfer_Reset(); Do_32X_Frame(); Do_32X_Frame_No_VDP();
     for(int owner=0;owner<2;owner++) for(int write=0;write<2;write++)
         CHECK(SH2DMATransfer_GetHistory(owner,write,ram_values)==2 && ram_values[0]>0 && ram_values[1]>0);
@@ -296,6 +299,7 @@ static int hle_tests(void) {
         if(n!=2 || !ram_values[0] || !ram_values[1])printf("RAM frame dir=%d count=%u bytes=%lu/%lu CPUstatus=%lu/%lu PC=%lx/%lx CPL=%d/%d\n",write,n,ram_values[0],ram_values[1],M_SH2.Status,S_SH2.Status,SH2_Get_PC(&M_SH2),SH2_Get_PC(&S_SH2),CPL_MSH2,CPL_SSH2);
         CHECK(n==2 && ram_values[0]>0 && ram_values[1]>0);
     }
+    CHECK(VRAM32XTransfer_GetHistory(ram_values)==2 && ram_values[0]>0 && ram_values[1]>0);
 
     CHECK(VRAMTransfer_GetHistory(0,ram_values)==2 && ram_values[0]>0 && ram_values[1]>0);
     for(int kind=GENESIS_RAM_MAIN;kind<=GENESIS_RAM_SUB;kind++) CHECK(GenesisRAMTransfer_GetHistory(kind,0,ram_values)==2 && ram_values[0]>0 && ram_values[1]>0);
@@ -303,7 +307,7 @@ static int hle_tests(void) {
     CHECK(VRAMTransfer_GetHistory(1,ram_values)==2 && ram_values[0]>0 && ram_values[1]>0);
     for(int kind=GENESIS_RAM_MAIN;kind<=GENESIS_RAM_SUB;kind++) CHECK(GenesisRAMTransfer_GetHistory(kind,1,ram_values)==2 && ram_values[0]>0 && ram_values[1]>0);
     for(int kind=VDP_TRANSFER_CRAM;kind<=VDP_TRANSFER_DMA;kind++) CHECK(VDPTransfer_GetHistory(kind,1,ram_values)==2 && ram_values[0]>0 && ram_values[1]>0);
-    PWM_Enable=0; SH2DMATransfer_Reset();SDRAMTransfer_Reset();
+    PWM_Enable=0; SH2DMATransfer_Reset();SDRAMTransfer_Reset();VRAM32XTransfer_Reset();
     _32X_Started=0; Genesis_Started=1; Init_Memory_M68K(0);
     VRAMTransfer_Reset(); GenesisRAMTransfer_Reset(); Do_Genesis_Frame(); Do_Genesis_Frame_No_VDP();
     CHECK(VRAMTransfer_GetHistory(0,ram_values)==2 && ram_values[0]>0 && ram_values[1]>0);
@@ -314,6 +318,7 @@ static int hle_tests(void) {
     for(int kind=VDP_TRANSFER_CRAM;kind<=VDP_TRANSFER_DMA;kind++) CHECK(VDPTransfer_GetHistory(kind,1,ram_values)==2 && ram_values[0]>0 && ram_values[1]>0);
     CHECK(!SH2DMATransfer_GetHistory(0,0,ram_values));
     CHECK(!SDRAMTransfer_GetHistory(0,ram_values));
+    CHECK(!VRAM32XTransfer_GetHistory(ram_values));
     Genesis_Started=0; Unload_ISO(); DeleteFile("transfer-test.iso");
     puts("PASS: HLE direct/host reads without double counting; all eight frame loops including Genesis, SegaCD, 32X/CD32X and frameskip");
     return 0;

@@ -38,6 +38,7 @@
 #include "genesis_ram_transfer.h"
 #include "sh2_dma_transfer.h"
 #include "sdram_transfer.h"
+#include "vram32x_transfer.h"
 #include "program_ram_transfer.h"
 #include "32x_boot.h"
 #define main68k_exec CD_HLE_MainExec
@@ -1278,6 +1279,7 @@ int Do_32X_Frame_No_VDP()
 	GenesisRAMTransfer_BeginFrame();
 	SH2DMATransfer_BeginFrame();
 	SDRAMTransfer_BeginFrame();
+	VRAM32XTransfer_BeginFrame();
 	z80_Clear_Odo(&M_Z80);
 	Z80_Usage_Begin_Frame();
 	M_SH2.Idle_Cycles = S_SH2.Idle_Cycles = 0;
@@ -1556,6 +1558,7 @@ int Do_32X_Frame_No_VDP()
 	GenesisRAMTransfer_EndFrame(CPU_Mode ? 50 : 60);
 	SH2DMATransfer_EndFrame(CPU_Mode ? 50 : 60);
 	SDRAMTransfer_EndFrame(CPU_Mode ? 50 : 60);
+	VRAM32XTransfer_EndFrame(CPU_Mode ? 50 : 60);
 	Z80_Usage_End_Frame(CPL_Z80 * VDP_Num_Lines);
 	return 1;
 }
@@ -1590,6 +1593,7 @@ int Do_32X_Frame()
 	GenesisRAMTransfer_BeginFrame();
 	SH2DMATransfer_BeginFrame();
 	SDRAMTransfer_BeginFrame();
+	VRAM32XTransfer_BeginFrame();
 	z80_Clear_Odo(&M_Z80);
 	Z80_Usage_Begin_Frame();
 	M_SH2.Idle_Cycles = S_SH2.Idle_Cycles = 0;
@@ -1867,6 +1871,7 @@ int Do_32X_Frame()
 	GenesisRAMTransfer_EndFrame(CPU_Mode ? 50 : 60);
 	SH2DMATransfer_EndFrame(CPU_Mode ? 50 : 60);
 	SDRAMTransfer_EndFrame(CPU_Mode ? 50 : 60);
+	VRAM32XTransfer_EndFrame(CPU_Mode ? 50 : 60);
 	Z80_Usage_End_Frame(CPL_Z80 * VDP_Num_Lines);
 	return 1;
 }

@@ -1,3 +1,4 @@
+%include "vram32x_transfer.inc"
 %define PWM_BUF_SIZE 4
 
 	; 32X extended Read Byte
@@ -1489,6 +1490,7 @@
 		jz short .blank
 
 		xor ebx, byte 1
+		COUNT_32X_VRAM_WRITE 1
 		mov [_32X_VDP_Ram + ebx], al
 
 	.blank
@@ -1504,6 +1506,7 @@
 		jz short .blank
 
 		xor ebx, byte 1
+		COUNT_32X_VRAM_WRITE 1
 		mov [_32X_VDP_Ram + ebx + 0x20000], al
 
 	.blank
@@ -2160,6 +2163,7 @@
 		jz short .Spec_Fill
 		jnc short .Loop
 
+		COUNT_32X_VRAM_WRITE 2
 		mov [edi + ebx * 2], ax
 		inc bl
 		jmp short .Loop
@@ -2167,6 +2171,7 @@
 	ALIGN32
 
 	.Loop
+		COUNT_32X_VRAM_WRITE 4
 		mov [edi + ebx * 2], eax
 		add bl, byte 2
 		dec ecx
@@ -2181,6 +2186,7 @@
 	ALIGN32
 
 	.Spec_Fill
+		COUNT_32X_VRAM_WRITE 2
 		mov [edi + ebx * 2], ax
 		inc bl
 		pop edi
@@ -2241,6 +2247,7 @@
 		test ebx, 0x20000
 		jnz short .overwrite
 
+		COUNT_32X_VRAM_WRITE 2
 		mov [_32X_VDP_Ram + ebx], ax
 		pop ecx
 		pop ebx
@@ -2252,12 +2259,14 @@
 		test al, al
 		jz short .blank1
 
+		COUNT_32X_VRAM_WRITE 1
 		mov [_32X_VDP_Ram + ebx - 0x20000 + 0], al
 
 	.blank1
 		test ah, ah
 		jz short .blank2
 
+		COUNT_32X_VRAM_WRITE 1
 		mov [_32X_VDP_Ram + ebx - 0x20000 + 1], ah
 
 	.blank2
@@ -2273,6 +2282,7 @@
 		test ebx, 0x20000
 		jnz short .overwrite
 
+		COUNT_32X_VRAM_WRITE 2
 		mov [_32X_VDP_Ram + ebx + 0x20000], ax
 		pop ecx
 		pop ebx
@@ -2284,12 +2294,14 @@
 		test al, al
 		jz short .blank1
 
+		COUNT_32X_VRAM_WRITE 1
 		mov [_32X_VDP_Ram + ebx - 0x20000 + 0x20000 + 0], al
 
 	.blank1
 		test ah, ah
 		jz short .blank2
 
+		COUNT_32X_VRAM_WRITE 1
 		mov [_32X_VDP_Ram + ebx - 0x20000 + 0x20000 + 1], ah
 
 	.blank2

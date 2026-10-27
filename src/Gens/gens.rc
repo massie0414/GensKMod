@@ -1338,3 +1338,16 @@ BEGIN
     LTEXT "Last 256 frames / newest at right / shared automatic scale",-1,18,246,264,12
     LTEXT "Master + Slave SH2 + DMA / instruction fetch excluded",-1,18,262,264,12
 END
+
+IDD_VRAM32X_TRANSFER DIALOGEX 0, 0, 300, 170
+STYLE DS_SETFONT | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "32X - VRAM Write Transfer"
+FONT 8, "MS Shell Dlg"
+BEGIN
+    GROUPBOX "Write to VRAM (KiB per frame)",-1,11,7,278,105
+    CONTROL "",IDC_VRAM32X_TRANSFER_GRAPH,"Static",SS_OWNERDRAW,18,19,264,68
+    LTEXT "Last 256 frames / newest at right / automatic scale",-1,18,92,264,12
+    LTEXT "",IDC_VRAM32X_TRANSFER_RATE,18,118,264,12
+    LTEXT "128 KiB x 2 framebuffers / CPU + SH2 DMA + autofill",-1,18,134,264,12
+    LTEXT "Stored bytes / transparent and rejected writes excluded",-1,18,150,264,12
+END

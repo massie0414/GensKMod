@@ -1,3 +1,4 @@
+%include "vram32x_transfer.inc"
 %include "nasmhead.inc"
 extern _CD_32X_Active
 extern _SDRAMTransfer_InFrame
@@ -733,6 +734,7 @@ section .text align=64
 		jz short .blank
 
 		xor ecx, byte 1
+		COUNT_32X_VRAM_WRITE 1
 		mov [_32X_VDP_Ram + ecx], dl
 
 	.blank
@@ -747,6 +749,7 @@ section .text align=64
 		jz short .blank
 
 		xor ecx, byte 1
+		COUNT_32X_VRAM_WRITE 1
 		mov [_32X_VDP_Ram + ecx + 0x20000], dl
 
 	.blank
@@ -828,6 +831,7 @@ section .text align=64
 		test ecx, 0x20000
 		jnz short .overwrite
 
+		COUNT_32X_VRAM_WRITE 2
 		mov [_32X_VDP_Ram + ecx], dx
 		ret
 
@@ -837,12 +841,14 @@ section .text align=64
 		test dl, dl
 		jz short .blank1
 
+		COUNT_32X_VRAM_WRITE 1
 		mov [_32X_VDP_Ram + ecx - 0x20000 + 0], dl
 
 	.blank1
 		test dh, dh
 		jz short .blank2
 
+		COUNT_32X_VRAM_WRITE 1
 		mov [_32X_VDP_Ram + ecx - 0x20000 + 1], dh
 
 	.blank2
@@ -855,6 +861,7 @@ section .text align=64
 		test ecx, 0x20000
 		jnz short .overwrite
 
+		COUNT_32X_VRAM_WRITE 2
 		mov [_32X_VDP_Ram + ecx + 0x20000], dx
 		ret
 
@@ -864,12 +871,14 @@ section .text align=64
 		test dl, dl
 		jz short .blank1
 
+		COUNT_32X_VRAM_WRITE 1
 		mov [_32X_VDP_Ram + ecx - 0x20000 + 0x20000 + 0], dl
 
 	.blank1
 		test dh, dh
 		jz short .blank2
 
+		COUNT_32X_VRAM_WRITE 1
 		mov [_32X_VDP_Ram + ecx - 0x20000 + 0x20000 + 1], dh
 
 	.blank2
@@ -980,6 +989,7 @@ section .text align=64
 		test ecx, 0x20000
 		jnz short .overwrite
 
+		COUNT_32X_VRAM_WRITE 4
 		mov [_32X_VDP_Ram + ecx], edx
 		ret
 
@@ -989,24 +999,28 @@ section .text align=64
 		test dl, dl
 		jz short .blank1
 
+		COUNT_32X_VRAM_WRITE 1
 		mov [_32X_VDP_Ram + ecx - 0x20000 + 0], dl
 
 	.blank1
 		test dh, dh
 		jz short .blank2
 
+		COUNT_32X_VRAM_WRITE 1
 		mov [_32X_VDP_Ram + ecx - 0x20000 + 1], dh
 
 	.blank2
 		test al, al
 		jz short .blank3
 
+		COUNT_32X_VRAM_WRITE 1
 		mov [_32X_VDP_Ram + ecx - 0x20000 + 2], al
 
 	.blank3
 		test ah, ah
 		jz short .blank4
 
+		COUNT_32X_VRAM_WRITE 1
 		mov [_32X_VDP_Ram + ecx - 0x20000 + 3], ah
 
 	.blank4
@@ -1022,6 +1036,7 @@ section .text align=64
 		test ecx, 0x20000
 		jnz short .overwrite
 
+		COUNT_32X_VRAM_WRITE 4
 		mov [_32X_VDP_Ram + ecx + 0x20000], edx
 		ret
 
@@ -1031,24 +1046,28 @@ section .text align=64
 		test dl, dl
 		jz short .blank1
 
+		COUNT_32X_VRAM_WRITE 1
 		mov [_32X_VDP_Ram + ecx - 0x20000 + 0x20000 + 0], dl
 
 	.blank1
 		test dh, dh
 		jz short .blank2
 
+		COUNT_32X_VRAM_WRITE 1
 		mov [_32X_VDP_Ram + ecx - 0x20000 + 0x20000 + 1], dh
 
 	.blank2
 		test al, al
 		jz short .blank3
 
+		COUNT_32X_VRAM_WRITE 1
 		mov [_32X_VDP_Ram + ecx - 0x20000 + 0x20000 + 2], al
 
 	.blank3
 		test ah, ah
 		jz short .blank4
 
+		COUNT_32X_VRAM_WRITE 1
 		mov [_32X_VDP_Ram + ecx - 0x20000 + 0x20000 + 3], ah
 
 	.blank4
@@ -2196,6 +2215,7 @@ section .text align=64
 		jz short .Spec
 		jnc short .Loop
 
+		COUNT_32X_VRAM_WRITE 2
 		mov [edi + edx * 2], ax
 		inc dl
 		jmp short .Loop
@@ -2203,6 +2223,7 @@ section .text align=64
 	ALIGN32
 
 	.Loop
+		COUNT_32X_VRAM_WRITE 4
 		mov [edi + edx * 2], eax
 		add dl, byte 2
 		dec ecx
@@ -2215,6 +2236,7 @@ section .text align=64
 	ALIGN32
 
 	.Spec
+		COUNT_32X_VRAM_WRITE 2
 		mov [edi + edx * 2], ax
 		inc dl
 		pop edi
