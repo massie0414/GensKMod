@@ -16,6 +16,7 @@
 #include "../src/Gens/vdp_io.h"
 #include "../src/Gens/LC89510.h"
 #include "../src/Gens/program_ram_transfer.h"
+#include "../src/Gens/main_word_ram_transfer.h"
 
 #define CHECK(x) do { if(!(x)) { fprintf(stderr,"FAIL line %d: %s\n",__LINE__,#x); return 1; } } while(0)
 static void be32(unsigned char *p,unsigned v) { p[0]=v>>24; p[1]=v>>16; p[2]=v>>8; p[3]=v; }
@@ -117,6 +118,21 @@ int main(void) {
       main68k_context.areg[2]=0xff5100;
       S68000CONTEXT decoded=main_api(0x2f0,0xff5200,0xff5000,0xdeadbeef);
       CHECK(decoded.areg[0]==0xff5200 && decoded.areg[1]==0xff5000 && decoded.areg[2]==0xff5100 && decoded.dreg[0]==0xdeadbeef);
+      // HLE byte reads (Nemesis) and output writes also use the main-CPU counter.
+      unsigned long main_values[MAIN_WORD_RAM_TRANSFER_HISTORY];
+      for(unsigned i=0;i<sizeof(stream);i++)M68K_WB(0x200400+i,stream[i]);
+      main68k_context.areg[2]=0x200500;
+      MainWordRAMTransfer_Reset(); MainWordRAMTransfer_BeginFrame();
+      main_api(0x2f0,0xff5200,0x200400,0xdeadbeef); MainWordRAMTransfer_EndFrame(60);
+      CHECK(MainWordRAMTransfer_GetHistory(0,main_values)==1 && main_values[0]>2 && main_values[0]<=sizeof(stream));
+      CHECK(MainWordRAMTransfer_GetHistory(1,main_values)==1 && main_values[0]==32);
+      for(unsigned i=0;i<32;i++)CHECK(M68K_RB(0x200500+i)==Ram_68k[(0x5100+i)^1]);
+      // HLE longword copies can read and write Word RAM in the same call.
+      MainWordRAMTransfer_BeginFrame(); main_api(0x310,0x200500,0x200600,8); MainWordRAMTransfer_EndFrame(60);
+      CHECK(MainWordRAMTransfer_GetHistory(0,main_values)==2 && main_values[1]==8);
+      CHECK(MainWordRAMTransfer_GetHistory(1,main_values)==2 && main_values[1]==8);
+      for(unsigned i=0;i<8;i++)CHECK(M68K_RB(0x200600+i)==M68K_RB(0x200500+i));
+      main68k_context.areg[2]=0xff5100;
       // The VDP address is set by the caller, independently of D0.
       Set_VDP_Reg(15,2); Write_VDP_Ctrl(0x5800); Write_VDP_Ctrl(1);
       decoded=main_api(0x2ec,0xff5200,0xff5000,0x40000003);

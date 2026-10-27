@@ -529,10 +529,10 @@ static void gen_interface(void) {
 	emit("bits 32\n");
 
 	emit("\n");
-	emit("\textern M68K_RB\n");
-	emit("\textern M68K_RW\n");
-	emit("\textern M68K_WB\n");
-	emit("\textern M68K_WW\n");
+	emit("\textern _M68K_Data_RB\n");
+	emit("\textern _M68K_Data_RW\n");
+	emit("\textern _M68K_Data_WB\n");
+	emit("\textern _M68K_Data_WW\n");
 	emit("\textern Int_Ack\n");
 	emit("\n");
 
@@ -1500,7 +1500,7 @@ static void gen_readbw(int size)
 		emit("\tmov [__io_cycle_counter], edi\n");
 		emit("\tmov [__io_fetchbase], ebp\n");
 		emit("\tmov [__io_fetchbased_pc], esi\n");
-		emit("\tcall M68K_RB\n");
+		emit("\tcall _M68K_Data_RB\n");
 
 //	emit("\tmov eax, [esp]\n");
 //	emit("\tpush ebx\n");
@@ -1540,7 +1540,7 @@ static void gen_readbw(int size)
 		emit("\tmov [__io_cycle_counter], edi\n");
 		emit("\tmov [__io_fetchbase], ebp\n");
 		emit("\tmov [__io_fetchbased_pc], esi\n");
-		emit("\tcall M68K_RW\n");
+		emit("\tcall _M68K_Data_RW\n");
 		emit("\tmov edi, [__io_cycle_counter]\n");
 		emit("\tadd esp, byte 4\n");
 		emit("\tmov ebp, [__io_fetchbase]\n");
@@ -1575,11 +1575,11 @@ static void gen_readl(void)
 	emit("\tmov [__io_cycle_counter], edi\n");
 	emit("\tmov [__io_fetchbase], ebp\n");
 	emit("\tmov [__io_fetchbased_pc], esi\n");
-	emit("\tcall M68K_RW\n");
+	emit("\tcall _M68K_Data_RW\n");
 	emit("\tmov cx, ax\n");
 	emit("\tadd dword [esp], byte 2\n");
 	emit("\tshl ecx, 16\n");
-	emit("\tcall M68K_RW\n");
+	emit("\tcall _M68K_Data_RW\n");
 	emit("\tmov edi, [__io_cycle_counter]\n");
 	emit("\tadd esp, byte 4\n");
 	emit("\tmov ebp, [__io_fetchbase]\n");
@@ -1614,11 +1614,11 @@ static void gen_readdecl(void)
 	emit("\tmov [__io_cycle_counter], edi\n");
 	emit("\tmov [__io_fetchbase], ebp\n");
 	emit("\tmov [__io_fetchbased_pc], esi\n");
-	emit("\tcall M68K_RW\n");
+	emit("\tcall _M68K_Data_RW\n");
 	emit("\tmov ecx, eax\n");
 	emit("\tsub dword [esp], byte 2\n");
 	emit("\tand ecx, 0xFFFF\n");
-	emit("\tcall M68K_RW\n");
+	emit("\tcall _M68K_Data_RW\n");
 	emit("\tand eax, 0xFFFF\n");
 	emit("\tmov edi, [__io_cycle_counter]\n");
 	emit("\tshl eax, 16\n");
@@ -1657,7 +1657,7 @@ static void gen_writebw(int size)
 		emit("\tmov [__io_cycle_counter], edi\n");
 		emit("\tmov [__io_fetchbase], ebp\n");
 		emit("\tmov [__io_fetchbased_pc], esi\n");
-		emit("\tcall M68K_WB\n");
+		emit("\tcall _M68K_Data_WB\n");
 		emit("\tmov edi, [__io_cycle_counter]\n");
 		emit("\tadd esp, byte 8\n");
 		emit("\tmov ebp, [__io_fetchbase]\n");
@@ -1686,7 +1686,7 @@ static void gen_writebw(int size)
 		emit("\tmov [__io_cycle_counter], edi\n");
 		emit("\tmov [__io_fetchbase], ebp\n");
 		emit("\tmov [__io_fetchbased_pc], esi\n");
-		emit("\tcall M68K_WW\n");
+		emit("\tcall _M68K_Data_WW\n");
 		emit("\tmov edi, [__io_cycle_counter]\n");
 		emit("\tadd esp, byte 8\n");
 		emit("\tmov ebp, [__io_fetchbase]\n");
@@ -1722,10 +1722,10 @@ static void gen_writel(void)
 	emit("\tmov [__io_fetchbase], ebp\n");
 	emit("\trol ecx, 16\n");
 	emit("\tmov [__io_fetchbased_pc], esi\n");
-	emit("\tcall M68K_WW\n");
+	emit("\tcall _M68K_Data_WW\n");
 	emit("\tmov [esp + 4], cx\n");
 	emit("\tadd dword [esp], byte 2\n");
-	emit("\tcall M68K_WW\n");
+	emit("\tcall _M68K_Data_WW\n");
 	emit("\tmov edi, [__io_cycle_counter]\n");
 	emit("\tadd esp, byte 8\n");
 	emit("\tmov ebp, [__io_fetchbase]\n");
@@ -1761,10 +1761,10 @@ static void gen_writedecl(void)
 	emit("\tmov [__io_fetchbase], ebp\n");
 	emit("\trol ecx, 16\n");
 	emit("\tmov [__io_fetchbased_pc], esi\n");
-	emit("\tcall M68K_WW\n");
+	emit("\tcall _M68K_Data_WW\n");
 	emit("\tmov [esp + 4], ecx\n");
 	emit("\tsub dword [esp], byte 2\n");
-	emit("\tcall M68K_WW\n");
+	emit("\tcall _M68K_Data_WW\n");
 	emit("\tmov edi, [__io_cycle_counter]\n");
 	emit("\tadd esp, byte 8\n");
 	emit("\tmov ebp, [__io_fetchbase]\n");

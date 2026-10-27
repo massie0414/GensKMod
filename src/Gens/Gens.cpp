@@ -33,6 +33,7 @@
 #include "cd_hle.h"
 #include "cd_transfer.h"
 #include "word_ram_transfer.h"
+#include "main_word_ram_transfer.h"
 #include "program_ram_transfer.h"
 #include "32x_boot.h"
 #define main68k_exec CD_HLE_MainExec
@@ -1267,7 +1268,7 @@ int Do_32X_Frame_No_VDP()
 	SH2_Clear_Odo(&M_SH2);
 	SH2_Clear_Odo(&S_SH2);
 	PWM_Clear_Timer();
-    if(CD_32X_Active) { CPL_S68K=795; Cycles_S68K=0; sub68k_tripOdometer(); S68K_Usage_Begin_Frame(); CDTransfer_BeginFrame(); WordRAMTransfer_BeginFrame(); ProgramRAMTransfer_BeginFrame(); CD_HLE_Frame(); }
+    if(CD_32X_Active) { CPL_S68K=795; Cycles_S68K=0; sub68k_tripOdometer(); S68K_Usage_Begin_Frame(); CDTransfer_BeginFrame(); WordRAMTransfer_BeginFrame(); MainWordRAMTransfer_BeginFrame(); ProgramRAMTransfer_BeginFrame(); CD_HLE_Frame(); }
 
 	Patch_Codes();
 
@@ -1524,7 +1525,7 @@ int Do_32X_Frame_No_VDP()
         if(CD_32X_Active) Update_SegaCD_Timer();
 	}
 
-	if (CD_32X_Active) { S68K_Usage_End_Frame(CPL_S68K * VDP_Num_Lines); CDTransfer_EndFrame(CPU_Mode ? 50 : 60); WordRAMTransfer_EndFrame(CPU_Mode ? 50 : 60); ProgramRAMTransfer_EndFrame(CPU_Mode ? 50 : 60); }
+	if (CD_32X_Active) { S68K_Usage_End_Frame(CPL_S68K * VDP_Num_Lines); CDTransfer_EndFrame(CPU_Mode ? 50 : 60); WordRAMTransfer_EndFrame(CPU_Mode ? 50 : 60); MainWordRAMTransfer_EndFrame(CPU_Mode ? 50 : 60); ProgramRAMTransfer_EndFrame(CPU_Mode ? 50 : 60); }
 	SH2_Usage_End_Frame(&M_SH2);
 	SH2_Usage_End_Frame(&S_SH2);
 	PSG_Special_Update();
@@ -1571,7 +1572,7 @@ int Do_32X_Frame()
 	SH2_Clear_Odo(&M_SH2);
 	SH2_Clear_Odo(&S_SH2);
 	PWM_Clear_Timer();
-    if(CD_32X_Active) { CPL_S68K=795; Cycles_S68K=0; sub68k_tripOdometer(); S68K_Usage_Begin_Frame(); CDTransfer_BeginFrame(); WordRAMTransfer_BeginFrame(); ProgramRAMTransfer_BeginFrame(); CD_HLE_Frame(); }
+    if(CD_32X_Active) { CPL_S68K=795; Cycles_S68K=0; sub68k_tripOdometer(); S68K_Usage_Begin_Frame(); CDTransfer_BeginFrame(); WordRAMTransfer_BeginFrame(); MainWordRAMTransfer_BeginFrame(); ProgramRAMTransfer_BeginFrame(); CD_HLE_Frame(); }
 
 	Patch_Codes();
 
@@ -1827,7 +1828,7 @@ int Do_32X_Frame()
         if(CD_32X_Active) Update_SegaCD_Timer();
 	}
 
-	if (CD_32X_Active) { S68K_Usage_End_Frame(CPL_S68K * VDP_Num_Lines); CDTransfer_EndFrame(CPU_Mode ? 50 : 60); WordRAMTransfer_EndFrame(CPU_Mode ? 50 : 60); ProgramRAMTransfer_EndFrame(CPU_Mode ? 50 : 60); }
+	if (CD_32X_Active) { S68K_Usage_End_Frame(CPL_S68K * VDP_Num_Lines); CDTransfer_EndFrame(CPU_Mode ? 50 : 60); WordRAMTransfer_EndFrame(CPU_Mode ? 50 : 60); MainWordRAMTransfer_EndFrame(CPU_Mode ? 50 : 60); ProgramRAMTransfer_EndFrame(CPU_Mode ? 50 : 60); }
 	SH2_Usage_End_Frame(&M_SH2);
 	SH2_Usage_End_Frame(&S_SH2);
 	PSG_Special_Update();
@@ -2130,7 +2131,7 @@ int Do_SegaCD_Frame_No_VDP(void)
 #endif
 	M68K_Usage_Begin_Frame();
 	sub68k_tripOdometer(); S68K_Usage_Begin_Frame();
-	CDTransfer_BeginFrame(); WordRAMTransfer_BeginFrame(); ProgramRAMTransfer_BeginFrame();
+	CDTransfer_BeginFrame(); WordRAMTransfer_BeginFrame(); MainWordRAMTransfer_BeginFrame(); ProgramRAMTransfer_BeginFrame();
 	CD_HLE_Frame();
 	z80_Clear_Odo(&M_Z80);
 	Z80_Usage_Begin_Frame();
@@ -2255,7 +2256,7 @@ int Do_SegaCD_Frame_No_VDP(void)
 	if (GYM_Dumping) Update_GYM_Dump((unsigned char) 0, (unsigned char) 0, (unsigned char) 0);
 
 	S68K_Usage_End_Frame(CPL_S68K * VDP_Num_Lines);
-	CDTransfer_EndFrame(CPU_Mode ? 50 : 60); WordRAMTransfer_EndFrame(CPU_Mode ? 50 : 60); ProgramRAMTransfer_EndFrame(CPU_Mode ? 50 : 60);
+	CDTransfer_EndFrame(CPU_Mode ? 50 : 60); WordRAMTransfer_EndFrame(CPU_Mode ? 50 : 60); MainWordRAMTransfer_EndFrame(CPU_Mode ? 50 : 60); ProgramRAMTransfer_EndFrame(CPU_Mode ? 50 : 60);
 	M68K_Usage_End_Frame(CPL_M68K * VDP_Num_Lines);
 	Z80_Usage_End_Frame(CPL_Z80 * VDP_Num_Lines);
 	return(1);
@@ -2287,7 +2288,7 @@ int Do_SegaCD_Frame_No_VDP_Cycle_Accurate(void)
 #endif
 	M68K_Usage_Begin_Frame();
 	sub68k_tripOdometer(); S68K_Usage_Begin_Frame();
-	CDTransfer_BeginFrame(); WordRAMTransfer_BeginFrame(); ProgramRAMTransfer_BeginFrame();
+	CDTransfer_BeginFrame(); WordRAMTransfer_BeginFrame(); MainWordRAMTransfer_BeginFrame(); ProgramRAMTransfer_BeginFrame();
 	CD_HLE_Frame();
 	z80_Clear_Odo(&M_Z80);
 	Z80_Usage_Begin_Frame();
@@ -2528,7 +2529,7 @@ int Do_SegaCD_Frame_No_VDP_Cycle_Accurate(void)
 	if (GYM_Dumping) Update_GYM_Dump((unsigned char) 0, (unsigned char) 0, (unsigned char) 0);
 
 	S68K_Usage_End_Frame(CPL_S68K * VDP_Num_Lines);
-	CDTransfer_EndFrame(CPU_Mode ? 50 : 60); WordRAMTransfer_EndFrame(CPU_Mode ? 50 : 60); ProgramRAMTransfer_EndFrame(CPU_Mode ? 50 : 60);
+	CDTransfer_EndFrame(CPU_Mode ? 50 : 60); WordRAMTransfer_EndFrame(CPU_Mode ? 50 : 60); MainWordRAMTransfer_EndFrame(CPU_Mode ? 50 : 60); ProgramRAMTransfer_EndFrame(CPU_Mode ? 50 : 60);
 	M68K_Usage_End_Frame(CPL_M68K * VDP_Num_Lines);
 	Z80_Usage_End_Frame(CPL_Z80 * VDP_Num_Lines);
 	return(1);
@@ -2562,7 +2563,7 @@ int Do_SegaCD_Frame(void)
 #endif
 	M68K_Usage_Begin_Frame();
 	sub68k_tripOdometer(); S68K_Usage_Begin_Frame();
-	CDTransfer_BeginFrame(); WordRAMTransfer_BeginFrame(); ProgramRAMTransfer_BeginFrame();
+	CDTransfer_BeginFrame(); WordRAMTransfer_BeginFrame(); MainWordRAMTransfer_BeginFrame(); ProgramRAMTransfer_BeginFrame();
 	CD_HLE_Frame();
 	z80_Clear_Odo(&M_Z80);
 	Z80_Usage_Begin_Frame();
@@ -2716,7 +2717,7 @@ int Do_SegaCD_Frame(void)
 	}
 
 	S68K_Usage_End_Frame(CPL_S68K * VDP_Num_Lines);
-	CDTransfer_EndFrame(CPU_Mode ? 50 : 60); WordRAMTransfer_EndFrame(CPU_Mode ? 50 : 60); ProgramRAMTransfer_EndFrame(CPU_Mode ? 50 : 60);
+	CDTransfer_EndFrame(CPU_Mode ? 50 : 60); WordRAMTransfer_EndFrame(CPU_Mode ? 50 : 60); MainWordRAMTransfer_EndFrame(CPU_Mode ? 50 : 60); ProgramRAMTransfer_EndFrame(CPU_Mode ? 50 : 60);
 	M68K_Usage_End_Frame(CPL_M68K * VDP_Num_Lines);
 	Z80_Usage_End_Frame(CPL_Z80 * VDP_Num_Lines);
 	return(1);
@@ -2748,7 +2749,7 @@ int Do_SegaCD_Frame_Cycle_Accurate(void)
 #endif
 	M68K_Usage_Begin_Frame();
 	sub68k_tripOdometer(); S68K_Usage_Begin_Frame();
-	CDTransfer_BeginFrame(); WordRAMTransfer_BeginFrame(); ProgramRAMTransfer_BeginFrame();
+	CDTransfer_BeginFrame(); WordRAMTransfer_BeginFrame(); MainWordRAMTransfer_BeginFrame(); ProgramRAMTransfer_BeginFrame();
 	CD_HLE_Frame();
 	z80_Clear_Odo(&M_Z80);
 	Z80_Usage_Begin_Frame();
@@ -3018,7 +3019,7 @@ int Do_SegaCD_Frame_Cycle_Accurate(void)
 	}
 
 	S68K_Usage_End_Frame(CPL_S68K * VDP_Num_Lines);
-	CDTransfer_EndFrame(CPU_Mode ? 50 : 60); WordRAMTransfer_EndFrame(CPU_Mode ? 50 : 60); ProgramRAMTransfer_EndFrame(CPU_Mode ? 50 : 60);
+	CDTransfer_EndFrame(CPU_Mode ? 50 : 60); WordRAMTransfer_EndFrame(CPU_Mode ? 50 : 60); MainWordRAMTransfer_EndFrame(CPU_Mode ? 50 : 60); ProgramRAMTransfer_EndFrame(CPU_Mode ? 50 : 60);
 	M68K_Usage_End_Frame(CPL_M68K * VDP_Num_Lines);
 	Z80_Usage_End_Frame(CPL_Z80 * VDP_Num_Lines);
 	return 1;

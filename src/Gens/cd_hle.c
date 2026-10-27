@@ -11,6 +11,7 @@
 #include "cd_hle.h"
 #include "cd_transfer.h"
 #include "word_ram_transfer.h"
+#include "main_word_ram_transfer.h"
 #include "program_ram_transfer.h"
 #include "Cpu_68k.h"
 #include "Mem_M68K.h"
@@ -84,12 +85,12 @@ static unsigned memr(int sub,unsigned a) {
     if(sub) { if(a<0x80000)return prg_rw(a); return S68K_Data_RW(a); }
     if(a>=0xff0000)return rw(Ram_68k,a&0xffff);
     if(a<0x20000)return rw(Rom_Data,a);
-    return M68K_RW(a);
+    return M68K_Data_RW(a);
 }
 static void memw(int sub,unsigned a,unsigned v) {
     a &= 0xffffff;
     if(sub) { if(a<0x80000)prg_ww(a,v); else S68K_Data_WW(a,(unsigned short)v); }
-    else { if(a>=0xff0000)ww(Ram_68k,a&0xffff,v); else M68K_WW(a,(unsigned short)v); }
+    else { if(a>=0xff0000)ww(Ram_68k,a&0xffff,v); else M68K_Data_WW(a,(unsigned short)v); }
 }
 static unsigned meml(int sub,unsigned a) { return (memr(sub,a)<<16)|memr(sub,a+2); }
 static void ret(int sub) {
@@ -548,22 +549,22 @@ static int nemesis(unsigned source,unsigned destination,int to_ram) {
     unsigned bits=0,remaining=0,produced=0,row=0,row_pixels=0,previous=0;
     a+=2;
     for(i=0;i<512;i++) {
-        unsigned d=M68K_RB(a++);
+        unsigned d=M68K_Data_RB(a++);
         if(d==255)break;
-        if(d&128) { pixel=d&15; d=M68K_RB(a++); }
+        if(d&128) { pixel=d&15; d=M68K_Data_RB(a++); }
         if(n>=256 || !(d&15) || (d&15)>8)return 0;
-        length[n]=d&15; runs[n]=((d>>4)&7)+1; color[n]=pixel; code[n++]=(unsigned char)M68K_RB(a++);
+        length[n]=d&15; runs[n]=((d>>4)&7)+1; color[n]=pixel; code[n++]=(unsigned char)M68K_Data_RB(a++);
     }
     if(i==512)return 0;
     while(produced<tiles*64) {
         unsigned prefix=0,len,run=0,value=0;
         for(len=1;len<=8;len++) {
-            if(!remaining) { bits=M68K_RB(a++); remaining=8; }
+            if(!remaining) { bits=M68K_Data_RB(a++); remaining=8; }
             prefix=(prefix<<1)|((bits>>--remaining)&1);
             if(len==6 && prefix==63) {
                 unsigned inline_bits=0,j;
                 for(j=0;j<7;j++) {
-                    if(!remaining) { bits=M68K_RB(a++); remaining=8; }
+                    if(!remaining) { bits=M68K_Data_RB(a++); remaining=8; }
                     inline_bits=(inline_bits<<1)|((bits>>--remaining)&1);
                 }
                 run=(inline_bits>>4)+1; value=inline_bits&15; break;
@@ -672,7 +673,7 @@ static void maincall(unsigned fn) {
             Write_VDP_Ctrl((unsigned short)(cmd>>16)); Write_VDP_Ctrl((unsigned short)cmd);
             for(x=0;x<cols;x++) {
                 if(fn==0x2c4) { tile=memr(0,src); src+=2; }
-                else if(fn==0x2c8) { tile=(tile&~255U)|M68K_RB(src++); }
+                else if(fn==0x2c8) { tile=(tile&~255U)|M68K_Data_RB(src++); }
                 Write_Word_VDP_Data((unsigned short)(fn==0x334?tile+y+x*rows:tile));
                 if(fn==0x36c)tile++;
             }
@@ -716,8 +717,8 @@ static void maincall(unsigned fn) {
     case 0x2e8: { unsigned i; if(!(Ram_68k[0xfe29^1]&1))break; Ram_68k[0xfe29^1]&=~1; for(i=0;i<128;i+=2)ww(CRam,i,rw(Ram_68k,0xfb80+i)); CRam_Flag=1; } break;
     case 0x29c: {
         unsigned port=c->areg[6]&0xffffff, hi,lo;
-        M68K_WB(port+6,0x40); M68K_WB(port,0x40); hi=M68K_RB(port);
-        M68K_WB(port,0); lo=M68K_RB(port);
+        M68K_Data_WB(port+6,0x40); M68K_Data_WB(port,0x40); hi=M68K_Data_RB(port);
+        M68K_Data_WB(port,0); lo=M68K_Data_RB(port);
         c->dreg[7]=((hi&12)?8:0)|((hi&3)?4:0)|((lo&12)?2:0)|((lo&3)?1:0);
         break;
     }
@@ -725,7 +726,7 @@ static void maincall(unsigned fn) {
         unsigned port;
         for(port=0;port<2;port++) {
             unsigned addr=0xa10003+port*2,low,high,pressed,old=Ram_68k[(0xfe20+port*2)^1];
-            M68K_WB(addr,0); low=M68K_RB(addr); M68K_WB(addr,0x40); high=M68K_RB(addr);
+            M68K_Data_WB(addr,0); low=M68K_Data_RB(addr); M68K_Data_WB(addr,0x40); high=M68K_Data_RB(addr);
             pressed=~(((low<<2)&0xc0)|(high&0x3f))&255;
             ww(Ram_68k,0xfe20+port*2,(pressed<<8)|(pressed&~old));
         }
@@ -737,7 +738,7 @@ static void maincall(unsigned fn) {
     case 0x368: wl(Ram_68k,0xfd08,c->areg[1]); break;
     case 0x348: { /* Decode the sub CPU's buffered disc status after exchange. */
         unsigned flags=Ram_68k[0xfdde^1], subflags=Ram_68k[0xfddf^1], status;
-        M68K_WB(0xa1200e,M68K_RB(0xa1200e)&~2);
+        M68K_Data_WB(0xa1200e,M68K_Data_RB(0xa1200e)&~2);
         if(!(flags&2) || !(subflags&4))break;
         Ram_68k[0xfdde^1]|=4;
         status=rw(Ram_68k,0xfdf4); ww(Ram_68k,0xfe3a,status);
@@ -764,20 +765,20 @@ static void maincall(unsigned fn) {
         break;
     }
     case 0x35c: /* Queue the system command in the second communication slot. */
-        if((c->dreg[0]&0xffff)==1)M68K_WB(0xa1200e,M68K_RB(0xa1200e)|4);
+        if((c->dreg[0]&0xffff)==1)M68K_Data_WB(0xa1200e,M68K_Data_RB(0xa1200e)|4);
         ww(Ram_68k,0xfde4,c->dreg[0]);
         ww(Ram_68k,0xfde6,c->dreg[1]);
         break;
     case 0x344: { /* Exchange buffered commands with the sub CPU. */
-        unsigned flags=M68K_RB(0xa1200e);
-        M68K_WB(0xa1200e,flags|1);
+        unsigned flags=M68K_Data_RB(0xa1200e);
+        M68K_Data_WB(0xa1200e,flags|1);
         Ram_68k[0xfdde^1]&=~2;
         if((S68K_State&3)!=1)break;
-        if(M68K_RB(0xa1200f)&1) {
+        if(M68K_Data_RB(0xa1200f)&1) {
             Ram_68k[0xfdde^1]^=1; Ram_68k[0xfdde^1]|=2;
             comm_wait=1; return;
         }
-        sub68k_interrupt(2,-1); M68K_WB(0xa1200e,flags|3);
+        sub68k_interrupt(2,-1); M68K_Data_WB(0xa1200e,flags|3);
         break;
     }
 
@@ -799,8 +800,8 @@ static void maincall(unsigned fn) {
         break;
     }
     case 0x340: { /* CLEAR_COMM: clear the main CPU-owned communication registers. */
-        unsigned i; M68K_WB(0xa1200e,0);
-        for(i=0;i<16;i+=2)M68K_WW(0xa12010+i,0);
+        unsigned i; M68K_Data_WB(0xa1200e,0);
+        for(i=0;i<16;i+=2)M68K_Data_WW(0xa12010+i,0);
         memset(Ram_68k+0xfdde,0,18);
         break;
     }
@@ -816,18 +817,18 @@ unsigned CD_HLE_MainExec(int cycles) {
     if(!CD_HLE_Active)return M68K_Exec_Profiled(cycles);
     if(Paused)return 0x80000004;
     if(comm_wait) {
-        unsigned i, flags=M68K_RB(0xa1200f);
+        unsigned i, flags=M68K_Data_RB(0xa1200f);
         /* The sub CPU acknowledges the phase before either side copies data.
          * Yield this CPU slice while it waits, so the sub CPU can run. */
         if(((flags>>1)&1)!=(Ram_68k[0xfdde^1]&1))return 0;
         Ram_68k[0xfddf^1]=(unsigned char)flags;
         for(i=0;i<16;i+=2) {
-            M68K_WW(0xa12010+i,rw(Ram_68k,0xfde0+i));
+            M68K_Data_WW(0xa12010+i,rw(Ram_68k,0xfde0+i));
             ww(Ram_68k,0xfde0+i,0);
-            ww(Ram_68k,0xfdf0+i,M68K_RW(0xa12020+i));
+            ww(Ram_68k,0xfdf0+i,M68K_Data_RW(0xa12020+i));
         }
         sub68k_interrupt(2,-1);
-        M68K_WB(0xa1200e,M68K_RB(0xa1200e)|2);
+        M68K_Data_WB(0xa1200e,M68K_Data_RB(0xa1200e)|2);
         comm_wait=0; ret(0);
     }
     result=M68K_Exec_Profiled(cycles);

@@ -4,6 +4,7 @@
 #include "mem_M68K.h"
 #include "mem_S68K.h"
 #include "word_ram_transfer.h"
+#include "main_word_ram_transfer.h"
 #include "program_ram_transfer.h"
 #include "mem_SH2.h"
 #include "save.h"
@@ -37,31 +38,31 @@ struct STARSCREAM_PROGRAMREGION M68K_Fetch[] =
 		
 struct STARSCREAM_DATAREGION M68K_Read_Byte[5] =
 {
-	{0x000000, 0x3FFFFF, NULL, NULL},
+	{0x000000, 0x3FFFFF, (void *)M68K_Data_RB, NULL},
 	{0xFF0000, 0xFFFFFF, NULL, &Ram_68k[0]},
-	{0x400000, 0xFEFFFF, (void *)M68K_RB, NULL},
+	{0x400000, 0xFEFFFF, (void *)M68K_Data_RB, NULL},
 	{-1, -1, NULL, NULL}
 };
 
 struct STARSCREAM_DATAREGION M68K_Read_Word[5] =
 {
-	{0x000000, 0x3FFFFF, NULL, NULL},
+	{0x000000, 0x3FFFFF, (void *)M68K_Data_RW, NULL},
 	{0xFF0000, 0xFFFFFF, NULL, &Ram_68k[0]},
-	{0x400000, 0xFEFFFF, (void *)M68K_RW, NULL},
+	{0x400000, 0xFEFFFF, (void *)M68K_Data_RW, NULL},
 	{-1, -1, NULL, NULL}
 };
 
 struct STARSCREAM_DATAREGION M68K_Write_Byte[] =
 {
 	{0xFF0000, 0xFFFFFF, NULL, &Ram_68k[0]},
-	{0x000000, 0xFEFFFF, (void *)M68K_WB, NULL},
+	{0x000000, 0xFEFFFF, (void *)M68K_Data_WB, NULL},
 	{-1, -1, NULL, NULL}
 };
 
 struct STARSCREAM_DATAREGION M68K_Write_Word[] =
 {
 	{0xFF0000, 0xFFFFFF, NULL, &Ram_68k[0]},
-	{0x000000, 0xFEFFFF, (void *)M68K_WW, NULL},
+	{0x000000, 0xFEFFFF, (void *)M68K_Data_WW, NULL},
 	{-1, -1, NULL, NULL}
 };
 
@@ -499,6 +500,7 @@ static struct {
 } m68kUsage;
 void M68K_Usage_ClearHistory(void)
 {
+    MainWordRAMTransfer_Reset();
     memset(&m68kUsage, 0, sizeof(m68kUsage));
     main68k_idleCycles = 0;
 }
