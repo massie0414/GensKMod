@@ -15,12 +15,16 @@ extern "C" {
 #include "../src/Gens/vdp_io.h"
 #include "../src/Gens/pwm.h"
 #include "../src/Gens/sh2_dma_transfer.h"
+#include "../src/Gens/sdram_transfer.h"
 #include "../src/Gens/resource.h"
 #include "../src/Gens/kmod/sh2_dma_transfer_panel.h"
 #define CHECK(x) do { if(!(x)) { printf("FAIL line %d: %s\n",__LINE__,#x); return 1; } } while(0)
 static unsigned long values[SH2_DMA_TRANSFER_HISTORY];
 static unsigned long latest(int cpu,int write) {
     unsigned n=SH2DMATransfer_GetHistory(cpu,write,values);return n?values[n-1]:~0UL;
+}
+static unsigned long ram_latest(int write) {
+    unsigned long ram[SDRAM_TRANSFER_HISTORY]; unsigned n=SDRAMTransfer_GetHistory(write,ram);return n?ram[n-1]:~0UL;
 }
 static void configure(SH2_CONTEXT *cpu,unsigned channel,unsigned src,unsigned dst,unsigned count,unsigned control) {
     unsigned reg=0xffffff80+channel*16;
@@ -41,17 +45,18 @@ static int internal_tests(void) {
             unsigned si=(sm==2?units-i-1:sm==1?i:0)*width,di=(dm==2?units-i-1:dm==1?i:0)*width;
             for(unsigned b=0;b<width;b++)expected[di+b]=(unsigned char)(si+b+17);
         }
-        SH2DMATransfer_Reset();SH2DMATransfer_BeginFrame();
+        SH2DMATransfer_Reset();SH2DMATransfer_BeginFrame();SDRAMTransfer_BeginFrame();
         configure(cpu,channel,src,dst,2,0x201|(size<<10)|(sm<<12)|(dm<<14));
-        SH2DMATransfer_EndFrame(60);
+        SH2DMATransfer_EndFrame(60);SDRAMTransfer_EndFrame(60);
         CHECK(latest(owner,0)==units*width && latest(owner,1)==units*width);
+        CHECK(ram_latest(0)==units*width && ram_latest(1)==units*width);
         CHECK(!latest(1-owner,0) && !latest(1-owner,1));
         CHECK(SH2_Read_Long(cpu,0xffffff88+channel*16)==0 && (SH2_Read_Long(cpu,0xffffff8c+channel*16)&2));
         for(unsigned i=0;i<64;i++)CHECK(SH2_Read_Byte(cpu,0x06002000+i)==expected[i]);
     }
     // Both channels accumulate for one CPU, cache-through aliases still transfer once.
-    SH2DMATransfer_BeginFrame();configure(&M_SH2,0,0x26001000,0x26002000,2,0x5601);
-    configure(&M_SH2,1,0x06001000,0x06002010,3,0x5a01);SH2DMATransfer_EndFrame(60);
+    SH2DMATransfer_BeginFrame();SDRAMTransfer_BeginFrame();configure(&M_SH2,0,0x26001000,0x26002000,2,0x5601);
+    configure(&M_SH2,1,0x06001000,0x06002010,3,0x5a01);SH2DMATransfer_EndFrame(60);SDRAMTransfer_EndFrame(60);
     CHECK(latest(0,0)==16 && latest(0,1)==16);
     puts("PASS: both CPUs/channels, byte/word/long/16-byte DMA, all fixed/increment/decrement combinations, payload and channel totals");
     return 0;
@@ -75,15 +80,16 @@ static int external_tests(void) {
         for(unsigned ch=0;ch<2;ch++) for(unsigned size=0;size<4;size++) for(unsigned sm=0;sm<3;sm++) for(unsigned dm=0;dm<3;dm++) {
             request_channel=ch;unsigned width=size==3?4:1<<size;
             cpu->DREQ0=cpu->DREQ1=0;reads=writes=0;stop_after=3;
-            SH2DMATransfer_Reset();SH2DMATransfer_BeginFrame();
+            SH2DMATransfer_Reset();SH2DMATransfer_BeginFrame();SDRAMTransfer_BeginFrame();
             configure(cpu,ch,0x10001000,0x11002000,5,1|(size<<10)|(sm<<12)|(dm<<14));
-            SH2DMATransfer_EndFrame(60);CHECK(!latest(owner,0) && !latest(owner,1) && !reads);
-            SH2DMATransfer_BeginFrame();if(ch)SH2_DMA1_Request(cpu,1);else SH2_DMA0_Request(cpu,1);SH2DMATransfer_EndFrame(60);
+            SH2DMATransfer_EndFrame(60);SDRAMTransfer_EndFrame(60);CHECK(!latest(owner,0) && !latest(owner,1) && !reads);CHECK(!ram_latest(0) && !ram_latest(1));
+            SH2DMATransfer_BeginFrame();SDRAMTransfer_BeginFrame();if(ch)SH2_DMA1_Request(cpu,1);else SH2_DMA0_Request(cpu,1);SH2DMATransfer_EndFrame(60);SDRAMTransfer_EndFrame(60);
             CHECK(reads==3 && writes==3 && latest(owner,0)==3*width && latest(owner,1)==3*width);
+            CHECK(!ram_latest(0) && !ram_latest(1));
             CHECK(SH2_Read_Long(cpu,0xffffff88+ch*16)==(size==3?17:2));
             if(size!=3) {
                 reads=writes=0;stop_after=2;
-                SH2DMATransfer_BeginFrame();if(ch)SH2_DMA1_Request(cpu,1);else SH2_DMA0_Request(cpu,1);SH2DMATransfer_EndFrame(60);
+                SH2DMATransfer_BeginFrame();SDRAMTransfer_BeginFrame();if(ch)SH2_DMA1_Request(cpu,1);else SH2_DMA0_Request(cpu,1);SH2DMATransfer_EndFrame(60);SDRAMTransfer_EndFrame(60);
                 CHECK(reads==2 && writes==2 && latest(owner,0)==2*width && (SH2_Read_Long(cpu,0xffffff8c+ch*16)&2));
             }
         }
@@ -101,9 +107,10 @@ static int peripheral_tests(void) {
         PWM_Mode=0x185;PWM_Set_Cycle(32);PWM_Set_Int(1);
         SH2DMATransfer_Reset();
         for(unsigned i=0;i<4;i++) {
-            SH2DMATransfer_BeginFrame();PWM_Update_Timer(i*31);SH2DMATransfer_EndFrame(60);
+            SH2DMATransfer_BeginFrame();SDRAMTransfer_BeginFrame();PWM_Update_Timer(i*31);SH2DMATransfer_EndFrame(60);SDRAMTransfer_EndFrame(60);
             if(latest(owner,0)!=4 || latest(owner,1)!=4 || cpu->TCR1!=3-i) printf("PWM owner=%d i=%u bytes=%lu/%lu remaining=%lu request=%u\n",owner,i,latest(owner,0),latest(owner,1),cpu->TCR1,cpu->DREQ1);
             CHECK(latest(owner,0)==4 && latest(owner,1)==4 && cpu->TCR1==3-i);
+            CHECK(ram_latest(0)==4 && !ram_latest(1));
         }
         CHECK(PWM_FIFO_L[3]==0x303 && PWM_FIFO_R[3]==0x403);
     }
@@ -112,13 +119,14 @@ static int peripheral_tests(void) {
     SH2_Reset(&M_SH2,0);_32X_DREQ_ST=4;_32X_DREQ_LEN=4;_32X_FIFO_Read=0;_32X_FIFO_Block=0;
     for(unsigned i=0;i<4;i++)_32X_FIFO_B[i]=(unsigned short)(0x1230+i);
     configure(&M_SH2,0,0x20004012,0x06003000,4,0x44e1);
-    SH2DMATransfer_Reset();SH2DMATransfer_BeginFrame();SH2_DMA0_Request(&M_SH2,1);SH2DMATransfer_EndFrame(60);
+    SH2DMATransfer_Reset();SH2DMATransfer_BeginFrame();SDRAMTransfer_BeginFrame();SH2_DMA0_Request(&M_SH2,1);SH2DMATransfer_EndFrame(60);SDRAMTransfer_EndFrame(60);
     CHECK(latest(0,0)==8 && latest(0,1)==8 && M_SH2.TCR0==0);
+    CHECK(!ram_latest(0) && ram_latest(1)==8);
     for(unsigned i=0;i<4;i++)CHECK(SH2_Read_Word(&M_SH2,0x06003000+i*2)==0x1230+i);
     puts("PASS: real PWM paced DMA on both SH2s and FIFO-requested master DMA");return 0;
 }
 static void sample(unsigned master,unsigned slave,unsigned fps=60) {
-    SH2DMATransfer_BeginFrame();
+    SH2DMATransfer_BeginFrame();SDRAMTransfer_BeginFrame();
     if(master)configure(&M_SH2,0,0x06001000,0x06002000,master,0x201);
     if(slave)configure(&S_SH2,1,0x06001000,0x06002000,slave,0x201);
     SH2DMATransfer_EndFrame(fps);
@@ -126,13 +134,13 @@ static void sample(unsigned master,unsigned slave,unsigned fps=60) {
 static int history_tests(void) {
     SH2DMATransfer_Reset();
     SH2_Read_Long(&M_SH2,0x06001000);SH2_Write_Long(&S_SH2,0x06002000,0);
-    configure(&M_SH2,0,0x06001000,0x06002000,4,0x201);SH2DMATransfer_EndFrame(60);
+    configure(&M_SH2,0,0x06001000,0x06002000,4,0x201);SH2DMATransfer_EndFrame(60);SDRAMTransfer_EndFrame(60);
     CHECK(!SH2DMATransfer_GetHistory(0,0,values));
-    SH2DMATransfer_BeginFrame();
+    SH2DMATransfer_BeginFrame();SDRAMTransfer_BeginFrame();
     SH2_Read_Long(&M_SH2,0x06001000);SH2_Write_Long(&S_SH2,0x06002000,0);
     configure(&M_SH2,0,0x06001000,0x06002000,4,0x200); // channel disabled
     SH2_Write_Long(&M_SH2,0xffffffb0,0);SH2_Write_Long(&M_SH2,0xffffff8c,0x201); // controller disabled
-    SH2DMATransfer_EndFrame(60);CHECK(!latest(0,0) && !latest(0,1) && !latest(1,0) && !latest(1,1));
+    SH2DMATransfer_EndFrame(60);SDRAMTransfer_EndFrame(60);CHECK(!latest(0,0) && !latest(0,1) && !latest(1,0) && !latest(1,1));
     SH2_Write_Long(&M_SH2,0xffffff8c,0);
     for(unsigned i=0;i<300;i++)sample(i,300-i);
     CHECK(SH2DMATransfer_GetHistory(0,0,values)==256 && values[0]==44 && values[255]==299);

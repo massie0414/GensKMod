@@ -1,5 +1,21 @@
 %include "nasmhead.inc"
 extern _CD_32X_Active
+extern _SDRAMTransfer_InFrame
+extern _SDRAMTransfer_Pending
+extern _SDRAMTransfer_BusActive
+%macro COUNT_SDRAM_ACCESS 2
+    pushfd
+    cmp dword [_SDRAMTransfer_InFrame], 0
+    je %%done
+    cmp dword [_SDRAMTransfer_BusActive], 0
+    jne %%count
+    test byte [ebp + SH2.Status], 1 ; SH2_RUNNING
+    jz %%done
+%%count:
+    add dword [_SDRAMTransfer_Pending + %1 * 4], %2
+%%done:
+    popfd
+%endmacro
 
 %define PWM_BUF_SIZE 4
 
@@ -377,6 +393,7 @@ section .text align=64
 	ALIGN32
 	
 	DECLF SH2_Read_Byte_Ram, 4
+		COUNT_SDRAM_ACCESS 0, 1
 		and ecx, 0x3FFFF
 		mov al, [_32X_Ram + ecx]
 		ret
@@ -494,6 +511,7 @@ section .text align=64
 	ALIGN32
 	
 	DECLF SH2_Read_Word_Ram, 4
+		COUNT_SDRAM_ACCESS 0, 2
 		and ecx, 0x3FFFE
 		mov ah, [_32X_Ram + ecx + 0]
 		mov al, [_32X_Ram + ecx + 1]
@@ -640,6 +658,7 @@ section .text align=64
 	ALIGN32
 	
 	DECLF SH2_Read_Long_Ram, 4
+		COUNT_SDRAM_ACCESS 0, 4
 		and ecx, 0x3FFFC
 		mov eax, [_32X_Ram + ecx]
 		bswap eax
@@ -737,6 +756,7 @@ section .text align=64
 	ALIGN32
 	
 	DECLF SH2_Write_Byte_Ram, 8
+		COUNT_SDRAM_ACCESS 1, 1
 		and ecx, 0x3FFFF
 		mov [_32X_Ram + ecx], dl
 		ret
@@ -859,6 +879,7 @@ section .text align=64
 	ALIGN32
 	
 	DECLF SH2_Write_Word_Ram, 8
+		COUNT_SDRAM_ACCESS 1, 2
 		and ecx, 0x3FFFE
 		mov [_32X_Ram + ecx + 0], dh
 		mov [_32X_Ram + ecx + 1], dl
@@ -1037,6 +1058,7 @@ section .text align=64
 	ALIGN32
 	
 	DECLF SH2_Write_Long_Ram, 8
+		COUNT_SDRAM_ACCESS 1, 4
 		and ecx, 0x3FFFC
 		bswap edx
 		mov [_32X_Ram + ecx], edx

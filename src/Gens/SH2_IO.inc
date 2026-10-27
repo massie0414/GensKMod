@@ -1,10 +1,18 @@
 
 extern _SH2DMATransfer_AddBytes
 extern _SH2DMATransfer_ClearCPU
+extern _SDRAMTransfer_Reset
+extern _SDRAMTransfer_BusActive
+%macro BEGIN_SDRAM_DMA 0
+    pushfd
+    inc dword [_SDRAMTransfer_BusActive]
+    popfd
+%endmacro
 ; EBP = owning CPU, EBX = byte width (16-byte bursts use four longwords).
 ; Preserve flags and registers, including the just-read payload and DMA state.
 %macro COUNT_SH2_DMA 0
     pushfd
+    dec dword [_SDRAMTransfer_BusActive]
     pushad
     push ebx
     push ebp
@@ -1912,6 +1920,7 @@ ALIGN4
 ALIGN32
 
 .DREQ0_D_S_
+		BEGIN_SDRAM_DMA
 %ifdef __GCC
 		mov ecx, [esp + 4]			; Read function pointer
 		mov eax, esi
@@ -1945,6 +1954,7 @@ ALIGN32
 ALIGN32
 
 .DREQ0_D_SI
+		BEGIN_SDRAM_DMA
 %ifdef __GCC
 		mov ecx, [esp + 4]			; Read function pointer
 		mov eax, esi
@@ -1980,6 +1990,7 @@ ALIGN32
 
 .DREQ0_D_SD
 		sub esi, ebx
+		BEGIN_SDRAM_DMA
 %ifdef __GCC
 		mov ecx, [esp + 4]			; Read function pointer
 		mov eax, esi
@@ -2013,6 +2024,7 @@ ALIGN32
 ALIGN32
 
 .DREQ0_DIS_
+		BEGIN_SDRAM_DMA
 %ifdef __GCC
 		mov ecx, [esp + 4]			; Read function pointer
 		mov eax, esi
@@ -2047,6 +2059,7 @@ ALIGN32
 ALIGN32
 
 .DREQ0_DISI
+		BEGIN_SDRAM_DMA
 %ifdef __GCC
 		mov ecx, [esp + 4]			; Read function pointer
 		mov eax, esi
@@ -2083,6 +2096,7 @@ ALIGN32
 
 .DREQ0_DISD
 		sub esi, ebx
+		BEGIN_SDRAM_DMA
 %ifdef __GCC
 		mov ecx, [esp + 4]			; Read function pointer
 		mov eax, esi
@@ -2118,6 +2132,7 @@ ALIGN32
 
 .DREQ0_DDS_
 		sub edi, ebx
+		BEGIN_SDRAM_DMA
 %ifdef __GCC
 		mov ecx, [esp + 4]			; Read function pointer
 		mov eax, esi
@@ -2152,6 +2167,7 @@ ALIGN32
 
 .DREQ0_DDSI
 		sub edi, ebx
+		BEGIN_SDRAM_DMA
 %ifdef __GCC
 		mov ecx, [esp + 4]			; Read function pointer
 		mov eax, esi
@@ -2188,6 +2204,7 @@ ALIGN32
 .DREQ0_DDSD
 		sub edi, ebx
 		sub esi, ebx
+		BEGIN_SDRAM_DMA
 %ifdef __GCC
 		mov ecx, [esp + 4]			; Read function pointer
 		mov eax, esi
@@ -2296,6 +2313,7 @@ ALIGN4
 ALIGN32
 
 .DMA0_D_S_
+		BEGIN_SDRAM_DMA
 %ifdef __GCC
 		mov ecx, [esp + 4]			; Read function pointer
 		mov eax, esi
@@ -2325,6 +2343,7 @@ ALIGN32
 ALIGN32
 
 .DMA0_D_SI
+		BEGIN_SDRAM_DMA
 %ifdef __GCC
 		mov ecx, [esp + 4]			; Read function pointer
 		mov eax, esi
@@ -2356,6 +2375,7 @@ ALIGN32
 
 .DMA0_D_SD
 		sub esi, ebx
+		BEGIN_SDRAM_DMA
 %ifdef __GCC
 		mov ecx, [esp + 4]			; Read function pointer
 		mov eax, esi
@@ -2385,6 +2405,7 @@ ALIGN32
 ALIGN32
 
 .DMA0_DIS_
+		BEGIN_SDRAM_DMA
 %ifdef __GCC
 		mov ecx, [esp + 4]			; Read function pointer
 		mov eax, esi
@@ -2415,6 +2436,7 @@ ALIGN32
 ALIGN32
 
 .DMA0_DISI
+		BEGIN_SDRAM_DMA
 %ifdef __GCC
 		mov ecx, [esp + 4]			; Read function pointer
 		mov eax, esi
@@ -2447,6 +2469,7 @@ ALIGN32
 
 .DMA0_DISD
 		sub esi, ebx
+		BEGIN_SDRAM_DMA
 %ifdef __GCC
 		mov ecx, [esp + 4]			; Read function pointer
 		mov eax, esi
@@ -2478,6 +2501,7 @@ ALIGN32
 
 .DMA0_DDS_
 		sub edi, ebx
+		BEGIN_SDRAM_DMA
 %ifdef __GCC
 		mov ecx, [esp + 4]			; Read function pointer
 		mov eax, esi
@@ -2508,6 +2532,7 @@ ALIGN32
 
 .DMA0_DDSI
 		sub edi, ebx
+		BEGIN_SDRAM_DMA
 %ifdef __GCC
 		mov ecx, [esp + 4]			; Read function pointer
 		mov eax, esi
@@ -2540,6 +2565,7 @@ ALIGN32
 .DMA0_DDSD
 		sub edi, ebx
 		sub esi, ebx
+		BEGIN_SDRAM_DMA
 %ifdef __GCC
 		mov ecx, [esp + 4]			; Read function pointer
 		mov eax, esi
@@ -2707,6 +2733,7 @@ ALIGN4
 ALIGN32
 
 .DREQ1_D_S_
+		BEGIN_SDRAM_DMA
 %ifdef __GCC
 		mov ecx, [esp + 4]			; Read function pointer
 		mov eax, esi
@@ -2741,6 +2768,7 @@ ALIGN32
 ALIGN32
 
 .DREQ1_D_SI
+		BEGIN_SDRAM_DMA
 %ifdef __GCC
 		mov ecx, [esp + 4]			; Read function pointer
 		mov eax, esi
@@ -2777,6 +2805,7 @@ ALIGN32
 
 .DREQ1_D_SD
 		sub esi, ebx
+		BEGIN_SDRAM_DMA
 %ifdef __GCC
 		mov ecx, [esp + 4]			; Read function pointer
 		mov eax, esi
@@ -2811,6 +2840,7 @@ ALIGN32
 ALIGN32
 
 .DREQ1_DIS_
+		BEGIN_SDRAM_DMA
 %ifdef __GCC
 		mov ecx, [esp + 4]			; Read function pointer
 		mov eax, esi
@@ -2846,6 +2876,7 @@ ALIGN32
 ALIGN32
 
 .DREQ1_DISI
+		BEGIN_SDRAM_DMA
 %ifdef __GCC
 		mov ecx, [esp + 4]			; Read function pointer
 		mov eax, esi
@@ -2883,6 +2914,7 @@ ALIGN32
 
 .DREQ1_DISD
 		sub esi, ebx
+		BEGIN_SDRAM_DMA
 %ifdef __GCC
 		mov ecx, [esp + 4]			; Read function pointer
 		mov eax, esi
@@ -2919,6 +2951,7 @@ ALIGN32
 
 .DREQ1_DDS_
 		sub edi, ebx
+		BEGIN_SDRAM_DMA
 %ifdef __GCC
 		mov ecx, [esp + 4]			; Read function pointer
 		mov eax, esi
@@ -2954,6 +2987,7 @@ ALIGN32
 
 .DREQ1_DDSI
 		sub edi, ebx
+		BEGIN_SDRAM_DMA
 %ifdef __GCC
 		mov ecx, [esp + 4]			; Read function pointer
 		mov eax, esi
@@ -2991,6 +3025,7 @@ ALIGN32
 .DREQ1_DDSD
 		sub edi, ebx
 		sub esi, ebx
+		BEGIN_SDRAM_DMA
 %ifdef __GCC
 		mov ecx, [esp + 4]			; Read function pointer
 		mov eax, esi
@@ -3100,6 +3135,7 @@ ALIGN4
 ALIGN32
 
 .DMA1_D_S_
+		BEGIN_SDRAM_DMA
 %ifdef __GCC
 		mov ecx, [esp + 4]			; Read function pointer
 		mov eax, esi
@@ -3129,6 +3165,7 @@ ALIGN32
 ALIGN32
 
 .DMA1_D_SI
+		BEGIN_SDRAM_DMA
 %ifdef __GCC
 		mov ecx, [esp + 4]			; Read function pointer
 		mov eax, esi
@@ -3160,6 +3197,7 @@ ALIGN32
 
 .DMA1_D_SD
 		sub esi, ebx
+		BEGIN_SDRAM_DMA
 %ifdef __GCC
 		mov ecx, [esp + 4]			; Read function pointer
 		mov eax, esi
@@ -3189,6 +3227,7 @@ ALIGN32
 ALIGN32
 
 .DMA1_DIS_
+		BEGIN_SDRAM_DMA
 %ifdef __GCC
 		mov ecx, [esp + 4]			; Read function pointer
 		mov eax, esi
@@ -3219,6 +3258,7 @@ ALIGN32
 ALIGN32
 
 .DMA1_DISI
+		BEGIN_SDRAM_DMA
 %ifdef __GCC
 		mov ecx, [esp + 4]			; Read function pointer
 		mov eax, esi
@@ -3251,6 +3291,7 @@ ALIGN32
 
 .DMA1_DISD
 		sub esi, ebx
+		BEGIN_SDRAM_DMA
 %ifdef __GCC
 		mov ecx, [esp + 4]			; Read function pointer
 		mov eax, esi
@@ -3282,6 +3323,7 @@ ALIGN32
 
 .DMA1_DDS_
 		sub edi, ebx
+		BEGIN_SDRAM_DMA
 %ifdef __GCC
 		mov ecx, [esp + 4]			; Read function pointer
 		mov eax, esi
@@ -3312,6 +3354,7 @@ ALIGN32
 
 .DMA1_DDSI
 		sub edi, ebx
+		BEGIN_SDRAM_DMA
 %ifdef __GCC
 		mov ecx, [esp + 4]			; Read function pointer
 		mov eax, esi
@@ -3344,6 +3387,7 @@ ALIGN32
 .DMA1_DDSD
 		sub edi, ebx
 		sub esi, ebx
+		BEGIN_SDRAM_DMA
 %ifdef __GCC
 		mov ecx, [esp + 4]			; Read function pointer
 		mov eax, esi

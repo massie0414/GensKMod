@@ -584,6 +584,26 @@ bits 32
 ; OUT:
 ; eax = value
 
+; PC-relative data loads use fetch backing memory directly. They are data,
+; not instruction fetches; count only bytes actually backed by 32X SDRAM.
+extern _SDRAMTransfer_InFrame
+extern _SDRAMTransfer_Pending
+extern _32X_Ram
+%macro COUNT_SDRAM_LITERAL 2
+    pushfd
+    push ecx
+    cmp dword [_SDRAMTransfer_InFrame], 0
+    je %%done
+    lea ecx, [%1]
+    sub ecx, _32X_Ram
+    cmp ecx, 256 * 1024 - %2
+    ja %%done
+    add dword [_SDRAMTransfer_Pending], %2
+%%done:
+    pop ecx
+    popfd
+%endmacro
+
 %macro READ_BYTE 0
 
 %ifdef __GCC
@@ -936,7 +956,13 @@ bits 32
 %%New_Line
 	mov [ebp + SH2.INT_Vect], al
 	mov [ebp + SH2.INT_Prio], dl
+	pushfd
+	inc dword [_SDRAMTransfer_BusActive]
+	popfd
 	call Do_Exception
+	pushfd
+	dec dword [_SDRAMTransfer_BusActive]
+	popfd
 
 %%End
 
@@ -2396,6 +2422,7 @@ ALIGN32
 DECLF SH2I_MOVWI 
 
 	F_ND8
+	COUNT_SDRAM_LITERAL esi + eax * 2, 2
 	mov dh, [esi + eax * 2 + 0]
 	mov dl, [esi + eax * 2 + 1]
 	movsx eax, dx
@@ -2411,6 +2438,7 @@ DECLF SH2I_MOVLI
 	mov edx, esi
 	and ebx, byte 0x0F
 	and edx, byte ~3
+	COUNT_SDRAM_LITERAL edx + eax * 4, 4
 	mov eax, [edx + eax * 4]
 	bswap eax
 	mov [ebp + SH2.R + ebx * 4], eax
@@ -4300,6 +4328,7 @@ ALIGN32
 DECLF SH2I_MOVWI_DS
 
 	F_ND8
+	COUNT_SDRAM_LITERAL esi + eax * 2, 2
 	mov dh, [esi + eax * 2 + 0]
 	mov dl, [esi + eax * 2 + 1]
 	movsx eax, dx
@@ -4315,6 +4344,7 @@ DECLF SH2I_MOVLI_DS
 	mov edx, esi
 	and ebx, byte 0x0F
 	and edx, byte ~3
+	COUNT_SDRAM_LITERAL edx + eax * 4, 4
 	mov eax, [edx + eax * 4]
 	bswap eax
 	mov [ebp + SH2.R + ebx * 4], eax
@@ -5138,7 +5168,7 @@ DECLF SH2_Exec, 8
 	push edi
 	push esi
 	push ebp
-	jbe short SH2_Exec_Error
+	jbe near SH2_Exec_Error
 
 	lea edi, [edx - 1]
 	mov ebp, ecx
@@ -5197,7 +5227,7 @@ SH2_Exec_Quit:
 	xor ebx, ebx
 	add edi, eax
 	mov [ebp + SH2.Cycle_Sup], ebx
-	jns short SH2_Exec_Interrupt_Happened
+	jns near SH2_Exec_Interrupt_Happened
 
 ALIGN4
 
@@ -5419,6 +5449,7 @@ DECLF SH2_Reset, 8
 	push ecx
 	call _SH2DMATransfer_ClearCPU
 	add esp, 4
+	call _SDRAMTransfer_Reset
 	popad
 	popfd
 	push edi
