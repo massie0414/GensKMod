@@ -7,6 +7,7 @@
 #include "cd_transfer.h"
 #include "cpu_68k.h"
 #include "cpu_sh2.h"
+#include "sh2_dma_transfer.h"
 #include "sh2.h"
 #include "z80.h"
 #include "Cpu_Z80.h"
@@ -195,6 +196,7 @@ int Load_State(char *Name)
 		CDTransfer_Reset();
 		S68K_Usage_ClearHistory();
 		M68K_Usage_ClearHistory();
+		SH2DMATransfer_Reset();
 		Z80_Usage_ClearHistory();
 		z80_Reset(&M_Z80);
 //		main68k_reset();

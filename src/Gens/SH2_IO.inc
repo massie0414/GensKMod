@@ -1,3 +1,18 @@
+
+extern _SH2DMATransfer_AddBytes
+extern _SH2DMATransfer_ClearCPU
+; EBP = owning CPU, EBX = byte width (16-byte bursts use four longwords).
+; Preserve flags and registers, including the just-read payload and DMA state.
+%macro COUNT_SH2_DMA 0
+    pushfd
+    pushad
+    push ebx
+    push ebp
+    call _SH2DMATransfer_AddBytes
+    add esp, 8
+    popad
+    popfd
+%endmacro
 ;******************************************
 ;
 ; SH2 emulator 1.60 (ASM source part)
@@ -1918,6 +1933,7 @@ ALIGN32
 		mov ecx, edi
 		call eax
 %endif
+		COUNT_SH2_DMA
 		mov eax, [esp + 8]
 		mov dl, [ebp + SH2.DREQ0]
 		dec eax
@@ -1950,6 +1966,7 @@ ALIGN32
 		mov ecx, edi
 		call eax
 %endif
+		COUNT_SH2_DMA
 		add esi, ebx
 		mov eax, [esp + 8]
 		mov dl, [ebp + SH2.DREQ0]
@@ -1984,6 +2001,7 @@ ALIGN32
 		mov ecx, edi
 		call eax
 %endif
+		COUNT_SH2_DMA
 		mov eax, [esp + 8]
 		mov dl, [ebp + SH2.DREQ0]
 		dec eax
@@ -2016,6 +2034,7 @@ ALIGN32
 		mov ecx, edi
 		call eax
 %endif
+		COUNT_SH2_DMA
 		add edi, ebx
 		mov eax, [esp + 8]
 		mov dl, [ebp + SH2.DREQ0]
@@ -2049,6 +2068,7 @@ ALIGN32
 		mov ecx, edi
 		call eax
 %endif
+		COUNT_SH2_DMA
 		add edi, ebx
 		add esi, ebx
 		mov eax, [esp + 8]
@@ -2084,6 +2104,7 @@ ALIGN32
 		mov ecx, edi
 		call eax
 %endif
+		COUNT_SH2_DMA
 		add edi, ebx
 		mov eax, [esp + 8]
 		mov dl, [ebp + SH2.DREQ0]
@@ -2118,6 +2139,7 @@ ALIGN32
 		mov ecx, edi
 		call eax
 %endif
+		COUNT_SH2_DMA
 		mov eax, [esp + 8]
 		mov dl, [ebp + SH2.DREQ0]
 		dec eax
@@ -2151,6 +2173,7 @@ ALIGN32
 		mov ecx, edi
 		call eax
 %endif
+		COUNT_SH2_DMA
 		add esi, ebx
 		mov eax, [esp + 8]
 		mov dl, [ebp + SH2.DREQ0]
@@ -2186,6 +2209,7 @@ ALIGN32
 		mov ecx, edi
 		call eax
 %endif
+		COUNT_SH2_DMA
 		mov eax, [esp + 8]
 		mov dl, [ebp + SH2.DREQ0]
 		dec eax
@@ -2293,6 +2317,7 @@ ALIGN32
 		mov ecx, edi
 		call eax
 %endif
+		COUNT_SH2_DMA
 		dec dword [esp + 8]
 		jnz short .DMA0_D_S_
 		jmp .DMA0_End
@@ -2321,6 +2346,7 @@ ALIGN32
 		mov ecx, edi
 		call eax
 %endif
+		COUNT_SH2_DMA
 		add esi, ebx
 		dec dword [esp + 8]
 		jnz short .DMA0_D_SI
@@ -2351,6 +2377,7 @@ ALIGN32
 		mov ecx, edi
 		call eax
 %endif
+		COUNT_SH2_DMA
 		dec dword [esp + 8]
 		jnz short .DMA0_D_SD
 		jmp .DMA0_End
@@ -2379,6 +2406,7 @@ ALIGN32
 		mov ecx, edi
 		call eax
 %endif
+		COUNT_SH2_DMA
 		add edi, ebx
 		dec dword [esp + 8]
 		jnz short .DMA0_DIS_
@@ -2408,6 +2436,7 @@ ALIGN32
 		mov ecx, edi
 		call eax
 %endif
+		COUNT_SH2_DMA
 		add edi, ebx
 		add esi, ebx
 		dec dword [esp + 8]
@@ -2439,6 +2468,7 @@ ALIGN32
 		mov ecx, edi
 		call eax
 %endif
+		COUNT_SH2_DMA
 		add edi, ebx
 		dec dword [esp + 8]
 		jnz short .DMA0_DISD
@@ -2469,6 +2499,7 @@ ALIGN32
 		mov ecx, edi
 		call eax
 %endif
+		COUNT_SH2_DMA
 		dec dword [esp + 8]
 		jnz short .DMA0_DDS_
 		jmp .DMA0_End
@@ -2498,6 +2529,7 @@ ALIGN32
 		mov ecx, edi
 		call eax
 %endif
+		COUNT_SH2_DMA
 		add esi, ebx
 		dec dword [esp + 8]
 		jnz short .DMA0_DDSI
@@ -2529,6 +2561,7 @@ ALIGN32
 		mov ecx, edi
 		call eax
 %endif
+		COUNT_SH2_DMA
 		dec dword [esp + 8]
 		jnz short .DMA0_DDSD
 		jmp short .DMA0_End
@@ -2695,6 +2728,7 @@ ALIGN32
 		mov ecx, edi
 		call eax
 %endif
+		COUNT_SH2_DMA
 		mov eax, [esp + 8]
 		mov dl, [ebp + SH2.DREQ1]
 		dec eax
@@ -2728,6 +2762,7 @@ ALIGN32
 		mov ecx, edi
 		call eax
 %endif
+		COUNT_SH2_DMA
 		add esi, ebx
 		mov eax, [esp + 8]
 		mov dl, [ebp + SH2.DREQ1]
@@ -2763,6 +2798,7 @@ ALIGN32
 		mov ecx, edi
 		call eax
 %endif
+		COUNT_SH2_DMA
 		mov eax, [esp + 8]
 		mov dl, [ebp + SH2.DREQ1]
 		dec eax
@@ -2796,6 +2832,7 @@ ALIGN32
 		mov ecx, edi
 		call eax
 %endif
+		COUNT_SH2_DMA
 		add edi, ebx
 		mov eax, [esp + 8]
 		mov dl, [ebp + SH2.DREQ1]
@@ -2830,6 +2867,7 @@ ALIGN32
 		mov ecx, edi
 		call eax
 %endif
+		COUNT_SH2_DMA
 		add edi, ebx
 		add esi, ebx
 		mov eax, [esp + 8]
@@ -2866,6 +2904,7 @@ ALIGN32
 		mov ecx, edi
 		call eax
 %endif
+		COUNT_SH2_DMA
 		add edi, ebx
 		mov eax, [esp + 8]
 		mov dl, [ebp + SH2.DREQ1]
@@ -2901,6 +2940,7 @@ ALIGN32
 		mov ecx, edi
 		call eax
 %endif
+		COUNT_SH2_DMA
 		mov eax, [esp + 8]
 		mov dl, [ebp + SH2.DREQ1]
 		dec eax
@@ -2935,6 +2975,7 @@ ALIGN32
 		mov ecx, edi
 		call eax
 %endif
+		COUNT_SH2_DMA
 		add esi, ebx
 		mov eax, [esp + 8]
 		mov dl, [ebp + SH2.DREQ1]
@@ -2971,6 +3012,7 @@ ALIGN32
 		mov ecx, edi
 		call eax
 %endif
+		COUNT_SH2_DMA
 		mov eax, [esp + 8]
 		mov dl, [ebp + SH2.DREQ1]
 		dec eax
@@ -3079,6 +3121,7 @@ ALIGN32
 		mov ecx, edi
 		call eax
 %endif
+		COUNT_SH2_DMA
 		dec dword [esp + 8]
 		jnz short .DMA1_D_S_
 		jmp .DMA1_End
@@ -3107,6 +3150,7 @@ ALIGN32
 		mov ecx, edi
 		call eax
 %endif
+		COUNT_SH2_DMA
 		add esi, ebx
 		dec dword [esp + 8]
 		jnz short .DMA1_D_SI
@@ -3137,6 +3181,7 @@ ALIGN32
 		mov ecx, edi
 		call eax
 %endif
+		COUNT_SH2_DMA
 		dec dword [esp + 8]
 		jnz short .DMA1_D_SD
 		jmp .DMA1_End
@@ -3165,6 +3210,7 @@ ALIGN32
 		mov ecx, edi
 		call eax
 %endif
+		COUNT_SH2_DMA
 		add edi, ebx
 		dec dword [esp + 8]
 		jnz short .DMA1_DIS_
@@ -3194,6 +3240,7 @@ ALIGN32
 		mov ecx, edi
 		call eax
 %endif
+		COUNT_SH2_DMA
 		add edi, ebx
 		add esi, ebx
 		dec dword [esp + 8]
@@ -3225,6 +3272,7 @@ ALIGN32
 		mov ecx, edi
 		call eax
 %endif
+		COUNT_SH2_DMA
 		add edi, ebx
 		dec dword [esp + 8]
 		jnz short .DMA1_DISD
@@ -3255,6 +3303,7 @@ ALIGN32
 		mov ecx, edi
 		call eax
 %endif
+		COUNT_SH2_DMA
 		dec dword [esp + 8]
 		jnz short .DMA1_DDS_
 		jmp .DMA1_End
@@ -3284,6 +3333,7 @@ ALIGN32
 		mov ecx, edi
 		call eax
 %endif
+		COUNT_SH2_DMA
 		add esi, ebx
 		dec dword [esp + 8]
 		jnz short .DMA1_DDSI
@@ -3315,6 +3365,7 @@ ALIGN32
 		mov ecx, edi
 		call eax
 %endif
+		COUNT_SH2_DMA
 		dec dword [esp + 8]
 		jnz short .DMA1_DDSD
 		jmp short .DMA1_End

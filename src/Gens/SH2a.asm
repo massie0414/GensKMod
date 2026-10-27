@@ -5414,6 +5414,13 @@ ALIGN64
 DECLF SH2_Reset, 8
 
 	FUNC_IN
+	pushfd
+	pushad
+	push ecx
+	call _SH2DMATransfer_ClearCPU
+	add esp, 4
+	popad
+	popfd
 	push edi
 	push esi
 	push ebp

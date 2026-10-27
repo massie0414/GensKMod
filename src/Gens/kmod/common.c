@@ -29,6 +29,8 @@
 #include "vram_transfer_panel.h"
 #include "vdp_transfer_panel.h"
 #include "genesis_ram_transfer_panel.h"
+#include "sh2_dma_transfer_panel.h"
+#include "../sh2_dma_transfer.h"
 #include "../genesis_ram_transfer.h"
 #include "../vram_transfer.h"
 #include "program_ram_transfer_panel.h"
@@ -136,6 +138,12 @@ void CloseWindow_KMod(UCHAR mode)
 		break;
 	case DMODE_VRAM_TRANSFER:
 		vramtransfer_show(FALSE);
+		break;
+	case DMODE_MASTER_SH2_DMA_TRANSFER:
+		sh2dmatransfer_show(SH2_DMA_MASTER, FALSE);
+		break;
+	case DMODE_SLAVE_SH2_DMA_TRANSFER:
+		sh2dmatransfer_show(SH2_DMA_SLAVE, FALSE);
 		break;
 	case DMODE_MAIN_RAM_TRANSFER:
 		genesisramtransfer_show(GENESIS_RAM_MAIN, FALSE);
@@ -276,6 +284,12 @@ void OpenWindow_KMod(UCHAR mode)
 		break;
 	case DMODE_VRAM_TRANSFER:
 		vramtransfer_show(TRUE);
+		break;
+	case DMODE_MASTER_SH2_DMA_TRANSFER:
+		sh2dmatransfer_show(SH2_DMA_MASTER, TRUE);
+		break;
+	case DMODE_SLAVE_SH2_DMA_TRANSFER:
+		sh2dmatransfer_show(SH2_DMA_SLAVE, TRUE);
 		break;
 	case DMODE_MAIN_RAM_TRANSFER:
 		genesisramtransfer_show(GENESIS_RAM_MAIN, TRUE);
