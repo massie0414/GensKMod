@@ -10,6 +10,7 @@
 #include "G_dsound.h"
 #include "cd_hle.h"
 #include "cd_transfer.h"
+#include "word_ram_transfer.h"
 #include "Cpu_68k.h"
 #include "Mem_M68K.h"
 #include "Mem_S68K.h"
@@ -70,14 +71,14 @@ static int sector(unsigned lba, unsigned char *b, unsigned bytes) {
 }
 static unsigned memr(int sub,unsigned a) {
     a &= 0xffffff;
-    if(sub) { if(a<0x80000)return rw(Ram_Prg,a); return S68K_RW(a); }
+    if(sub) { if(a<0x80000)return rw(Ram_Prg,a); return S68K_Data_RW(a); }
     if(a>=0xff0000)return rw(Ram_68k,a&0xffff);
     if(a<0x20000)return rw(Rom_Data,a);
     return M68K_RW(a);
 }
 static void memw(int sub,unsigned a,unsigned v) {
     a &= 0xffffff;
-    if(sub) { if(a<0x80000)ww(Ram_Prg,a,v); else S68K_WW(a,(unsigned short)v); }
+    if(sub) { if(a<0x80000)ww(Ram_Prg,a,v); else S68K_Data_WW(a,(unsigned short)v); }
     else { if(a>=0xff0000)ww(Ram_68k,a&0xffff,v); else M68K_WW(a,(unsigned short)v); }
 }
 static unsigned meml(int sub,unsigned a) { return (memr(sub,a)<<16)|memr(sub,a+2); }

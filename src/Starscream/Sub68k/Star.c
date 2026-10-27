@@ -521,10 +521,10 @@ static void gen_interface(void) {
 	emit("bits 32\n");
 
 	emit("\n");
-	emit("\textern S68K_RB\n");
-	emit("\textern S68K_RW\n");
-	emit("\textern S68K_WB\n");
-	emit("\textern S68K_WW\n");
+	emit("\textern _S68K_Data_RB\n");
+	emit("\textern _S68K_Data_RW\n");
+	emit("\textern _S68K_Data_WB\n");
+	emit("\textern _S68K_Data_WW\n");
 	emit("\textern _SpyCDBiosCall\n");
 	emit("\n");
 
@@ -1556,7 +1556,7 @@ static void gen_readbw(int size)
 		emit("\tmov [__io_cycle_counter], edi\n");
 		emit("\tmov [__io_fetchbase], ebp\n");
 		emit("\tmov [__io_fetchbased_pc], esi\n");
-		emit("\tcall S68K_RB\n");
+		emit("\tcall _S68K_Data_RB\n");
 		emit("\tmov ebp, [__io_fetchbase]\n");
 		emit("\tmov edi, [__io_cycle_counter]\n");
 		emit("\tmov cl, al\n");
@@ -1578,7 +1578,7 @@ static void gen_readbw(int size)
 		emit("\tmov [__io_cycle_counter], edi\n");
 		emit("\tmov [__io_fetchbase], ebp\n");
 		emit("\tmov [__io_fetchbased_pc], esi\n");
-		emit("\tcall S68K_RW\n");
+		emit("\tcall _S68K_Data_RW\n");
 		emit("\tmov edi, [__io_cycle_counter]\n");
 		emit("\tmov ebp, [__io_fetchbase]\n");
 		emit("\tmov cx, ax\n");
@@ -1603,11 +1603,11 @@ static void gen_readl(void)
 	emit("\tmov [__io_cycle_counter], edi\n");
 	emit("\tmov [__io_fetchbase], ebp\n");
 	emit("\tmov [__io_fetchbased_pc], esi\n");
-	emit("\tcall S68K_RW\n");
+	emit("\tcall _S68K_Data_RW\n");
 	emit("\tmov cx, ax\n");
 	emit("\tadd dword [esp], byte 2\n");
 	emit("\tshl ecx, 16\n");
-	emit("\tcall S68K_RW\n");
+	emit("\tcall _S68K_Data_RW\n");
 	emit("\tmov edi, [__io_cycle_counter]\n");
 	emit("\tmov ebp, [__io_fetchbase]\n");
 	emit("\tmov cx, ax\n");
@@ -1634,7 +1634,7 @@ static void gen_writebw(int size)
 		emit("\tmov [__io_cycle_counter], edi\n");
 		emit("\tmov [__io_fetchbase], ebp\n");
 		emit("\tmov [__io_fetchbased_pc], esi\n");
-		emit("\tcall S68K_WB\n");
+		emit("\tcall _S68K_Data_WB\n");
 		emit("\tmov edi, [__io_cycle_counter]\n");
 		emit("\tadd esp, byte 8\n");
 		emit("\tmov ebp, [__io_fetchbase]\n");
@@ -1655,7 +1655,7 @@ static void gen_writebw(int size)
 		emit("\tmov [__io_cycle_counter], edi\n");
 		emit("\tmov [__io_fetchbase], ebp\n");
 		emit("\tmov [__io_fetchbased_pc], esi\n");
-		emit("\tcall S68K_WW\n");
+		emit("\tcall _S68K_Data_WW\n");
 		emit("\tmov edi, [__io_cycle_counter]\n");
 		emit("\tadd esp, byte 8\n");
 		emit("\tmov ebp, [__io_fetchbase]\n");
@@ -1682,10 +1682,10 @@ static void gen_writel(void)
 	emit("\tmov [__io_fetchbase], ebp\n");
 	emit("\trol ecx, 16\n");
 	emit("\tmov [__io_fetchbased_pc], esi\n");
-	emit("\tcall S68K_WW\n");
+	emit("\tcall _S68K_Data_WW\n");
 	emit("\tmov [esp + 4], cx\n");
 	emit("\tadd dword [esp], byte 2\n");
-	emit("\tcall S68K_WW\n");
+	emit("\tcall _S68K_Data_WW\n");
 	emit("\tmov edi, [__io_cycle_counter]\n");
 	emit("\tadd esp, byte 8\n");
 	emit("\tmov ebp, [__io_fetchbase]\n");

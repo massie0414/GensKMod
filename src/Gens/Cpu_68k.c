@@ -3,6 +3,7 @@
 #include "Cpu_68k.h"
 #include "mem_M68K.h"
 #include "mem_S68K.h"
+#include "word_ram_transfer.h"
 #include "mem_SH2.h"
 #include "save.h"
 #include "ym2612.h"
@@ -74,28 +75,28 @@ struct STARSCREAM_PROGRAMREGION S68K_Fetch[] =
 struct STARSCREAM_DATAREGION S68K_Read_Byte[] =
 {
 	{0x000000, 0x07FFFF, NULL, &Ram_Prg[0]},
-	{0x080000, 0xFFFFFF, (void *)S68K_RB, NULL},
+	{0x080000, 0xFFFFFF, (void *)S68K_Data_RB, NULL},
 	{-1, -1, NULL, NULL}
 };
 
 struct STARSCREAM_DATAREGION S68K_Read_Word[] =
 {
 	{0x000000, 0x07FFFF, NULL, &Ram_Prg[0]},
-	{0x080000, 0xFFFFFF, (void *)S68K_RW, NULL},
+	{0x080000, 0xFFFFFF, (void *)S68K_Data_RW, NULL},
 	{-1, -1, NULL, NULL}
 };
 
 struct STARSCREAM_DATAREGION S68K_Write_Byte[] =
 {
 	{0x000000, 0x07FFFF, NULL, &Ram_Prg[0]},
-	{0x080000, 0xFFFFFF, (void *)S68K_WB, NULL},
+	{0x080000, 0xFFFFFF, (void *)S68K_Data_WB, NULL},
 	{-1, -1, NULL, NULL}
 };
 
 struct STARSCREAM_DATAREGION S68K_Write_Word[] =
 {
 	{0x000000, 0x07FFFF, NULL, &Ram_Prg[0]},
-	{0x080000, 0xFFFFFF, (void *)S68K_WW, NULL},
+	{0x080000, 0xFFFFFF, (void *)S68K_Data_WW, NULL},
 	{-1, -1, NULL, NULL}
 };
 
@@ -467,6 +468,7 @@ static struct {
 } s68kUsage;
 void S68K_Usage_ClearHistory(void)
 {
+    WordRAMTransfer_Reset();
     memset(&s68kUsage, 0, sizeof(s68kUsage));
     sub68k_idleCycles = 0;
 }

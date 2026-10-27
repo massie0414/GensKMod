@@ -1209,3 +1209,19 @@ BEGIN
     LTEXT "",IDC_CD_TRANSFER_RATE,18,118,244,12
     LTEXT "Data payload only / CD-DA excluded / pause retains history",-1,18,134,244,12
 END
+
+IDD_WORD_RAM_TRANSFER DIALOGEX 0, 0, 300, 280
+STYLE DS_SETFONT | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "SegaCD - Word RAM Transfer (Sub 68000)"
+FONT 8, "MS Shell Dlg"
+BEGIN
+    GROUPBOX "Read from Word RAM (KiB per frame)",-1,11,7,278,105
+    CONTROL "",IDC_WORD_RAM_READ_GRAPH,"Static",SS_OWNERDRAW,18,19,264,68
+    LTEXT "",IDC_WORD_RAM_READ_RATE,18,92,264,12
+    GROUPBOX "Write to Word RAM (KiB per frame)",-1,11,118,278,105
+    CONTROL "",IDC_WORD_RAM_WRITE_GRAPH,"Static",SS_OWNERDRAW,18,130,264,68
+    LTEXT "",IDC_WORD_RAM_WRITE_RATE,18,203,264,12
+    LTEXT "",IDC_WORD_RAM_TRANSFER_STATUS,18,230,264,12
+    LTEXT "Last 256 frames / newest at right / shared automatic scale",-1,18,246,264,12
+    LTEXT "Sub-CPU data accesses / instruction fetch and DMA excluded",-1,18,262,264,12
+END
