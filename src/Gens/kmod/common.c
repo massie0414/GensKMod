@@ -25,6 +25,7 @@
 #include "cdprg.h"
 #include "cd_transfer_panel.h"
 #include "word_ram_transfer_panel.h"
+#include "program_ram_transfer_panel.h"
 #include "cd_reg.h"
 
 #include "mSH2.h"
@@ -123,6 +124,9 @@ void CloseWindow_KMod(UCHAR mode)
 		break;
 	case DMODE_WORD_RAM_TRANSFER:
 		wordramtransfer_show(FALSE);
+		break;
+	case DMODE_PROGRAM_RAM_TRANSFER:
+		programramtransfer_show(FALSE);
 		break;
 	case DMODE_CD_GFX:
 		cdgfx_show(FALSE);
@@ -239,6 +243,9 @@ void OpenWindow_KMod(UCHAR mode)
 		break;
 	case DMODE_WORD_RAM_TRANSFER:
 		wordramtransfer_show(TRUE);
+		break;
+	case DMODE_PROGRAM_RAM_TRANSFER:
+		programramtransfer_show(TRUE);
 		break;
 	case DMODE_CD_GFX:
 		cdgfx_show(TRUE);

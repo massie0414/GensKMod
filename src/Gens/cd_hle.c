@@ -11,6 +11,7 @@
 #include "cd_hle.h"
 #include "cd_transfer.h"
 #include "word_ram_transfer.h"
+#include "program_ram_transfer.h"
 #include "Cpu_68k.h"
 #include "Mem_M68K.h"
 #include "Mem_S68K.h"
@@ -57,6 +58,15 @@ static unsigned rl(const unsigned char *p, unsigned a) { return (rw(p,a)<<16)|rw
 static void ww(unsigned char *p,unsigned a,unsigned v) { p[a^1]=(unsigned char)(v>>8); p[(a+1)^1]=(unsigned char)v; }
 static void wl(unsigned char *p,unsigned a,unsigned v) { ww(p,a,v>>16); ww(p,a+2,v); }
 static void copy_be(unsigned char *p,unsigned a,const unsigned char *b,unsigned n) { unsigned i; for(i=0;i<n;i++)p[(a+i)^1]=b[i]; }
+/* HLE CPU data operations keep their existing direct-RAM semantics.
+ * Boot patching uses the unmeasured helpers above; CDC DMA has its own path. */
+static unsigned prg_rb(unsigned a) { ProgramRAMTransfer_AddBytes(0,1); return Ram_Prg[a^1]; }
+static unsigned prg_rw(unsigned a) { ProgramRAMTransfer_AddBytes(0,2); return rw(Ram_Prg,a); }
+static void prg_wb(unsigned a,unsigned v) { ProgramRAMTransfer_AddBytes(1,1); Ram_Prg[a^1]=(unsigned char)v; }
+static void prg_ww(unsigned a,unsigned v) { ProgramRAMTransfer_AddBytes(1,2); ww(Ram_Prg,a,v); }
+static void prg_wl(unsigned a,unsigned v) { prg_ww(a,v>>16); prg_ww(a+2,v); }
+static void prg_copy(unsigned a,const unsigned char *b,unsigned n) { ProgramRAMTransfer_AddBytes(1,n); copy_be(Ram_Prg,a,b,n); }
+static void prg_clear(unsigned a,unsigned n) { ProgramRAMTransfer_AddBytes(1,n); memset(Ram_Prg+a,0,n); }
 static unsigned sector_header(unsigned lba) {
     unsigned t=lba+150,m=t/4500,s=t/75%60,f=t%75;
     return ((m/10*16+m%10)<<24)|((s/10*16+s%10)<<16)|((f/10*16+f%10)<<8)|1;
@@ -71,14 +81,14 @@ static int sector(unsigned lba, unsigned char *b, unsigned bytes) {
 }
 static unsigned memr(int sub,unsigned a) {
     a &= 0xffffff;
-    if(sub) { if(a<0x80000)return rw(Ram_Prg,a); return S68K_Data_RW(a); }
+    if(sub) { if(a<0x80000)return prg_rw(a); return S68K_Data_RW(a); }
     if(a>=0xff0000)return rw(Ram_68k,a&0xffff);
     if(a<0x20000)return rw(Rom_Data,a);
     return M68K_RW(a);
 }
 static void memw(int sub,unsigned a,unsigned v) {
     a &= 0xffffff;
-    if(sub) { if(a<0x80000)ww(Ram_Prg,a,v); else S68K_Data_WW(a,(unsigned short)v); }
+    if(sub) { if(a<0x80000)prg_ww(a,v); else S68K_Data_WW(a,(unsigned short)v); }
     else { if(a>=0xff0000)ww(Ram_68k,a&0xffff,v); else M68K_WW(a,(unsigned short)v); }
 }
 static unsigned meml(int sub,unsigned a) { return (memr(sub,a)<<16)|memr(sub,a+2); }
@@ -166,12 +176,12 @@ static void bramcall(void) {
         if(fn==3) {
             unsigned n=saves[found].blocks*(saves[found].mode?32:64);
             if(dest>=0x80000 || n>0x80000-dest) { c->sr|=1; break; }
-            copy_be(Ram_Prg,dest,saves[found].data,n);
+            prg_copy(dest,saves[found].data,n);
         } else if(fn==8) {
             unsigned n=saves[found].blocks*(saves[found].mode?32:64);
             if(dest>=0x80000 || n>0x80000-dest) { c->sr|=1; break; }
             c->dreg[0]=0;
-            for(j=0;j<n;j++)if(Ram_Prg[(dest+j)^1]!=saves[found].data[j]) { c->sr|=1; c->dreg[0]=0xffffffff; break; }
+            for(j=0;j<n;j++)if(prg_rb(dest+j)!=saves[found].data[j]) { c->sr|=1; c->dreg[0]=0xffffffff; break; }
         }
         break;
     case 4: {
@@ -179,7 +189,7 @@ static void bramcall(void) {
         int slot=found>=0?found:empty;
         if(slot<0||!blocks||blocks>125||n>8000||dest>=0x80000||n>0x80000-dest||used-(found>=0?saves[found].blocks:0)+blocks>125) { c->sr|=1; break; }
         memcpy(saves[slot].name,name,11); saves[slot].mode=(unsigned char)mode; saves[slot].blocks=blocks;
-        for(j=0;j<n;j++)saves[slot].data[j]=Ram_Prg[(dest+j)^1];
+        for(j=0;j<n;j++)saves[slot].data[j]=(unsigned char)prg_rb(dest+j);
         if(!write_saves())c->sr|=1;
         break;
     }
@@ -196,13 +206,13 @@ static void bramcall(void) {
             if(j<11 && name[j]!='*')continue;
             if(skip) { skip--; continue; }
             if(written==capacity) { c->sr|=1; break; }
-            copy_be(Ram_Prg,dest+written*16,saves[i].name,11);
-            Ram_Prg[(dest+written*16+11)^1]=0;
-            ww(Ram_Prg,dest+written*16+12,start);
-            ww(Ram_Prg,dest+written*16+14,saves[i].blocks);
+            prg_copy(dest+written*16,saves[i].name,11);
+            prg_wb(dest+written*16+11,0);
+            prg_ww(dest+written*16+12,start);
+            prg_ww(dest+written*16+14,saves[i].blocks);
             written++;
         }
-        for(j=written*16;j<capacity*16;j++)Ram_Prg[(dest+j)^1]=0;
+        for(j=written*16;j<capacity*16;j++)prg_wb(dest+j,0);
         break;
     }
     default: unsupported(1,0xb000+fn); c->sr|=1; break;
@@ -437,10 +447,10 @@ static void subcall(void) {
             (audio_paused || (read_count && read_paused))?0x500:
             (audio_track>=1 || read_count)?0x100:0;
         /* CDBSTAT returns a pointer, not a caller-provided output buffer. */
-        c->areg[0]=0x1300; memset(Ram_Prg+0x1300,0,32);
-        ww(Ram_Prg,0x1300,state|(read_count?(read_paused?5:1):0));
-        ww(Ram_Prg,0x1310,0x100|SCD.TOC.Last_Track);
-        Ram_Prg[0x1307^1]=(unsigned char)(audio_track>=1?audio_track+1:1);
+        c->areg[0]=0x1300; prg_clear(0x1300,32);
+        prg_ww(0x1300,state|(read_count?(read_paused?5:1):0));
+        prg_ww(0x1310,0x100|SCD.TOC.Last_Track);
+        prg_wb(0x1307,audio_track>=1?audio_track+1:1);
         /* The CDD table includes BCD absolute/track-relative MSF, not just
          * the track number. Games wait for the relative frame to advance
          * before beginning a transfer (Mega-CD BIOS Manual, pp. 20-21). */
@@ -448,8 +458,8 @@ static void subcall(void) {
             unsigned relative=audio_track>=1?audio_sector:read_lba;
             unsigned absolute=relative+150+(audio_track>=1?Tracks[audio_track].DiscStart:0);
             unsigned flag=audio_track>=1?0:4;
-            wl(Ram_Prg,0x1308,(bcd(absolute/4500)<<24)|(bcd(absolute/75%60)<<16)|(bcd(absolute%75)<<8)|flag);
-            wl(Ram_Prg,0x130c,(bcd(relative/4500)<<24)|(bcd(relative/75%60)<<16)|(bcd(relative%75)<<8)|flag);
+            prg_wl(0x1308,(bcd(absolute/4500)<<24)|(bcd(absolute/75%60)<<16)|(bcd(absolute%75)<<8)|flag);
+            prg_wl(0x130c,(bcd(relative/4500)<<24)|(bcd(relative/75%60)<<16)|(bcd(relative%75)<<8)|flag);
         }
         break;
     }

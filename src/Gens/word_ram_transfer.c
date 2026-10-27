@@ -52,19 +52,24 @@ unsigned long WordRAMTransfer_GetBytesPerSecond(int write)
     return (unsigned long)(total * frame_rate / count);
 }
 
+/* Private counters used by the shared CPU data-access thunks below. */
+extern unsigned long ProgramRAMTransfer_ReadBytes, ProgramRAMTransfer_WriteBytes;
+extern int ProgramRAMTransfer_InFrame;
+
 /* Starscream's longword helpers keep half the value in ECX between two
  * accesses. Ordinary C wrappers may clobber it. These x86 tail-call thunks
  * preserve every register and the original argument stack before entering
  * the existing memory handlers; emulated timing and memory behavior stay
- * unchanged. Match Mem_S68k.asm: 2M $080000-$0BFFFF; 1M also $0C0000-$0DFFFF.
+ * unchanged. Program RAM: $000000-$07FFFF. Word RAM matches Mem_S68k.asm:
+ * 2M $080000-$0BFFFF; 1M also $0C0000-$0DFFFF.
  * Count bus width, including repeat/same-value writes, not changed bytes. */
-#define MEASURE_ACCESS(counter, bytes, raw) \
+#define MEASURE_ACCESS(counter, program_counter, bytes, raw) \
     __asm push ecx \
     __asm mov ecx, [esp + 8] \
+    __asm cmp ecx, 0x080000 \
+    __asm jb program_access \
     __asm cmp in_frame, 0 \
     __asm je forward_access \
-    __asm cmp ecx, 0x080000 \
-    __asm jb forward_access \
     __asm test Ram_Word_State, 2 \
     __asm jnz banked_access \
     __asm cmp ecx, 0x0BFFFF \
@@ -74,24 +79,29 @@ unsigned long WordRAMTransfer_GetBytesPerSecond(int write)
     __asm check_access: \
     __asm ja forward_access \
     __asm add counter, bytes \
+    __asm jmp forward_access \
+    __asm program_access: \
+    __asm cmp ProgramRAMTransfer_InFrame, 0 \
+    __asm je forward_access \
+    __asm add program_counter, bytes \
     __asm forward_access: \
     __asm pop ecx \
     __asm jmp raw
 
 __declspec(naked) unsigned char S68K_Data_RB(unsigned int address)
 {
-    MEASURE_ACCESS(pending_read, 1, S68K_RB)
+    MEASURE_ACCESS(pending_read, ProgramRAMTransfer_ReadBytes, 1, S68K_RB)
 }
 __declspec(naked) unsigned short S68K_Data_RW(unsigned int address)
 {
-    MEASURE_ACCESS(pending_read, 2, S68K_RW)
+    MEASURE_ACCESS(pending_read, ProgramRAMTransfer_ReadBytes, 2, S68K_RW)
 }
 __declspec(naked) void S68K_Data_WB(unsigned int address, unsigned char value)
 {
-    MEASURE_ACCESS(pending_write, 1, S68K_WB)
+    MEASURE_ACCESS(pending_write, ProgramRAMTransfer_WriteBytes, 1, S68K_WB)
 }
 __declspec(naked) void S68K_Data_WW(unsigned int address, unsigned short value)
 {
-    MEASURE_ACCESS(pending_write, 2, S68K_WW)
+    MEASURE_ACCESS(pending_write, ProgramRAMTransfer_WriteBytes, 2, S68K_WW)
 }
 #undef MEASURE_ACCESS

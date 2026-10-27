@@ -15,6 +15,7 @@
 #include "../src/Gens/G_dsound.h"
 #include "../src/Gens/vdp_io.h"
 #include "../src/Gens/LC89510.h"
+#include "../src/Gens/program_ram_transfer.h"
 
 #define CHECK(x) do { if(!(x)) { fprintf(stderr,"FAIL line %d: %s\n",__LINE__,#x); return 1; } } while(0)
 static void be32(unsigned char *p,unsigned v) { p[0]=v>>24; p[1]=v>>16; p[2]=v>>8; p[3]=v; }
@@ -303,13 +304,28 @@ int main(void) {
     CHECK(!(bram_api(6).sr&1));
     Ram_Prg[0x5200^1]='*'; Ram_Prg[0x5201^1]=0;
     memset(Ram_Prg+0x5300,0xa5,48);
+    unsigned long prg_values[PROGRAM_RAM_TRANSFER_HISTORY];
+    ProgramRAMTransfer_Reset(); ProgramRAMTransfer_BeginFrame();
     CHECK(!(bram_api(7,0x5200,0x5300,2).sr&1));
+    ProgramRAMTransfer_EndFrame(60);
+    CHECK(ProgramRAMTransfer_GetHistory(0,prg_values)==1 && prg_values[0]==28);
+    CHECK(ProgramRAMTransfer_GetHistory(1,prg_values)==1 && prg_values[0]==32);
     CHECK(rw(Ram_Prg,0x5300)==0 && rw(Ram_Prg,0x531e)==0 && rw(Ram_Prg,0x5320)==0xa5a5);
     for(unsigned file=0;file<2;file++) {
         const char *name=file?"SWITCH____2":"SWITCH____1";
         for(unsigned j=0;j<11;j++)Ram_Prg[(0x5200+j)^1]=name[j];
         Ram_Prg[0x520b^1]=file?255:0; word(Ram_Prg,0x520c,file+1);
+        ProgramRAMTransfer_Reset(); ProgramRAMTransfer_BeginFrame();
         CHECK(!(bram_api(4,0x5200,0x5400).sr&1));
+        ProgramRAMTransfer_EndFrame(60);
+        CHECK(ProgramRAMTransfer_GetHistory(0,prg_values)==1 && prg_values[0]==96);
+        CHECK(ProgramRAMTransfer_GetHistory(1,prg_values)==1 && prg_values[0]==0);
+        ProgramRAMTransfer_BeginFrame(); CHECK(!(bram_api(3,0x5200,0x5500).sr&1)); ProgramRAMTransfer_EndFrame(60);
+        CHECK(ProgramRAMTransfer_GetHistory(0,prg_values)==2 && prg_values[1]==28);
+        CHECK(ProgramRAMTransfer_GetHistory(1,prg_values)==2 && prg_values[1]==64);
+        ProgramRAMTransfer_BeginFrame(); CHECK(!(bram_api(8,0x5200,0x5500).sr&1)); ProgramRAMTransfer_EndFrame(60);
+        CHECK(ProgramRAMTransfer_GetHistory(0,prg_values)==3 && prg_values[2]==92);
+        CHECK(ProgramRAMTransfer_GetHistory(1,prg_values)==3 && prg_values[2]==0);
     }
     Ram_Prg[0x520a^1]='*'; Ram_Prg[0x520b^1]=0;
     CHECK(bram_api(7,0x5200,0x5300,1).sr&1);

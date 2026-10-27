@@ -53,7 +53,8 @@ extern "C" {
 #define DMODE_CD_CDDA 32
 #define DMODE_CD_TRANSFER 33
 #define DMODE_WORD_RAM_TRANSFER 34
-#define WIN_NUMBER DMODE_WORD_RAM_TRANSFER
+#define DMODE_PROGRAM_RAM_TRANSFER 35
+#define WIN_NUMBER DMODE_PROGRAM_RAM_TRANSFER
 
 extern int Debug;
 extern int Frame_Skip;

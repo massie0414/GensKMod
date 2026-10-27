@@ -17,7 +17,7 @@ void WordRAMTransfer_EndFrame(unsigned int frames_per_second);
 unsigned int WordRAMTransfer_GetHistory(int write, unsigned long *values);
 unsigned long WordRAMTransfer_GetBytesPerSecond(int write);
 
-/* Use only for CPU data accesses (including sub-CPU BIOS HLE operations).
+/* Measure both Program RAM and Word RAM CPU data accesses (including HLE).
  * Raw S68K_RB/RW/WB/WW remain available for debugger inspection. */
 unsigned char S68K_Data_RB(unsigned int address);
 unsigned short S68K_Data_RW(unsigned int address);

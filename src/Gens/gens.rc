@@ -1225,3 +1225,19 @@ BEGIN
     LTEXT "Last 256 frames / newest at right / shared automatic scale",-1,18,246,264,12
     LTEXT "Sub-CPU data accesses / instruction fetch and DMA excluded",-1,18,262,264,12
 END
+
+IDD_PROGRAM_RAM_TRANSFER DIALOGEX 0, 0, 300, 280
+STYLE DS_SETFONT | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "SegaCD - Program RAM Transfer (Sub 68000)"
+FONT 8, "MS Shell Dlg"
+BEGIN
+    GROUPBOX "Read from Program RAM (KiB per frame)",-1,11,7,278,105
+    CONTROL "",IDC_PROGRAM_RAM_READ_GRAPH,"Static",SS_OWNERDRAW,18,19,264,68
+    LTEXT "",IDC_PROGRAM_RAM_READ_RATE,18,92,264,12
+    GROUPBOX "Write to Program RAM (KiB per frame)",-1,11,118,278,105
+    CONTROL "",IDC_PROGRAM_RAM_WRITE_GRAPH,"Static",SS_OWNERDRAW,18,130,264,68
+    LTEXT "",IDC_PROGRAM_RAM_WRITE_RATE,18,203,264,12
+    LTEXT "",IDC_PROGRAM_RAM_TRANSFER_STATUS,18,230,264,12
+    LTEXT "Last 256 frames / newest at right / shared automatic scale",-1,18,246,264,12
+    LTEXT "Sub-CPU data accesses / instruction fetch and DMA excluded",-1,18,262,264,12
+END

@@ -19,6 +19,7 @@ extern "C" {
 #include "../src/Gens/cd_aspi.h"
 #include "../src/Gens/cd_transfer.h"
 #include "../src/Gens/word_ram_transfer.h"
+#include "../src/Gens/program_ram_transfer.h"
 #include "../src/Gens/LC89510.h"
 #include "../src/Gens/G_dsound.h"
 #include "../src/Gens/vdp_io.h"
@@ -154,30 +155,53 @@ static int hle_tests(void) {
     api(0x8d); WordRAMTransfer_EndFrame(60);
     CHECK(WordRAMTransfer_GetHistory(0,ram_values)==2 && ram_values[1]==0);
     CHECK(WordRAMTransfer_GetHistory(1,ram_values)==2 && ram_values[1]==0);
+    // HLE parameter/stack reads and payload/header writes in Program RAM.
+    ProgramRAMTransfer_Reset(); ProgramRAMTransfer_BeginFrame(); CD_HLE_Frame(); request(33,1);
+    CHECK(!(api(0x8c,0x20000,0x5100)&1)); api(0x8d); ProgramRAMTransfer_EndFrame(60);
+    CHECK(ProgramRAMTransfer_GetHistory(0,ram_values)==1 && ram_values[0]==26);
+    CHECK(ProgramRAMTransfer_GetHistory(1,ram_values)==1 && ram_values[0]==2052);
+    ProgramRAMTransfer_BeginFrame(); CHECK(!(api(0x81)&1)); ProgramRAMTransfer_EndFrame(60);
+    CHECK(ProgramRAMTransfer_GetHistory(0,ram_values)==2 && ram_values[1]==6);
+    CHECK(ProgramRAMTransfer_GetHistory(1,ram_values)==2 && ram_values[1]==45);
+    ProgramRAMTransfer_BeginFrame(); CD_HLE_Frame(); request(33,1); CDC.RS0=0x500;
+    CHECK(!(api(0x8b)&1)); CDC.DMA_Adr=0x4000;
+    while(SCD.Status_CDC&8) Update_CDC_TRansfert();
+    api(0x8d); ProgramRAMTransfer_EndFrame(60);
+    CHECK(ProgramRAMTransfer_GetHistory(0,ram_values)==3 && ram_values[2]==26);
+    CHECK(ProgramRAMTransfer_GetHistory(1,ram_values)==3 && ram_values[2]==0);
     Reset_SegaCD(); CHECK(!CDTransfer_GetHistory(values));
+    CHECK(!ProgramRAMTransfer_GetHistory(0,ram_values));
     CHECK(!WordRAMTransfer_GetHistory(0,ram_values));
     // A sub-CPU read/write loop exercises sampling in every real frame path.
     word(Ram_68k,0x5400,0x60fe); main68k_context.pc=0xff5400; main68k_context.sr=0x2700;
-    word(Ram_Prg,0x5400,0x3010); word(Ram_Prg,0x5402,0x3280); word(Ram_Prg,0x5404,0x60fa);
+    word(Ram_Prg,0x5400,0x3010); word(Ram_Prg,0x5402,0x3280); word(Ram_Prg,0x5404,0x3012);
+    word(Ram_Prg,0x5406,0x3680); word(Ram_Prg,0x5408,0x60f6);
     sub68k_context.pc=0x5400; sub68k_context.sr=0x2700; sub68k_context.interrupts[0]=0;
     sub68k_context.areg[0]=0x080100; sub68k_context.areg[1]=0x080200;
+    sub68k_context.areg[2]=0x060100; sub68k_context.areg[3]=0x060200;
     Ram_Word_State=1; MS68K_Set_Word_Ram(); S68K_State=1;
     int (*frames[])(void)={Do_SegaCD_Frame,Do_SegaCD_Frame_No_VDP,
         Do_SegaCD_Frame_Cycle_Accurate,Do_SegaCD_Frame_No_VDP_Cycle_Accurate};
     CD_HLE_Active=0; SCD.Status_CDC=0;
     for (unsigned i=0;i<4;i++) {
-        CDTransfer_Reset(); WordRAMTransfer_Reset(); frames[i](); CHECK(CDTransfer_GetHistory(values)==1);
+        CDTransfer_Reset(); WordRAMTransfer_Reset(); ProgramRAMTransfer_Reset(); frames[i](); CHECK(CDTransfer_GetHistory(values)==1);
         CHECK(WordRAMTransfer_GetHistory(0,ram_values)==1 && ram_values[0]>0);
+        CHECK(ProgramRAMTransfer_GetHistory(0,ram_values)==1 && ram_values[0]>0);
         CHECK(WordRAMTransfer_GetHistory(1,ram_values)==1 && ram_values[0]>0);
+        CHECK(ProgramRAMTransfer_GetHistory(1,ram_values)==1 && ram_values[0]>0);
     }
     CD_HLE_Active=1;
-    CDTransfer_Reset(); WordRAMTransfer_Reset(); Do_SegaCD_Frame(); Do_SegaCD_Frame_No_VDP(); CHECK(CDTransfer_GetHistory(values)==2);
+    CDTransfer_Reset(); WordRAMTransfer_Reset(); ProgramRAMTransfer_Reset(); Do_SegaCD_Frame(); Do_SegaCD_Frame_No_VDP(); CHECK(CDTransfer_GetHistory(values)==2);
     CHECK(WordRAMTransfer_GetHistory(0,ram_values)==2 && ram_values[0]>0 && ram_values[1]>0);
+    CHECK(ProgramRAMTransfer_GetHistory(0,ram_values)==2 && ram_values[0]>0 && ram_values[1]>0);
     CHECK(WordRAMTransfer_GetHistory(1,ram_values)==2 && ram_values[0]>0 && ram_values[1]>0);
+    CHECK(ProgramRAMTransfer_GetHistory(1,ram_values)==2 && ram_values[0]>0 && ram_values[1]>0);
     Enable_CD_32X();
-    CDTransfer_Reset(); WordRAMTransfer_Reset(); Do_32X_Frame(); Do_32X_Frame_No_VDP(); CHECK(CDTransfer_GetHistory(values)==2);
+    CDTransfer_Reset(); WordRAMTransfer_Reset(); ProgramRAMTransfer_Reset(); Do_32X_Frame(); Do_32X_Frame_No_VDP(); CHECK(CDTransfer_GetHistory(values)==2);
     CHECK(WordRAMTransfer_GetHistory(0,ram_values)==2 && ram_values[0]>0 && ram_values[1]>0);
+    CHECK(ProgramRAMTransfer_GetHistory(0,ram_values)==2 && ram_values[0]>0 && ram_values[1]>0);
     CHECK(WordRAMTransfer_GetHistory(1,ram_values)==2 && ram_values[0]>0 && ram_values[1]>0);
+    CHECK(ProgramRAMTransfer_GetHistory(1,ram_values)==2 && ram_values[0]>0 && ram_values[1]>0);
     CD_32X_Active=0; CD_HLE_Close(); Unload_ISO(); DeleteFile("transfer-test.iso");
     puts("PASS: HLE direct/host reads without double counting; all six frame loops including CD32X and frameskip");
     return 0;
