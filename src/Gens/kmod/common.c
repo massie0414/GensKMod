@@ -23,6 +23,7 @@
 #include "cdc.h"
 #include "cdgfx.h"
 #include "cdprg.h"
+#include "cd_transfer_panel.h"
 #include "cd_reg.h"
 
 #include "mSH2.h"
@@ -115,6 +116,9 @@ void CloseWindow_KMod(UCHAR mode)
 		break;
 	case DMODE_CD_CDC:
 		cdcdebug_show(FALSE);
+		break;
+	case DMODE_CD_TRANSFER:
+		cdtransfer_show(FALSE);
 		break;
 	case DMODE_CD_GFX:
 		cdgfx_show(FALSE);
@@ -225,6 +229,9 @@ void OpenWindow_KMod(UCHAR mode)
 		break;
 	case DMODE_CD_CDC:
 		cdcdebug_show(TRUE);
+		break;
+	case DMODE_CD_TRANSFER:
+		cdtransfer_show(TRUE);
 		break;
 	case DMODE_CD_GFX:
 		cdgfx_show(TRUE);

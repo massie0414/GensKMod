@@ -51,7 +51,8 @@ extern "C" {
 #define DMODE_CD_PRG 30
 #define DMODE_CD_PCM 31
 #define DMODE_CD_CDDA 32
-#define WIN_NUMBER DMODE_CD_CDDA
+#define DMODE_CD_TRANSFER 33
+#define WIN_NUMBER DMODE_CD_TRANSFER
 
 extern int Debug;
 extern int Frame_Skip;

@@ -1197,3 +1197,15 @@ BEGIN
     LTEXT "",7123,278,215,80,14
     LTEXT "Per-channel output / Peak / 0 - 100% / refresh: 50 ms",-1,12,242,346,12
 END
+
+IDD_DEBUGCD_TRANSFER DIALOGEX 0, 0, 280, 154
+STYLE DS_SETFONT | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "SegaCD - CD-ROM Transfer"
+FONT 8, "MS Shell Dlg"
+BEGIN
+    GROUPBOX "CD-ROM data (KiB per frame)",-1,11,7,258,105
+    CONTROL "",IDC_CD_TRANSFER_GRAPH,"Static",SS_OWNERDRAW,18,19,244,68
+    LTEXT "Last 256 frames / newest at right / automatic scale",-1,18,92,244,12
+    LTEXT "",IDC_CD_TRANSFER_RATE,18,118,244,12
+    LTEXT "Data payload only / CD-DA excluded / pause retains history",-1,18,134,244,12
+END

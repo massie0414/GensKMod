@@ -7,6 +7,7 @@
 #include "mem_S68k.h"
 #include "pcm.h"
 #include "cd_hle.h"
+#include "cd_transfer.h"
 
 #define CDC_DMA_SPEED 256
 
@@ -68,6 +69,7 @@ void CDC_Reset(void)
 
 void LC89510_Reset(void)
 {
+	CDTransfer_Reset();
 	CDD_Reset();
 	CDC_Reset();
 

@@ -4,6 +4,7 @@
 #include <io.h>
 #include "save.h"
 #include "cd_hle.h"
+#include "cd_transfer.h"
 #include "cpu_68k.h"
 #include "cpu_sh2.h"
 #include "sh2.h"
@@ -191,6 +192,7 @@ int Load_State(char *Name)
 	memset(buf, 0, len);
 	if (fread(buf, 1, len, f))
 	{
+		CDTransfer_Reset();
 		S68K_Usage_ClearHistory();
 		M68K_Usage_ClearHistory();
 		Z80_Usage_ClearHistory();

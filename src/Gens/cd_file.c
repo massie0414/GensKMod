@@ -2,6 +2,7 @@
 #include <windows.h>
 #include "cd_sys.h"
 #include "cd_file.h"
+#include "cd_transfer.h"
 #include "cd_cue.h"
 #include "lc89510.h"
 #include "cdda_mp3.h"
@@ -221,6 +222,7 @@ int Load_ISO(char *buf, const char *iso_name)
 void Unload_ISO(void)
 {
 	int i;
+	CDTransfer_Reset();
 	
 	Track_Played = 99;
 
@@ -238,6 +240,7 @@ void Unload_ISO(void)
 int FILE_Read_One_LBA_CDC(void)
 {
 	int where_read;
+	int data_read = 0;
 	
 	if (CDD.Control & 0x0100)					// DATA
 	{
@@ -252,8 +255,8 @@ int FILE_Read_One_LBA_CDC(void)
 
 //		memset(cp_buf, 0, 2048);
 
-		fseek(Tracks[0].F, where_read, SEEK_SET);
-		fread(cp_buf, 1, 2048, Tracks[0].F);
+		if (fseek(Tracks[0].F, where_read, SEEK_SET) == 0)
+			data_read = fread(cp_buf, 1, 2048, Tracks[0].F) == 2048;
 
 #ifdef DEBUG_CD
 		fprintf(debug_SCD_file, "\n\nRead file CDC 1 data sector :\n");
@@ -300,6 +303,7 @@ int FILE_Read_One_LBA_CDC(void)
 				CDC.PT.N = (CDC.PT.N + 2352) & 0x7FFF;
 
 				memcpy(&CDC.Buffer[CDC.PT.N + 4], cp_buf, 2048);
+				if (data_read) CDTransfer_AddBytes(2048);
 				memcpy(&CDC.Buffer[CDC.PT.N], &CDC.HEAD, 4);
 
 #ifdef DEBUG_CD

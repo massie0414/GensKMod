@@ -9,6 +9,7 @@
 #include <mmsystem.h>
 #include "G_dsound.h"
 #include "cd_hle.h"
+#include "cd_transfer.h"
 #include "Cpu_68k.h"
 #include "Mem_M68K.h"
 #include "Mem_S68K.h"
@@ -29,6 +30,11 @@ static unsigned read_lba, read_count;
 static int read_paused;
 static unsigned read_budget, read_clock;
 static unsigned sectors_read;
+static int transfer_counted; /* One payload per pending sector, even when polled/re-read. */
+static void count_data_sector(void) {
+    if (!transfer_counted) CDTransfer_AddBytes(2048);
+    transfer_counted = 1;
+}
 static unsigned frame;
 static int native_irq2;
 static int comm_wait;
@@ -243,6 +249,8 @@ int CD_HLE_Boot(void) {
      * Empty RAM would run through the banked 68K window and corrupt RAM.
      * Supply our own DI / JP $0001 idle loop, replaceable by the game. */
     Ram_Z80[0]=0xf3; Ram_Z80[1]=0xc3; Ram_Z80[2]=1; Ram_Z80[3]=0;
+    transfer_counted=0;
+    CDTransfer_Reset();
     read_lba=read_count=frame=0; read_budget=1; read_clock=0; read_paused=0; sectors_read=0;
     audio_track=-1; audio_sector=audio_clock=audio_paused=0;
     audio_seek_delay=0; native_irq2=0; comm_wait=0;
@@ -454,6 +462,7 @@ static void subcall(void) {
         break;
     }
     case 0x17: case 0x20: case 0x21:
+        transfer_counted=0;
         read_lba=meml(1,a); read_paused=0; audio_track=-1;
         read_count=fn==0x17?(unsigned)Tracks[0].Lenght-read_lba:meml(1,a+4);
         if(fn==0x21)read_count-=read_lba;
@@ -481,6 +490,7 @@ static void subcall(void) {
                 /* Feed host-port readers and DMA users through the existing CDC
                  * DRQ/EDT machinery. DMA receives payload only, without header. */
                 if(!sector(read_lba,CDC.Buffer+4,2048)) { c->sr|=1; break; }
+                count_data_sector();
                 CDC.Buffer[0]=(unsigned char)(h>>24); CDC.Buffer[1]=(unsigned char)(h>>16);
                 CDC.Buffer[2]=(unsigned char)(h>>8); CDC.Buffer[3]=(unsigned char)h;
                 CDC.DAC.N=0; CDC.DBC.N=2052;
@@ -494,6 +504,7 @@ static void subcall(void) {
         break;
     case 0x8c:
         if(!read_count||read_paused||!read_budget||!sector(read_lba,b,sizeof(b))) { c->sr|=1; break; }
+        count_data_sector();
         for(i=0;i<sizeof(b);i+=2)memw(1,a+i,b[i]*256+b[i+1]);
         i=sector_header(read_lba);
         memw(1,c->areg[1],i>>16); memw(1,c->areg[1]+2,i);
@@ -503,6 +514,7 @@ static void subcall(void) {
         SCD.Status_CDC&=~8; CDC.RS0&=~0x4000;
         if(read_count && !read_paused && read_budget) {
             read_budget--; read_lba++; read_count--; sectors_read++;
+            transfer_counted=0;
         }
         break;
     default: unsupported(1,fn); c->sr|=1; break;

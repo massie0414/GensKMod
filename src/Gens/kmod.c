@@ -31,6 +31,8 @@
 #include "kmod\cdc.h"
 #include "kmod\cdgfx.h"
 #include "kmod\cdprg.h"
+#include "kmod/cd_transfer_panel.h"
+#include "cd_transfer.h"
 #include "kmod\cd_reg.h"
 
 #include "kmod\mSH2.h"
@@ -190,6 +192,7 @@ void Init_KMod( )
 
 	s68kdebug_create(ghInstance, HWnd);
 	cdcdebug_create(ghInstance, HWnd);
+	cdtransfer_create(ghInstance, HWnd);
 	cdgfx_create(ghInstance, HWnd);
 	cdprg_create(ghInstance, HWnd);
 	cdreg_create(ghInstance, HWnd);
@@ -228,6 +231,7 @@ void Init_KMod( )
 	sSH2_restore_window(config_file);
 	s68kdebug_restore_window(config_file);
 	cdcdebug_restore_window(config_file);
+	cdtransfer_restore_window(config_file);
 	cdreg_restore_window(config_file);
 	cdgfx_restore_window(config_file);
 	cdprg_restore_window(config_file);
@@ -314,7 +318,7 @@ void kmod_close()
 		if (OpenedWindow_KMod[mode] && mode != (DMODE_MSG - 1) &&
 			mode != (DMODE_DISASSEMBLY - 1) && mode != (DMODE_SHADOW - 1) && mode != (DMODE_HIGHLIGHT - 1) && mode != (DMODE_WINDOW - 1) && mode != (DMODE_PLANE_A - 1) && mode != (DMODE_PLANE_B - 1) && mode != (DMODE_SPRITE_SCREEN - 1) &&
 			mode != (DMODE_VDP - 1) && mode != (DMODE_VDP_REG - 1) && mode != (DMODE_SPRITES - 1) &&
-			mode != (DMODE_CD_PCM - 1) && mode != (DMODE_CD_CDDA - 1) &&
+			mode != (DMODE_CD_TRANSFER - 1) && mode != (DMODE_CD_PCM - 1) && mode != (DMODE_CD_CDDA - 1) &&
             mode != (DMODE_YM2612 - 1) && mode != (DMODE_PSG - 1) &&
             mode != (DMODE_32_MEMORY - 1) && mode != (DMODE_32_SOUND - 1) && mode != (DMODE_32_FPS - 1) && mode != (DMODE_32_SDRAM - 1) && mode != (DMODE_32_VDP - 1) && mode != (DMODE_32_REG - 1) &&
 			mode != (DMODE_32_MSH2 - 1) && mode != (DMODE_32_SSH2 - 1) &&
@@ -324,6 +328,8 @@ void kmod_close()
 		}
 	}
 
+	CDTransfer_Reset();
+	cdtransfer_update();
 	fps32x_reset();
     disassembly_clear();
 	sound32x_reset();
@@ -369,6 +375,8 @@ void ResetDebug_KMod(  )
 	vdp32x_reset();
 	s32xreg_reset();
 	sdram32x_reset();
+	CDTransfer_Reset();
+	cdtransfer_update();
 	fps32x_reset();
 	sound32x_reset();
     soundcd_reset();

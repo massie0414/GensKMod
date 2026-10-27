@@ -6,6 +6,7 @@
 #include "star_68k.h"
 #include "LC89510.h"
 #include "cd_aspi.h"
+#include "cd_transfer.h"
 #include "mem_S68K.h"
 
 HINSTANCE hDLL = NULL;               // Handle to DLL
@@ -2121,6 +2122,7 @@ int ASPI_Read_One_CDC_Cache(void)
 				if (SCD.Cur_LBA > 0)
 				{
 					Sectors_In_Cache--;
+					CDTransfer_AddBytes(2048);
 
 #ifdef DEBUG_CD
 					fprintf(debug_SCD_file, "\nRead -> WA = %d  Buffer[%d] =\n", CDC.WA.N, CDC.PT.N & 0x3FFF);

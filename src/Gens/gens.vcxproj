@@ -253,6 +253,8 @@
     <ClCompile Include="CCnet.c" />
     <ClCompile Include="cd_aspi.cpp" />
     <ClCompile Include="cd_file.c" />
+    <ClCompile Include="cd_transfer.c" />
+    <ClCompile Include="kmod\cd_transfer_panel.c" />
     <ClCompile Include="cd_hle.c" />
     <ClCompile Include="cd_cue.c" />
     <ClCompile Include="cd_sys.c" />
@@ -450,6 +452,9 @@
     <ClInclude Include="kmod\cdc.h" />
     <ClInclude Include="kmod\cdgfx.h" />
     <ClInclude Include="kmod\cdprg.h" />
+    <ClInclude Include="cd_transfer.h" />
+    <ClInclude Include="kmod\cd_transfer_panel.h" />
+    <ClInclude Include="kmod\frame_graph.h" />
     <ClInclude Include="kmod\cd_reg.h" />
     <ClInclude Include="kmod\common.h" />
     <ClInclude Include="kmod\config.h" />

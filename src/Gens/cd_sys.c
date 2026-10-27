@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include "cd_hle.h"
+#include "cd_transfer.h"
 #include <windows.h>
 #include "cd_aspi.h"		// this include cd_sys.h
 #include "cd_file.h"
@@ -263,6 +264,7 @@ void End_CD_Driver(void)
 
 int Reset_CD(char *buf, const char *iso_name)
 {
+	CDTransfer_Reset();
 	memset(CD_Audio_Buffer_L, 0, 4096 * 4);
 	memset(CD_Audio_Buffer_R, 0, 4096 * 4);
 
@@ -285,6 +287,7 @@ int Reset_CD(char *buf, const char *iso_name)
 
 void Stop_CD(void)
 {
+	CDTransfer_Reset();
 	if (CD_Load_System == CDROM_)
 	{
 		ASPI_Lock(0);
@@ -832,6 +835,7 @@ int Close_Tray_CDD_cC(void)
 int Open_Tray_CDD_cD(void)
 {
 	CHECK_TRAY_OPEN
+	CDTransfer_Reset();
 
 	SCD.Status_CDC &= ~1;			// Stop CDC read
 

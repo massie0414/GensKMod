@@ -67,6 +67,7 @@
 #include "kmod/cd_reg.h"
 #include "kmod/cdgfx.h"
 #include "kmod/cdprg.h"
+#include "kmod/cd_transfer_panel.h"
 #include "kmod/m68k.h"
 #include "kmod/z80.h"
 #include "kmod/disassembly.h"
@@ -1919,6 +1920,7 @@ int PASCAL WinMain(HINSTANCE hInst,	HINSTANCE hPrevInst, LPSTR lpCmdLine, int nC
 	sSH2_save_window(Str_Tmp);
 	s68kdebug_save_window(Str_Tmp);
 	cdcdebug_save_window(Str_Tmp);
+	cdtransfer_save_window(Str_Tmp);
 	cdreg_save_window(Str_Tmp);
 	cdgfx_save_window(Str_Tmp);
 	cdprg_save_window(Str_Tmp);
@@ -2413,6 +2415,13 @@ long PASCAL WinProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 #endif
 					Change_Debug(hWnd, DMODE_CD_68K);
 					return 0;
+
+				case ID_CPU_DEBUG_SEGACD_TRANSFER:
+#ifdef GENS_KMOD
+                    MINIMIZE
+                    Change_Debug(hWnd, DMODE_CD_TRANSFER);
+#endif
+                    return 0;
 
 				case ID_CPU_DEBUG_SEGACD_CDC:
 #ifdef GENS_KMOD
@@ -3686,6 +3695,7 @@ HMENU Build_Main_Menu(void)
 		MENU_L(DebugMCD, 4, Flags, ID_CPU_DEBUG_SEGACD_PRG, "CD Program RAM", "", "CD Program RAM");
         MENU_L(DebugMCD, 5, Flags, ID_CPU_DEBUG_SEGACD_PCM, "Sound - PCM", "", "Sound - PCM");
         MENU_L(DebugMCD, 6, Flags, ID_CPU_DEBUG_SEGACD_CDDA, "Sound - CDDA", "", "Sound - CDDA");
+        MENU_L(DebugMCD, 7, Flags, ID_CPU_DEBUG_SEGACD_TRANSFER, "CD-ROM Transfer", "", "CD-ROM Transfer");
 #else
 		if (Debug == DMODE_CD_68K) Flags |= MF_CHECKED;
 		else Flags &= ~MF_CHECKED;
