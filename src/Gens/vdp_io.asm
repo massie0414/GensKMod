@@ -215,6 +215,7 @@ section .text align=64
 	extern _main68k_interrupt
 
 	extern _Write_To_68K_Space
+	extern _VDPTransfer_RecordDMA
 
 ; ******************************************
 
@@ -232,7 +233,23 @@ section .text align=64
 ; %1 = 7 : source = Cell arranged Bank 0     8 : source = Cell arranged Bank 1
 ; %2 = 0 : dest = VRAM, 1 : dest = CRAM, 2 : dest = VSRAM
 
+; Record once per actual transfer, preserving every register and condition flag.
+; Parameters are byte expressions based on ECX (the validated transfer length).
+%macro RECORD_DMA 2
+    pushfd
+    pushad
+    lea eax, [%1]
+    lea ebx, [%2]
+    push ebx
+    push eax
+    call _VDPTransfer_RecordDMA
+    add esp, 8
+    popad
+    popfd
+%endmacro
+
 %macro DMA_LOOP 2
+	RECORD_DMA ecx * 2, ecx * 2
 
 %if %1 < 1
 	and esi, 0x003FFFFE
@@ -815,10 +832,12 @@ section .text align=64
 		and ecx, 0xFFFF
 		mov byte [VRam_Flag], 1
 		mov dword [DMAT_Lenght], ecx
-		jnz short .Loop
+		jnz short .Count_Fill
 
 		mov ecx, 0xFFFF
 		mov [DMAT_Lenght], ecx
+	.Count_Fill
+		RECORD_DMA 0, ecx + 2
 		jmp short .Loop
 
 	ALIGN4
@@ -1234,6 +1253,7 @@ section .text align=64
 	ALIGN32
 	
 	V_RAM_Copy:
+		RECORD_DMA ecx, ecx
 		call	KMod_DMA
 		or word [VDP_Status], 0x0002
 		and esi, 0xFFFF

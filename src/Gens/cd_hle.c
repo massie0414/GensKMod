@@ -12,6 +12,7 @@
 #include "cd_transfer.h"
 #include "word_ram_transfer.h"
 #include "main_word_ram_transfer.h"
+#include "vram_transfer.h"
 #include "program_ram_transfer.h"
 #include "Cpu_68k.h"
 #include "Mem_M68K.h"
@@ -714,7 +715,7 @@ static void maincall(unsigned fn) {
         c->areg[1]=a+2+count*2; c->dreg[0]=0xffff;
         break;
     }
-    case 0x2e8: { unsigned i; if(!(Ram_68k[0xfe29^1]&1))break; Ram_68k[0xfe29^1]&=~1; for(i=0;i<128;i+=2)ww(CRam,i,rw(Ram_68k,0xfb80+i)); CRam_Flag=1; } break;
+    case 0x2e8: { unsigned i; if(!(Ram_68k[0xfe29^1]&1))break; Ram_68k[0xfe29^1]&=~1; for(i=0;i<128;i+=2)ww(CRam,i,rw(Ram_68k,0xfb80+i)); CRam_Flag=1; VDPTransfer_RecordHLEWrite(VDP_TRANSFER_CRAM,128); } break;
     case 0x29c: {
         unsigned port=c->areg[6]&0xffffff, hi,lo;
         M68K_Data_WB(port+6,0x40); M68K_Data_WB(port,0x40); hi=M68K_Data_RB(port);
@@ -732,9 +733,9 @@ static void maincall(unsigned fn) {
         }
         break;
     }
-    case 0x2a0: vram_clear(0,65536); memset(VSRam,0,80); ww(CRam,0,0); CRam_Flag=1; break;
+    case 0x2a0: vram_clear(0,65536); memset(VSRam,0,80); ww(CRam,0,0); CRam_Flag=1; VDPTransfer_RecordHLEWrite(VDP_TRANSFER_VSRAM,80); VDPTransfer_RecordHLEWrite(VDP_TRANSFER_CRAM,2); break;
     case 0x2a4: vram_clear(0xa000,0xe00); vram_clear(0xb800,4); vram_clear(0xc000,0x4000); wl(Ram_68k,0xf900,0); break;
-    case 0x2a8: memset(VSRam,0,80); break;
+    case 0x2a8: memset(VSRam,0,80); VDPTransfer_RecordHLEWrite(VDP_TRANSFER_VSRAM,80); break;
     case 0x368: wl(Ram_68k,0xfd08,c->areg[1]); break;
     case 0x348: { /* Decode the sub CPU's buffered disc status after exchange. */
         unsigned flags=Ram_68k[0xfdde^1], subflags=Ram_68k[0xfddf^1], status;

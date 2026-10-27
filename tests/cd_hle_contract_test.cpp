@@ -161,7 +161,36 @@ int main(void) {
       VRAMTransfer_EndFrame(60);
       CHECK(VRAMTransfer_GetHistory(0,vram_values)==3 && vram_values[2]==0);
       CHECK(VRAMTransfer_GetHistory(1,vram_values)==3 && vram_values[2]==0);
+      CHECK(VDPTransfer_GetHistory(VDP_TRANSFER_DMA,0,vram_values)==3 && vram_values[2]==0);
+      CHECK(VDPTransfer_GetHistory(VDP_TRANSFER_DMA,1,vram_values)==3 && vram_values[0]==0 && vram_values[1]==0 && vram_values[2]==5);
+      // HLE CPU fill writes are measured in the selected CPU channel.
+      for(int kind=VDP_TRANSFER_CRAM;kind<=VDP_TRANSFER_VSRAM;kind++) {
+          VRAMTransfer_BeginFrame();
+          main_api(0x2b4,0,0,kind==VDP_TRANSFER_CRAM?0xc0000000:0x40000010,1,0x2468);
+          VRAMTransfer_EndFrame(60);
+          unsigned n=VDPTransfer_GetHistory(kind,1,vram_values);
+          CHECK(n && vram_values[n-1]==4);
+          CHECK(VDPTransfer_GetHistory(kind,0,vram_values)==n && vram_values[n-1]==0);
+          CHECK(VDPTransfer_GetHistory(VDP_TRANSFER_DMA,1,vram_values)==n && vram_values[n-1]==0);
+      }
       CHECK(VRam[0x5c00]==0xab && VRam[0x5c02]==0xab);
+      // Direct HLE palette and scroll-RAM stores retain their original VDP state.
+      VRAMTransfer_BeginFrame();
+      Ram_68k[0xfe29^1]|=1; word(Ram_68k,0xfb80,0x2468);
+      unsigned address=Ctrl.Address,access=Ctrl.Access;
+      main_api(0x2e8); main_api(0x2a8); VRAMTransfer_EndFrame(60);
+      CHECK(Ctrl.Address==address && Ctrl.Access==access && rw(CRam,0)==0x2468 && rw(VSRam,0)==0);
+      unsigned count=VDPTransfer_GetHistory(VDP_TRANSFER_CRAM,1,vram_values);
+      CHECK(count && vram_values[count-1]==128);
+      CHECK(VDPTransfer_GetHistory(VDP_TRANSFER_VSRAM,1,vram_values)==count && vram_values[count-1]==80);
+      VRAMTransfer_BeginFrame(); main_api(0x2e8); VRAMTransfer_EndFrame(60);
+      count=VDPTransfer_GetHistory(VDP_TRANSFER_CRAM,1,vram_values);
+      CHECK(vram_values[count-1]==0); // no pending palette upload
+      VRAMTransfer_BeginFrame(); main_api(0x2a0); VRAMTransfer_EndFrame(60);
+      count=VRAMTransfer_GetHistory(1,vram_values); CHECK(vram_values[count-1]==65536);
+      CHECK(VDPTransfer_GetHistory(VDP_TRANSFER_CRAM,1,vram_values)==count && vram_values[count-1]==2);
+      CHECK(VDPTransfer_GetHistory(VDP_TRANSFER_VSRAM,1,vram_values)==count && vram_values[count-1]==80);
+      CHECK(VDPTransfer_GetHistory(VDP_TRANSFER_DMA,1,vram_values)==count && vram_values[count-1]==0);
       CHECK(!Paused);
       for(unsigned i=0;i<32;i+=4) {
           unsigned v=((i/4)%2==0)?0xaaaa:0;

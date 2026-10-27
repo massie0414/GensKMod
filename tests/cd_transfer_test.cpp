@@ -176,12 +176,25 @@ static int hle_tests(void) {
     CHECK(!WordRAMTransfer_GetHistory(0,ram_values));
     CHECK(!MainWordRAMTransfer_GetHistory(0,ram_values));
     CHECK(!VRAMTransfer_GetHistory(0,ram_values));
+    for(int kind=VDP_TRANSFER_CRAM;kind<=VDP_TRANSFER_DMA;kind++) CHECK(!VDPTransfer_GetHistory(kind,0,ram_values));
     // Both CPUs exercise independent sampling in every real frame path.
-    word(Ram_68k,0x5400,0x3010); word(Ram_68k,0x5402,0x3280);
-    word(Ram_68k,0x5404,0x26bc); word(Ram_68k,0x5406,0x4000); word(Ram_68k,0x5408,0); // VRAM write command
-    word(Ram_68k,0x540a,0x3480); // MOVE.W D0,(A2): VDP data write
-    word(Ram_68k,0x540c,0x26bc); word(Ram_68k,0x540e,0); word(Ram_68k,0x5410,0); // VRAM read command
-    word(Ram_68k,0x5412,0x3012); word(Ram_68k,0x5414,0x60ea); // VDP data read; repeat
+    // Native loop exercises each CPU VDP target and starts a real memory DMA.
+    unsigned cursor=0x5400;
+    word(Ram_68k,cursor,0x3010); cursor+=2; word(Ram_68k,cursor,0x3280); cursor+=2;
+    const unsigned write_commands[]={0x40000000,0xc0000000,0x40000010};
+    const unsigned read_commands[]={0,0x20,0x10};
+    for(unsigned k=0;k<3;k++) {
+        word(Ram_68k,cursor,0x26bc); longword(Ram_68k,cursor+2,write_commands[k]); cursor+=6;
+        word(Ram_68k,cursor,0x3480); cursor+=2;
+        word(Ram_68k,cursor,0x26bc); longword(Ram_68k,cursor+2,read_commands[k]); cursor+=6;
+        word(Ram_68k,cursor,0x3012); cursor+=2;
+    }
+    const unsigned dma_regs[]={0x8110,0x8f02,0x9302,0x9400,0x9500,0x9688,0x977f};
+    for(unsigned k=0;k<sizeof(dma_regs)/sizeof(dma_regs[0]);k++) {
+        word(Ram_68k,cursor,0x36bc); word(Ram_68k,cursor+2,dma_regs[k]); cursor+=4;
+    }
+    word(Ram_68k,cursor,0x26bc); longword(Ram_68k,cursor+2,0x40000080); cursor+=6;
+    word(Ram_68k,cursor,0x6000|((0x5400-cursor-2)&255));
     main68k_context.areg[2]=0xc00000; main68k_context.areg[3]=0xc00004;
     main68k_context.pc=0xff5400; main68k_context.sr=0x2700;
     main68k_context.areg[0]=0x200100; main68k_context.areg[1]=0x200200;
@@ -199,10 +212,12 @@ static int hle_tests(void) {
         CHECK(WordRAMTransfer_GetHistory(0,ram_values)==1 && ram_values[0]>0);
         CHECK(MainWordRAMTransfer_GetHistory(0,ram_values)==1 && ram_values[0]>0);
         CHECK(VRAMTransfer_GetHistory(0,ram_values)==1 && ram_values[0]>0);
+    for(int kind=VDP_TRANSFER_CRAM;kind<=VDP_TRANSFER_DMA;kind++) CHECK(VDPTransfer_GetHistory(kind,0,ram_values)==1 && ram_values[0]>0);
         CHECK(ProgramRAMTransfer_GetHistory(0,ram_values)==1 && ram_values[0]>0);
         CHECK(WordRAMTransfer_GetHistory(1,ram_values)==1 && ram_values[0]>0);
         CHECK(MainWordRAMTransfer_GetHistory(1,ram_values)==1 && ram_values[0]>0);
         CHECK(VRAMTransfer_GetHistory(1,ram_values)==1 && ram_values[0]>0);
+    for(int kind=VDP_TRANSFER_CRAM;kind<=VDP_TRANSFER_DMA;kind++) CHECK(VDPTransfer_GetHistory(kind,1,ram_values)==1 && ram_values[0]>0);
         CHECK(ProgramRAMTransfer_GetHistory(1,ram_values)==1 && ram_values[0]>0);
     }
     CD_HLE_Active=1;
@@ -210,30 +225,38 @@ static int hle_tests(void) {
     CHECK(WordRAMTransfer_GetHistory(0,ram_values)==2 && ram_values[0]>0 && ram_values[1]>0);
     CHECK(MainWordRAMTransfer_GetHistory(0,ram_values)==2 && ram_values[0]>0 && ram_values[1]>0);
     CHECK(VRAMTransfer_GetHistory(0,ram_values)==2 && ram_values[0]>0 && ram_values[1]>0);
+    for(int kind=VDP_TRANSFER_CRAM;kind<=VDP_TRANSFER_DMA;kind++) CHECK(VDPTransfer_GetHistory(kind,0,ram_values)==2 && ram_values[0]>0 && ram_values[1]>0);
     CHECK(ProgramRAMTransfer_GetHistory(0,ram_values)==2 && ram_values[0]>0 && ram_values[1]>0);
     CHECK(WordRAMTransfer_GetHistory(1,ram_values)==2 && ram_values[0]>0 && ram_values[1]>0);
     CHECK(MainWordRAMTransfer_GetHistory(1,ram_values)==2 && ram_values[0]>0 && ram_values[1]>0);
     CHECK(VRAMTransfer_GetHistory(1,ram_values)==2 && ram_values[0]>0 && ram_values[1]>0);
+    for(int kind=VDP_TRANSFER_CRAM;kind<=VDP_TRANSFER_DMA;kind++) CHECK(VDPTransfer_GetHistory(kind,1,ram_values)==2 && ram_values[0]>0 && ram_values[1]>0);
     CHECK(ProgramRAMTransfer_GetHistory(1,ram_values)==2 && ram_values[0]>0 && ram_values[1]>0);
     Enable_CD_32X();
     CDTransfer_Reset(); VRAMTransfer_Reset(); WordRAMTransfer_Reset(); MainWordRAMTransfer_Reset(); ProgramRAMTransfer_Reset(); Do_32X_Frame(); Do_32X_Frame_No_VDP(); CHECK(CDTransfer_GetHistory(values)==2);
     CHECK(WordRAMTransfer_GetHistory(0,ram_values)==2 && ram_values[0]>0 && ram_values[1]>0);
     CHECK(MainWordRAMTransfer_GetHistory(0,ram_values)==2 && ram_values[0]>0 && ram_values[1]>0);
     CHECK(VRAMTransfer_GetHistory(0,ram_values)==2 && ram_values[0]>0 && ram_values[1]>0);
+    for(int kind=VDP_TRANSFER_CRAM;kind<=VDP_TRANSFER_DMA;kind++) CHECK(VDPTransfer_GetHistory(kind,0,ram_values)==2 && ram_values[0]>0 && ram_values[1]>0);
     CHECK(ProgramRAMTransfer_GetHistory(0,ram_values)==2 && ram_values[0]>0 && ram_values[1]>0);
     CHECK(WordRAMTransfer_GetHistory(1,ram_values)==2 && ram_values[0]>0 && ram_values[1]>0);
     CHECK(MainWordRAMTransfer_GetHistory(1,ram_values)==2 && ram_values[0]>0 && ram_values[1]>0);
     CHECK(VRAMTransfer_GetHistory(1,ram_values)==2 && ram_values[0]>0 && ram_values[1]>0);
+    for(int kind=VDP_TRANSFER_CRAM;kind<=VDP_TRANSFER_DMA;kind++) CHECK(VDPTransfer_GetHistory(kind,1,ram_values)==2 && ram_values[0]>0 && ram_values[1]>0);
     CHECK(ProgramRAMTransfer_GetHistory(1,ram_values)==2 && ram_values[0]>0 && ram_values[1]>0);
     // The same Genesis VDP is sampled without the CD add-on as well.
     CD_32X_Active=SegaCD_Started=0; CD_HLE_Close(); _32X_Started=1; Init_Memory_M68K(1);
     VRAMTransfer_Reset(); Do_32X_Frame(); Do_32X_Frame_No_VDP();
     CHECK(VRAMTransfer_GetHistory(0,ram_values)==2 && ram_values[0]>0 && ram_values[1]>0);
+    for(int kind=VDP_TRANSFER_CRAM;kind<=VDP_TRANSFER_DMA;kind++) CHECK(VDPTransfer_GetHistory(kind,0,ram_values)==2 && ram_values[0]>0 && ram_values[1]>0);
     CHECK(VRAMTransfer_GetHistory(1,ram_values)==2 && ram_values[0]>0 && ram_values[1]>0);
+    for(int kind=VDP_TRANSFER_CRAM;kind<=VDP_TRANSFER_DMA;kind++) CHECK(VDPTransfer_GetHistory(kind,1,ram_values)==2 && ram_values[0]>0 && ram_values[1]>0);
     _32X_Started=0; Genesis_Started=1; Init_Memory_M68K(0);
     VRAMTransfer_Reset(); Do_Genesis_Frame(); Do_Genesis_Frame_No_VDP();
     CHECK(VRAMTransfer_GetHistory(0,ram_values)==2 && ram_values[0]>0 && ram_values[1]>0);
+    for(int kind=VDP_TRANSFER_CRAM;kind<=VDP_TRANSFER_DMA;kind++) CHECK(VDPTransfer_GetHistory(kind,0,ram_values)==2 && ram_values[0]>0 && ram_values[1]>0);
     CHECK(VRAMTransfer_GetHistory(1,ram_values)==2 && ram_values[0]>0 && ram_values[1]>0);
+    for(int kind=VDP_TRANSFER_CRAM;kind<=VDP_TRANSFER_DMA;kind++) CHECK(VDPTransfer_GetHistory(kind,1,ram_values)==2 && ram_values[0]>0 && ram_values[1]>0);
     Genesis_Started=0; Unload_ISO(); DeleteFile("transfer-test.iso");
     puts("PASS: HLE direct/host reads without double counting; all eight frame loops including Genesis, SegaCD, 32X/CD32X and frameskip");
     return 0;
