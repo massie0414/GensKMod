@@ -324,7 +324,7 @@ int Flip_DDraw(HWND hWnd)
 
 	if (Full_Screen)
 	{
-		if ((VDP_Reg.Set4 & 0x1) || (Debug))
+		if ((Get_Video_Width() == 320) || (Debug))
 		{
 			if (Flag_Clr_Scr != 40)
 			{
@@ -477,7 +477,7 @@ int Flip_DDraw(HWND hWnd)
 			}
 		}
 
-		if ((VDP_Reg.Set4 & 0x1) || (Debug))
+		if ((Get_Video_Width() == 320) || (Debug))
 		{
 			Dep = 0;
 
@@ -988,7 +988,7 @@ RECT GetShotRect()
 				RD.top = 8;
 				RD.bottom = 224 + 8;
 			}
-			if ((Stretch) || (VDP_Reg.Set4 & 0x01))
+			if ((Stretch) || (Get_Video_Width() == 320))
 			{
 				RD.left = 0;
 				RD.right = 320;
@@ -1011,7 +1011,7 @@ RECT GetShotRect()
 				RD.top = 16;
 				RD.bottom = 448 + 16;
 			}
-			if ((Stretch) || (VDP_Reg.Set4 & 0x01))
+			if ((Stretch) || (Get_Video_Width() == 320))
 			{
 				RD.left = 0;
 				RD.right = 640;
@@ -1034,7 +1034,7 @@ RECT GetShotRect()
 				RD.top = 16;
 				RD.bottom = 448 + 16;
 			}
-			if (VDP_Reg.Set4 & 0x01)
+			if (Get_Video_Width() == 320)
 			{
 				RD.left = 0;
 				RD.right = 640;
@@ -1064,7 +1064,7 @@ RECT GetShotRect()
 				RD.top += 8;
 				RD.bottom -= 8;
 			}
-			if ((!Stretch) && ((VDP_Reg.Set4 & 0x01) == 0))
+			if ((!Stretch) && (Get_Video_Width() == 256))
 			{
 				RD.left += 32;
 				RD.right -= 32;
@@ -1078,7 +1078,7 @@ RECT GetShotRect()
 				RD.top += 16;
 				RD.bottom -= 16;
 			}
-			if ((!Stretch) && ((VDP_Reg.Set4 & 0x01) == 0))
+			if ((!Stretch) && (Get_Video_Width() == 256))
 			{
 				RD.left += 64;
 				RD.right -= 64;
@@ -1094,20 +1094,20 @@ RECT GetShotRect()
 int Take_Raw_Shot()
 {
 	int width, height, stride, sidebar;
-	width = VDP_Reg.Set4 & 0x01 ? 320 : 256;
+	width = Get_Video_Width();
 	height = VDP_Reg.Set2 & 0x08 ? 240 : 224;
 	stride = 336 * 2;
-	sidebar = 336 - width;
+	sidebar = 8 * 2; // Active pixels begin at x=8 in both H32 and H40.
 	return Save_Shot((unsigned char*)MD_Screen+sidebar, Mode_555 & 1, width, height, stride);
 }
 
 int Copy_Raw_Shot()
 {
 	int width, height, stride, sidebar;
-	width = VDP_Reg.Set4 & 0x01 ? 320 : 256;
+	width = Get_Video_Width();
 	height = VDP_Reg.Set2 & 0x08 ? 240 : 224;
 	stride = 336 * 2;
-	sidebar = 336 - width;
+	sidebar = 8 * 2; // Active pixels begin at x=8 in both H32 and H40.
 	return Copy_Shot((unsigned char*)MD_Screen + sidebar, Mode_555 & 1, width, height, stride);
 }
 

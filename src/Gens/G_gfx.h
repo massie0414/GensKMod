@@ -39,6 +39,7 @@ typedef void(*PFN_BLIT)(unsigned char *Dest, int pitch, int x, int y, int offset
 extern PFN_BLIT Blit_FS;
 extern PFN_BLIT Blit_W;
 
+int Get_Video_Width(void);
 int Init_GFX(HWND HWnd);
 int Flip_GFX(HWND hWnd);
 void End_GFX();

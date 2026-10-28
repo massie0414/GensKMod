@@ -2034,12 +2034,31 @@ ALIGN4
 	ALIGN4
 	
 	.VDP_OK
-		mov ecx, 160
-		mov eax, [H_Pix_Begin]
 		mov edi, [esp]
-		sub ecx, eax
 		add esp, byte 4
 		lea edi, [MD_Screen + edi * 2 + 8 * 2]
+
+		; 32X always scans 320 pixels, independently of the MD H32/H40 bit.
+		; Expand the H32 MD layer before priority mixing, retaining its indices
+		; and shadow/highlight flags. Work backwards so the expansion is safe
+		; in place: four MD pixels become five 32X output pixels.
+		test byte [VDP_Reg + 12 * 4], 1
+		jnz short .MD_Width_OK
+		lea esi, [edi + 252 * 2]
+		lea ebp, [edi + 315 * 2]
+		mov ecx, 64
+	.Expand_MD_H32
+		mov eax, [esi]
+		mov edx, [esi + 4]
+		mov [ebp], ax
+		mov [ebp + 2], eax
+		mov [ebp + 6], edx
+		sub esi, byte 8
+		sub ebp, byte 10
+		dec ecx
+		jnz short .Expand_MD_H32
+	.MD_Width_OK
+		mov ecx, 160
 		mov esi, [_32X_VDP + vx.State]
 		mov eax, [_32X_VDP + vx.Mode]
 		and esi, byte 1

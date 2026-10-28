@@ -4,6 +4,8 @@
 #include "G_gdi.h"
 #include "Misc.h"
 #include "blit.h"
+#include "gens.h"
+#include "vdp_io.h"
 
 #include <stdio.h>
 
@@ -21,6 +23,13 @@ int BlitScale_X = 1;
 int BlitScale_Y = 1;
 PFN_BLIT Blit_FS;
 PFN_BLIT Blit_W;
+
+// The MD remains H32 internally, but a connected 32X outputs 320 pixels.
+// Keep display cropping and screenshot dimensions consistent with composition.
+int Get_Video_Width(void)
+{
+    return (_32X_Started || CD_32X_Active || (VDP_Reg.Set4 & 1)) ? 320 : 256;
+}
 
 void Put_Info(const char *Message, int Duree)
 {

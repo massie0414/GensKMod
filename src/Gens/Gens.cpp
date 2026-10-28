@@ -680,7 +680,7 @@ int Do_VDP_Only()
 	for(VDP_Current_Line = 0; VDP_Current_Line < VDP_Num_Vis_Lines; VDP_Current_Line++)
 	{
 #ifdef GENS_KMOD
-		if (_32X_Started)
+		if (_32X_Started || CD_32X_Active)
 			Render_Line_32X();
 		else
 #endif

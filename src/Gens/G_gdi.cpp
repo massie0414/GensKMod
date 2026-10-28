@@ -97,9 +97,9 @@ int Flip_GDI(HWND hWnd)
 
     rc_vdp.left = 0;
     rc_vdp.top = 0;
-    rc_vdp.right = (VDP_Reg.Set4 & 0x1) ? 320 : 256;
+    rc_vdp.right = Get_Video_Width();
     rc_vdp.bottom = VDP_Num_Vis_Lines;
-    offset = (VDP_Reg.Set4 & 0x1) ? 32 : 160;
+    offset = (336 - rc_vdp.right) * 2;
 
     rc_src.left = 0;
     rc_src.top = 0;
@@ -234,9 +234,9 @@ void SaveGDI(RECT RD)
 
 	rc_vdp.left = 0;
 	rc_vdp.top = 0;
-	rc_vdp.right = (VDP_Reg.Set4 & 0x1) ? 320 : 256;
+	rc_vdp.right = Get_Video_Width();
 	rc_vdp.bottom = VDP_Num_Vis_Lines;
-//	offset = (VDP_Reg.Set4 & 0x1) ? 32 : 160;
+//	offset = (336 - rc_vdp.right) * 2;
 
 	Save_Shot((unsigned char *)gdi_instance.back_buffer,
 			Mode_555 & 1,
@@ -255,9 +255,9 @@ void CopyFromGDI(RECT RD)
 
 	rc_vdp.left = 0;
 	rc_vdp.top = 0;
-	rc_vdp.right = (VDP_Reg.Set4 & 0x1) ? 320 : 256;
+	rc_vdp.right = Get_Video_Width();
 	rc_vdp.bottom = VDP_Num_Vis_Lines;
-//	offset = (VDP_Reg.Set4 & 0x1) ? 32 : 160;
+//	offset = (336 - rc_vdp.right) * 2;
 
 	Copy_Shot((unsigned char *)gdi_instance.back_buffer,
 			Mode_555 & 1,
