@@ -300,22 +300,36 @@ void Init_KMod( )
     //HandleWindow_KMod[18] = hPlaneExplorer;
 }
 
-void Update_KMod( )
+static DWORD last_panel_update;
+static BOOL panel_update_started;
+
+static void Update_KMod_Internal(BOOL periodic)
 {
-	watchers_update();
-	message_update();
-//	layers_update(); //no update needed
-	planes_update();
+	DWORD now = GetTickCount();
+	BOOL refresh = !periodic || !panel_update_started ||
+		(DWORD)(now - last_panel_update) >= 100;
+	/* The main loop also runs while waiting for the next emulated frame.
+	 * Bound debug UI work to 10 Hz, independently of host/emulation speed.
+	 * Explicit refreshes (opening a panel or frame stepping) remain immediate.
+	 */
+	if (refresh)
+	{
+		last_panel_update = now;
+		panel_update_started = TRUE;
+		watchers_update();
+		message_update();
+		// layers_update(); //no update needed
+		planes_update();
 
 
-	m68kdebug_update();
-	z80debug_update();
-	vdpdebug_update(); 
-	vdpreg_update();
-	sprites_update();
-	ym2612_update();
-	psg_update();
-
+		m68kdebug_update();
+		z80debug_update();
+		vdpdebug_update();
+		vdpreg_update();
+		sprites_update();
+		ym2612_update();
+		psg_update();
+	}
 
 	GMVUpdateRecord_KMod( );
 
@@ -328,6 +342,8 @@ void Update_KMod( )
 		Paused = 1;
 		AutoPause_KMod = 0;
 	}
+
+	if (!refresh) return;
 
 	if (SegaCD_Started)
 	{
@@ -345,6 +361,16 @@ void Update_KMod( )
 		vdp32x_update();
 		s32xreg_update();
 	}
+}
+
+void Update_KMod(void)
+{
+	Update_KMod_Internal(FALSE);
+}
+
+void Update_KMod_Periodic(void)
+{
+	Update_KMod_Internal(TRUE);
 }
 
 void kmod_close()

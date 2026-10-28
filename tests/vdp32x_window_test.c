@@ -161,6 +161,15 @@ static void framebuffer_hover(void)
     vdp32x_destroy();
     puts("PASS: framebuffer hover, both banks, live updates, shift, RLE, direct/raw modes and bounds");
 }
+static WNDPROC original_line_table_proc;
+static unsigned line_table_reads, line_table_writes;
+static LRESULT CALLBACK count_line_table_messages(HWND hwnd, UINT message, WPARAM wp, LPARAM lp)
+{
+    if (message == LVM_GETITEMTEXTA) ++line_table_reads;
+    if (message == LVM_SETITEMTEXTA) ++line_table_writes;
+    return CallWindowProc(original_line_table_proc, hwnd, message, wp, lp);
+}
+
 static void line_table_inspection(void)
 {
     WORD *fb0 = (WORD *)_32X_VDP_Ram;
@@ -189,8 +198,65 @@ static void line_table_inspection(void)
     ListView_SetItemState(list, 255, LVIS_SELECTED, LVIS_SELECTED);
     GetDlgItemText(h32X_VDP, IDC_32XVDP_LINEINFO, text, sizeof(text));
     assert(strstr(text, "Y=255 (inactive)"));
+    original_line_table_proc = (WNDPROC)SetWindowLongPtr(list, GWLP_WNDPROC,
+        (LONG_PTR)count_line_table_messages);
+    line_table_reads = line_table_writes = 0;
+    Update32X_VDP_KMod();
+    assert(!line_table_reads && !line_table_writes);
+    ++fb0[0]; Update32X_VDP_KMod();
+    assert(!line_table_reads && line_table_writes == 3);
+    ListView_GetItemText(list, 1, 4, text, sizeof(text)); assert(!strcmp(text, "+191"));
+    line_table_reads = line_table_writes = 0;
+    ++fb1[17]; Update32X_VDP_KMod();
+    assert(!line_table_reads && line_table_writes == 4);
+    line_table_reads = line_table_writes = 0;
+    ++fb0[255]; Update32X_VDP_KMod();
+    assert(!line_table_reads && line_table_writes == 3);
+    SetWindowLongPtr(list, GWLP_WNDPROC, (LONG_PTR)original_line_table_proc);
     vdp32x_destroy();
+    /* Recreating the widget must populate every cell even with unchanged RAM. */
+    vdp32x_create(GetModuleHandle(NULL), NULL);
+    list = GetDlgItem(h32X_VDP, IDC_32XVDP_LINETABLE);
+    ListView_GetItemText(list, 255, 2, text, sizeof(text)); assert(!strcmp(text, "0x1235"));
+    ListView_GetItemText(list, 1, 4, text, sizeof(text)); assert(!strcmp(text, "+191"));
+    vdp32x_destroy();
+    puts("PASS: unchanged line table sends no cell messages; updates both banks, next-row deltas, last row and recreation");
     puts("PASS: 256 line entries, byte/word units, both banks, signed deltas, live detail and hover selection");
+}
+static void palette_paint(void)
+{
+    BITMAPINFO bmi = {0};
+    HDC dc = CreateCompatibleDC(NULL);
+    HBITMAP bitmap; HGDIOBJ old;
+    DWORD *pixels, handles;
+    DRAWITEMSTRUCT item = {0};
+    unsigned index, x, y, pass;
+    bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    bmi.bmiHeader.biWidth = 144; bmi.bmiHeader.biHeight = -384;
+    bmi.bmiHeader.biPlanes = 1; bmi.bmiHeader.biBitCount = 32;
+    bitmap = CreateDIBSection(dc, &bmi, DIB_RGB_COLORS, (void **)&pixels, NULL, 0);
+    assert(bitmap); old = SelectObject(dc, bitmap);
+    item.hDC = dc; SetRect(&item.rcItem, 0, 0, 144, 384);
+    for (index = 0; index < 256; ++index)
+        _32X_VDP_CRam[index] = (WORD)(((index * 131) & 0x7fff) | ((index & 1) << 15));
+    for (pass = 0; pass < 10; ++pass) Draw32XPal_KMod(&item);
+    GdiFlush();
+    handles = GetGuiResources(GetCurrentProcess(), GR_GDIOBJECTS);
+    for (pass = 0; pass < 100; ++pass) Draw32XPal_KMod(&item);
+    GdiFlush();
+    assert(GetGuiResources(GetCurrentProcess(), GR_GDIOBJECTS) == handles);
+    for (index = 0; index < 256; ++index) {
+        unsigned value = _32X_VDP_CRam[index], white = 0;
+        DWORD color = ((value & 31) << 19) | (((value >> 5) & 31) << 11) | (((value >> 10) & 31) << 3);
+        for (y = 0; y < 12; ++y) for (x = 0; x < 18; ++x) {
+            DWORD pixel = pixels[((index / 8) * 12 + y) * 144 + (index % 8) * 18 + x] & 0xffffff;
+            assert(pixel == color || ((value & 0x8000) && pixel == 0xffffff));
+            if (pixel == 0xffffff) ++white;
+        }
+        assert((white != 0) == ((value & 0x8000) != 0));
+    }
+    SelectObject(dc, old); DeleteObject(bitmap); DeleteDC(dc);
+    puts("PASS: all 256 palette colors, priority stipple, repeated paint without GDI leaks");
 }
 int main(void)
 {
@@ -203,6 +269,7 @@ int main(void)
     DRAWITEMSTRUCT d={0};
     LARGE_INTEGER f,a,z;
     InitCommonControls();
+    palette_paint();
     for(i=0;i<65536;i++)
         _32X_Palette_16B[i]=(WORD)(((i&31)<<11)|(((i>>5)&31)<<6)|((i>>10)&31));
     _32X_VDP_CRam[1]=31; _32X_VDP_CRam[2]=31<<5; _32X_VDP_CRam[3]=31<<10;

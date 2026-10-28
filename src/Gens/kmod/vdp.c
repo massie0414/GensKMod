@@ -99,9 +99,19 @@ void DrawVDP_Pal_KMod(LPDRAWITEMSTRUCT hlDIS)
 
 void DrawVDP_Tiles_KMod(LPDRAWITEMSTRUCT hlDIS)
 {
-
-	WORD posX, posY, maxY, maxX;
-	unsigned short int numTile = 0;
+	WORD maxY = VDP_TILE_ROWS * 8, maxX = VDP_TILE_COLUMNS * 8;
+	unsigned int tile, row, x;
+	COLORREF colors[16];
+	static COLORREF pixels[VDP_TILE_COLUMNS * 8 * VDP_TILE_ROWS * 8];
+	static const unsigned shifts[8] = {12, 8, 4, 0, 28, 24, 20, 16};
+	static const struct {
+		BITMAPINFOHEADER header;
+		DWORD masks[3];
+	} info = {
+		{sizeof(BITMAPINFOHEADER), VDP_TILE_COLUMNS * 8, -VDP_TILE_ROWS * 8,
+		 1, 32, BI_BITFIELDS, 0, 0, 0, 0, 0},
+		{0x000000ff, 0x0000ff00, 0x00ff0000}
+	};
 
 	HDC hDC;
 	HBITMAP hBitmap, hOldBitmap;
@@ -110,16 +120,21 @@ void DrawVDP_Tiles_KMod(LPDRAWITEMSTRUCT hlDIS)
 	hBitmap = CreateCompatibleBitmap(hlDIS->hDC, hlDIS->rcItem.right - hlDIS->rcItem.left, hlDIS->rcItem.bottom - hlDIS->rcItem.top);
 	hOldBitmap = SelectObject(hDC, hBitmap);
 
-	maxY = VDP_TILE_ROWS * 8;
-	maxX = VDP_TILE_COLUMNS * 8;
-
-	for (posY = 0; posY < maxY; posY += 8)
-	{
-		for (posX = 0; posX < maxX; posX += 8)
+	/* Decode the full grid in memory, then make one GDI transfer instead of
+	 * 2,048 StretchDIBits calls. Preserve the word-swapped VRAM pixel order
+	 * and the COLORREF masks used by the single-tile/zoom renderer.
+	 */
+	for (x = 0; x < 16; ++x) colors[x] = vdpdebug_getColor(pal_KMod, (UCHAR)x);
+	for (tile = 0; tile < VDP_TILE_COLUMNS * VDP_TILE_ROWS; ++tile)
+		for (row = 0; row < 8; ++row)
 		{
-			vdpdebug_drawTile(hDC, numTile++, posX, posY, pal_KMod, 1);
+			unsigned value = ((const unsigned int *)VRam)[tile * 8 + row];
+			COLORREF *dest = pixels + (tile / VDP_TILE_COLUMNS * 8 + row) * maxX
+				+ (tile % VDP_TILE_COLUMNS) * 8;
+			for (x = 0; x < 8; ++x) dest[x] = colors[(value >> shifts[x]) & 15];
 		}
-	}
+	StretchDIBits(hDC, 0, 0, maxX, maxY, 0, 0, maxX, maxY, pixels,
+		(const BITMAPINFO *)&info, DIB_RGB_COLORS, SRCCOPY);
 
 	if (selectedVDPSprite >= 0)
 	{

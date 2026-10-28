@@ -25,6 +25,8 @@ static WNDPROC paletteWindowProc;
 static int paletteIndex = -1;
 static int hoverBank = -1, hoverX, hoverY;
 static WNDPROC framebufferWindowProc[2];
+static WORD lineTableValues[2][256];
+static BOOL lineTableValid;
 static BOOL Sample32XPixel(unsigned bank, int x, int y, int *index, unsigned *color, unsigned *offset);
 
 /* The first 256 host WORDs are logical 16-bit line-table entries. */
@@ -49,23 +51,37 @@ static void Update32XLineInfo(void)
 static void Update32XLineTable(void)
 {
     HWND list = GetDlgItem(h32X_VDP, IDC_32XVDP_LINETABLE);
-    unsigned row, bank, col;
-    char text[40], old[40];
-    for (row = 0; row < 256; ++row)
-        for (bank = 0; bank < 2; ++bank)
+    unsigned row, bank;
+    char text[40];
+    /* Compare memory snapshots instead of reading 1,536 list-view cells on
+     * every refresh. A changed entry also changes the following row's delta.
+     * Keep the old bank intact until both comparisons have been made.
+     */
+    for (bank = 0; bank < 2; ++bank)
+    {
+        const WORD *fb = (const WORD *)(_32X_VDP_Ram + bank * 0x20000);
+        for (row = 0; row < 256; ++row)
         {
-            const WORD *fb = (const WORD *)(_32X_VDP_Ram + bank * 0x20000);
-            for (col = 0; col < 3; ++col)
+            int column = 2 + bank * 3;
+            if (!lineTableValid || fb[row] != lineTableValues[bank][row])
             {
-                int column = 2 + bank * 3 + col;
-                if (col == 0) sprintf(text, "0x%04X", fb[row]);
-                else if (col == 1) sprintf(text, "+0x%05X", fb[row] * 2);
-                else if (row) sprintf(text, "%+d", (int)fb[row] - (int)fb[row - 1]);
+                sprintf(text, "0x%04X", fb[row]);
+                ListView_SetItemText(list, row, column, text);
+                sprintf(text, "+0x%05X", fb[row] * 2);
+                ListView_SetItemText(list, row, column + 1, text);
+            }
+            if (!lineTableValid || (row &&
+                (int)fb[row] - (int)fb[row - 1] !=
+                (int)lineTableValues[bank][row] - (int)lineTableValues[bank][row - 1]))
+            {
+                if (row) sprintf(text, "%+d", (int)fb[row] - (int)fb[row - 1]);
                 else strcpy(text, "--");
-                ListView_GetItemText(list, row, column, old, sizeof(old));
-                if (strcmp(text, old)) ListView_SetItemText(list, row, column, text);
+                ListView_SetItemText(list, row, column + 2, text);
             }
         }
+        memcpy(lineTableValues[bank], fb, sizeof(lineTableValues[bank]));
+    }
+    lineTableValid = TRUE;
     Update32XLineInfo();
 }
 
@@ -78,6 +94,7 @@ static void Init32XLineTable(void)
     char text[32];
     LVCOLUMN column;
     LVITEM item;
+    lineTableValid = FALSE;
     ListView_SetExtendedListViewStyle(list, LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES | LVS_EX_DOUBLEBUFFER);
     for (i = 0; i < 8; ++i)
     {
@@ -178,9 +195,24 @@ void Draw32XPal_KMod(LPDRAWITEMSTRUCT hlDIS)
 	RECT rc;
 	LONG pix, h;
 	COLORREF col;
+	HDC dc;
+	HBITMAP bitmap;
+	HGDIOBJ oldBitmap;
 
 	palV = (hlDIS->rcItem.bottom - hlDIS->rcItem.top) / PALETTE32X_ROWS;
 	palH = (hlDIS->rcItem.right - hlDIS->rcItem.left) / PALETTE32X_COLUMNS;
+
+	/* Hundreds of brush/line operations against a visible window can force
+	 * compositor synchronization. Paint in memory and present once. */
+	if (palH <= 0 || palV <= 0) return;
+	dc = CreateCompatibleDC(hlDIS->hDC);
+	if (!dc) return;
+	bitmap = CreateCompatibleBitmap(hlDIS->hDC,
+		palH * PALETTE32X_COLUMNS, palV * PALETTE32X_ROWS);
+	if (!bitmap) { DeleteDC(dc); return; }
+	oldBitmap = SelectObject(dc, bitmap);
+	SetBkColor(dc, GetBkColor(hlDIS->hDC));
+	SetBkMode(dc, GetBkMode(hlDIS->hDC));
 
 	for (j = 0; j < PALETTE32X_ROWS; j++)
 	{
@@ -207,24 +239,24 @@ void Draw32XPal_KMod(LPDRAWITEMSTRUCT hlDIS)
 			col |= (tone << 3);
 
 			newBrush = CreateSolidBrush(col);
-			FillRect(hlDIS->hDC, &rc, newBrush);
+			FillRect(dc, &rc, newBrush);
 
 			if (pix & 0x8000) /* Priority bit. */
 			{
-				//FillRect(hlDIS->hDC, &rc, (HBRUSH) (COLOR_WINDOWFRAME+1));
+				//FillRect(dc, &rc, (HBRUSH) (COLOR_WINDOWFRAME+1));
 
 				hPen = CreatePen(PS_DOT, 1, col);
-				hPenOld = SelectObject(hlDIS->hDC, hPen);
+				hPenOld = SelectObject(dc, hPen);
 
 				for (h = rc.top; h < rc.bottom; h += 4)
 				{
-					MoveToEx(hlDIS->hDC, rc.left, h, NULL);
-					LineTo(hlDIS->hDC, rc.right, h);
-					MoveToEx(hlDIS->hDC, rc.left + 2, h + 2, NULL);
-					LineTo(hlDIS->hDC, rc.right, h + 2);
+					MoveToEx(dc, rc.left, h, NULL);
+					LineTo(dc, rc.right, h);
+					MoveToEx(dc, rc.left + 2, h + 2, NULL);
+					LineTo(dc, rc.right, h + 2);
 				}
 
-				SelectObject(hlDIS->hDC, hPenOld);
+				SelectObject(dc, hPenOld);
 				DeleteObject(hPen);
 
 			}
@@ -233,6 +265,11 @@ void Draw32XPal_KMod(LPDRAWITEMSTRUCT hlDIS)
 	}
 
 	if (newBrush)	DeleteObject((HGDIOBJ)newBrush);
+	BitBlt(hlDIS->hDC, 0, 0, palH * PALETTE32X_COLUMNS,
+		palV * PALETTE32X_ROWS, dc, 0, 0, SRCCOPY);
+	SelectObject(dc, oldBitmap);
+	DeleteObject(bitmap);
+	DeleteDC(dc);
 
 
 

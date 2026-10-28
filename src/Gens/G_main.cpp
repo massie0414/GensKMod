@@ -1857,7 +1857,7 @@ int PASCAL WinMain(HINSTANCE hInst,	HINSTANCE hPrevInst, LPSTR lpCmdLine, int nC
 			{
 				Update_Emulation(HWnd);
 #ifdef GENS_KMOD
-				Update_KMod( );
+				Update_KMod_Periodic();
 #endif
 			}
 			else						// EMULATION PAUSED

@@ -18,12 +18,48 @@ void CloseWindow_KMod(UCHAR mode)
     vdpdebug_show(FALSE);
 }
 
+static void compare_tile_grid(void)
+{
+    BITMAPINFO info = {0};
+    DWORD *actual, *expected;
+    HDC a = CreateCompatibleDC(NULL), b = CreateCompatibleDC(NULL);
+    HBITMAP ba, bb;
+    HGDIOBJ olda, oldb;
+    DRAWITEMSTRUCT draw = {0};
+    unsigned i, pal, tile;
+    info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    info.bmiHeader.biWidth = 512; info.bmiHeader.biHeight = -256;
+    info.bmiHeader.biPlanes = 1; info.bmiHeader.biBitCount = 32;
+    ba = CreateDIBSection(a, &info, DIB_RGB_COLORS, (void **)&actual, NULL, 0);
+    bb = CreateDIBSection(b, &info, DIB_RGB_COLORS, (void **)&expected, NULL, 0);
+    assert(ba && bb);
+    olda = SelectObject(a, ba); oldb = SelectObject(b, bb);
+    draw.hDC = a; SetRect(&draw.rcItem, 0, 0, 512, 256);
+    for (i = 0; i < sizeof(VRam); ++i) VRam[i] = (UCHAR)(i * 37 + (i >> 8));
+    for (i = 0; i < sizeof(CRam); ++i) CRam[i] = (UCHAR)(i * 13);
+    for (pal = 0; pal < VDP_PALETTES; ++pal) {
+        pal_KMod = (UCHAR)pal;
+        DrawVDP_Tiles_KMod(&draw);
+        for (tile = 0; tile < 2048; ++tile)
+            vdpdebug_drawTile(b, (unsigned short)tile, (WORD)((tile % 64) * 8),
+                (WORD)((tile / 64) * 8), (UCHAR)pal, 1);
+        GdiFlush();
+        for (i = 0; i < 512 * 256; ++i)
+            assert((actual[i] & 0xffffff) == (expected[i] & 0xffffff));
+    }
+    SelectObject(a, olda); SelectObject(b, oldb);
+    DeleteObject(ba); DeleteObject(bb); DeleteDC(a); DeleteDC(b);
+    memset(VRam, 0, sizeof(VRam)); memset(CRam, 0, sizeof(CRam));
+    puts("PASS: batched VDP grid matches every pixel of the single-tile renderer in all six palettes");
+}
+
 int main(void)
 {
     char temp[MAX_PATH], config[MAX_PATH];
     RECT expected, actual;
     MINMAXINFO limits = {0};
     MSG msg;
+    compare_tile_grid();
     assert(GetTempPath(sizeof(temp), temp));
     assert(GetTempFileName(temp, "vdp", 0, config));
     vdpdebug_create(GetModuleHandle(NULL), NULL);
@@ -43,6 +79,17 @@ int main(void)
         memset(VRam + 2047 * 32, 0xFF, 32);
         pal_KMod = VDP_PALETTE_MONO;
         draw.hDC = memory;
+        {
+            LARGE_INTEGER frequency, start, finish;
+            unsigned i;
+            draw.rcItem = tiles;
+            QueryPerformanceFrequency(&frequency);
+            QueryPerformanceCounter(&start);
+            for (i = 0; i < 20; ++i) { DrawVDP_Tiles_KMod(&draw); GdiFlush(); }
+            QueryPerformanceCounter(&finish);
+            printf("VDP tile grid: %.3f ms per paint\n",
+                (finish.QuadPart - start.QuadPart) * 1000.0 / frequency.QuadPart / 20);
+        }
         draw.rcItem = tiles;
         /* Running and paused updates must both paint the final tile. */
         for (Paused = 0; Paused <= 1; Paused++)
