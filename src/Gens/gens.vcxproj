@@ -532,6 +532,10 @@
     <ClInclude Include="kmod\watchers.h" />
     <ClInclude Include="kmod\ym2612.h" />
     <ClInclude Include="kmod\z80.h" />
+    <ClInclude Include="kmod\z80_ram_panel.h" />
+    <ClCompile Include="kmod\z80_ram_panel.c" />
+    <ClInclude Include="kmod\main_ram_panel.h" />
+    <ClCompile Include="kmod\main_ram_panel.c" />
     <ClInclude Include="mp3_dec\huffman.h" />
     <ClInclude Include="mp3_dec\mpg123.h" />
     <ClInclude Include="mp3_dec\mpglib.h" />

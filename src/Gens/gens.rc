@@ -1368,3 +1368,26 @@ BEGIN
     LTEXT "Last 256 frames / newest at right / shared automatic scale",-1,18,246,264,12
     LTEXT "Read: playback / Write: CPU + DMA / L + R combined",-1,18,262,264,12
 END
+
+
+IDD_Z80_RAM DIALOGEX 0, 0, 260, 94
+STYLE DS_SETFONT | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX
+CAPTION "Z80 RAM usage"
+FONT 8, "MS Shell Dlg"
+BEGIN
+    GROUPBOX "Estimated usage (8 KB)",IDC_Z80_RAM_GROUP,11,7,238,78
+    LTEXT "-- (no active game)",IDC_Z80_RAM_SUMMARY,18,21,224,12
+    CONTROL "",IDC_Z80_RAM_USAGE,"msctls_progress32",WS_BORDER | PBS_SMOOTH,18,39,224,12
+    LTEXT "Counts bytes other than $00 (reset value).\nZero-valued code/data is counted as free.",IDC_Z80_RAM_NOTE,18,57,224,20
+END
+
+IDD_MAIN_RAM_USAGE DIALOGEX 0, 0, 260, 94
+STYLE DS_SETFONT | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX
+CAPTION "Main RAM usage"
+FONT 8, "MS Shell Dlg"
+BEGIN
+    GROUPBOX "Estimated usage (64 KB)",IDC_MAIN_RAM_USAGE_GROUP,11,7,238,78
+    LTEXT "-- (no active game)",IDC_MAIN_RAM_USAGE_SUMMARY,18,21,224,12
+    CONTROL "",IDC_MAIN_RAM_USAGE_BAR,"msctls_progress32",WS_BORDER | PBS_SMOOTH,18,39,224,12
+    LTEXT "Counts bytes other than $00 (reset value).\nZero-valued code/data is counted as free.",IDC_MAIN_RAM_USAGE_NOTE,18,57,224,20
+END

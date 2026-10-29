@@ -13,6 +13,8 @@
 
 #include "m68k.h"
 #include "z80.h"
+#include "z80_ram_panel.h"
+#include "main_ram_panel.h"
 #include "vdp.h"
 #include "vdp_reg.h"
 #include "sprites.h"
@@ -108,6 +110,12 @@ void CloseWindow_KMod(UCHAR mode)
 		break;
 	case DMODE_Z80:
 		z80debug_show(FALSE);
+		break;
+	case DMODE_Z80_RAM:
+		z80ram_show(FALSE);
+		break;
+	case DMODE_MAIN_RAM_USAGE:
+		mainram_show(FALSE);
 		break;
 	case DMODE_VDP:
 		vdpdebug_show(FALSE);
@@ -263,6 +271,12 @@ void OpenWindow_KMod(UCHAR mode)
 		break;
 	case DMODE_Z80:
 		z80debug_show(TRUE);
+		break;
+	case DMODE_Z80_RAM:
+		z80ram_show(TRUE);
+		break;
+	case DMODE_MAIN_RAM_USAGE:
+		mainram_show(TRUE);
 		break;
 	case DMODE_VDP:
 		vdpdebug_show(TRUE);

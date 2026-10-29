@@ -21,6 +21,8 @@
 #include "kmod\planes.h"
 #include "kmod\m68k.h"
 #include "kmod\z80.h"
+#include "kmod/z80_ram_panel.h"
+#include "kmod/main_ram_panel.h"
 #include "kmod\vdp.h"
 #include "kmod\vdp_reg.h"
 #include "kmod\sprites.h"
@@ -203,6 +205,8 @@ void Init_KMod( )
 
 	m68kdebug_create(ghInstance, HWnd);
 	z80debug_create(ghInstance, HWnd);
+	z80ram_create(ghInstance, HWnd);
+	mainram_create(ghInstance, HWnd);
 	vdpdebug_create(ghInstance, HWnd);
 	vdpreg_create(ghInstance, HWnd);
 	sprites_create(ghInstance, HWnd);
@@ -276,6 +280,8 @@ void Init_KMod( )
 	cdprg_restore_window(config_file);
 	m68kdebug_restore_window(config_file);
 	z80debug_restore_window(config_file);
+	z80ram_restore_window(config_file);
+	mainram_restore_window(config_file);
 	disassembly_restore_window(config_file);
 
    
@@ -387,7 +393,7 @@ void kmod_close()
             mode != (DMODE_YM2612 - 1) && mode != (DMODE_PSG - 1) &&
             mode != (DMODE_32_MEMORY - 1) && mode != (DMODE_32_SOUND - 1) && mode != (DMODE_32_FPS - 1) && mode != (DMODE_32_SDRAM - 1) && mode != (DMODE_32_VDP - 1) && mode != (DMODE_32_REG - 1) &&
 			mode != (DMODE_32_MSH2 - 1) && mode != (DMODE_32_SSH2 - 1) &&
-			mode != (DMODE_68K - 1) && mode != (DMODE_CD_68K - 1) && mode != (DMODE_CD_CDC - 1) && mode != (DMODE_CD_REG - 1) && mode != (DMODE_CD_GFX - 1) && mode != (DMODE_CD_PRG - 1) && mode != (DMODE_Z80 - 1))
+			mode != (DMODE_68K - 1) && mode != (DMODE_CD_68K - 1) && mode != (DMODE_CD_CDC - 1) && mode != (DMODE_CD_REG - 1) && mode != (DMODE_CD_GFX - 1) && mode != (DMODE_CD_PRG - 1) && mode != (DMODE_Z80 - 1) && mode != (DMODE_Z80_RAM - 1) && mode != (DMODE_MAIN_RAM_USAGE - 1))
 		{
 			CloseWindow_KMod((UCHAR)(mode + 1));
 		}
@@ -442,6 +448,8 @@ void ResetDebug_KMod(  )
 
 	m68kdebug_reset();
 	z80debug_reset();
+	z80ram_reset();
+	mainram_reset();
 	vdpdebug_reset();
 	vdpreg_reset();
 	sprites_reset();

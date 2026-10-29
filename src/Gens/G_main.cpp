@@ -80,6 +80,8 @@
 #include "kmod/program_ram_transfer_panel.h"
 #include "kmod/m68k.h"
 #include "kmod/z80.h"
+#include "kmod/z80_ram_panel.h"
+#include "kmod/main_ram_panel.h"
 #include "kmod/disassembly.h"
 
 static gdbServerThread * g_gdb_main68k_server;
@@ -1946,6 +1948,8 @@ int PASCAL WinMain(HINSTANCE hInst,	HINSTANCE hPrevInst, LPSTR lpCmdLine, int nC
 	cdprg_save_window(Str_Tmp);
 	m68kdebug_save_window(Str_Tmp);
 	z80debug_save_window(Str_Tmp);
+	z80ram_save_window(Str_Tmp);
+	mainram_save_window(Str_Tmp);
 	disassembly_save_window(Str_Tmp);
 #endif
 
@@ -2351,6 +2355,20 @@ long PASCAL WinProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 #endif
 					Change_Debug(hWnd, DMODE_Z80);
 					return 0;
+
+				case ID_CPU_DEBUG_Z80_RAM:
+#ifdef GENS_KMOD
+                    MINIMIZE
+                    Change_Debug(hWnd, DMODE_Z80_RAM);
+#endif
+                    return 0;
+
+				case ID_CPU_DEBUG_MAIN_RAM_USAGE:
+#ifdef GENS_KMOD
+                    MINIMIZE
+                    Change_Debug(hWnd, DMODE_MAIN_RAM_USAGE);
+#endif
+                    return 0;
 
 				case ID_CPU_DEBUG_GENESIS_VDP:
 #ifdef GENS_KMOD
@@ -3774,19 +3792,21 @@ HMENU Build_Main_Menu(void)
 
 	MENU_L(DebugMD, 0, Flags, ID_CPU_DEBUG_GENESIS_68000, "Genesis - 68K", "", "Genesis - 68K");
 	MENU_L(DebugMD, 1, Flags, ID_CPU_DEBUG_GENESIS_Z80, "Z80", "", "Z80");
-	MENU_L(DebugMD, 2, Flags, ID_CPU_DEBUG_GENESIS_VDP, "VDP", "", "VDP");
-	MENU_L(DebugMD, 3, Flags, ID_CPU_DEBUG_GENESIS_VDPREG, "VDP - Registers", "", "VDP - Registers");
-	MENU_L(DebugMD, 4, Flags, ID_CPU_DEBUG_GENESIS_SPRITES, "VDP - Sprites", "", "VDP - Sprites");
-	MENU_L(DebugMD, 5, Flags, ID_CPU_DEBUG_GENESIS_YM2612, "Sound - YM2612", "", "Sound - YM2612");
-	MENU_L(DebugMD, 6, Flags, ID_CPU_DEBUG_GENESIS_PSG, "Sound - PSG", "", "Sound - PSG");
-	MENU_L(DebugMD, 7, Flags, ID_CPU_DEBUG_MAIN_WORD_RAM_TRANSFER, "Word RAM Transfer", "", "Word RAM Transfer");
-	MENU_L(DebugMD, 8, Flags, ID_CPU_DEBUG_VRAM_TRANSFER, "VRAM Transfer", "", "VRAM Transfer");
-	MENU_L(DebugMD, 9, Flags, ID_CPU_DEBUG_CRAM_TRANSFER, "CRAM Transfer", "", "CRAM Transfer");
-	MENU_L(DebugMD, 10, Flags, ID_CPU_DEBUG_VSRAM_TRANSFER, "VSRAM Transfer", "", "VSRAM Transfer");
-	MENU_L(DebugMD, 11, Flags, ID_CPU_DEBUG_VDP_DMA_TRANSFER, "VDP DMA Transfer", "", "VDP DMA Transfer");
-	MENU_L(DebugMD, 12, Flags, ID_CPU_DEBUG_MAIN_RAM_TRANSFER, "Main RAM Transfer", "", "Main RAM Transfer");
-	MENU_L(DebugMD, 13, Flags, ID_CPU_DEBUG_SUB_RAM_TRANSFER, "Sub RAM Transfer", "", "Sub RAM Transfer");
-	i = 14;
+	MENU_L(DebugMD, 2, Flags, ID_CPU_DEBUG_Z80_RAM, "Z80 RAM usage", "", "Z80 RAM usage");
+	MENU_L(DebugMD, 3, Flags, ID_CPU_DEBUG_MAIN_RAM_USAGE, "Main RAM usage", "", "Main RAM usage");
+	MENU_L(DebugMD, 4, Flags, ID_CPU_DEBUG_GENESIS_VDP, "VDP", "", "VDP");
+	MENU_L(DebugMD, 5, Flags, ID_CPU_DEBUG_GENESIS_VDPREG, "VDP - Registers", "", "VDP - Registers");
+	MENU_L(DebugMD, 6, Flags, ID_CPU_DEBUG_GENESIS_SPRITES, "VDP - Sprites", "", "VDP - Sprites");
+	MENU_L(DebugMD, 7, Flags, ID_CPU_DEBUG_GENESIS_YM2612, "Sound - YM2612", "", "Sound - YM2612");
+	MENU_L(DebugMD, 8, Flags, ID_CPU_DEBUG_GENESIS_PSG, "Sound - PSG", "", "Sound - PSG");
+	MENU_L(DebugMD, 9, Flags, ID_CPU_DEBUG_MAIN_WORD_RAM_TRANSFER, "Word RAM Transfer", "", "Word RAM Transfer");
+	MENU_L(DebugMD, 10, Flags, ID_CPU_DEBUG_VRAM_TRANSFER, "VRAM Transfer", "", "VRAM Transfer");
+	MENU_L(DebugMD, 11, Flags, ID_CPU_DEBUG_CRAM_TRANSFER, "CRAM Transfer", "", "CRAM Transfer");
+	MENU_L(DebugMD, 12, Flags, ID_CPU_DEBUG_VSRAM_TRANSFER, "VSRAM Transfer", "", "VSRAM Transfer");
+	MENU_L(DebugMD, 13, Flags, ID_CPU_DEBUG_VDP_DMA_TRANSFER, "VDP DMA Transfer", "", "VDP DMA Transfer");
+	MENU_L(DebugMD, 14, Flags, ID_CPU_DEBUG_MAIN_RAM_TRANSFER, "Main RAM Transfer", "", "Main RAM Transfer");
+	MENU_L(DebugMD, 15, Flags, ID_CPU_DEBUG_SUB_RAM_TRANSFER, "Sub RAM Transfer", "", "Sub RAM Transfer");
+	i = 16;
 #else
 	if (Debug == DMODE_68K) Flags |= MF_CHECKED;
 	else Flags &= ~MF_CHECKED;

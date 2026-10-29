@@ -66,7 +66,9 @@ extern "C" {
 #define DMODE_SDRAM_TRANSFER 45
 #define DMODE_VRAM32X_TRANSFER 46
 #define DMODE_PWM_FIFO_TRANSFER 47
-#define WIN_NUMBER DMODE_PWM_FIFO_TRANSFER
+#define DMODE_Z80_RAM 48
+#define DMODE_MAIN_RAM_USAGE 49
+#define WIN_NUMBER DMODE_MAIN_RAM_USAGE
 
 extern int Debug;
 extern int Frame_Skip;

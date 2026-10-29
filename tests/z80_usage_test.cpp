@@ -1,4 +1,5 @@
 #include <windows.h>
+#include <commctrl.h>
 #include <stdio.h>
 #include <string.h>
 #include <stddef.h>
@@ -8,6 +9,8 @@
 #include "../src/Gens/vdp_io.h"
 #include "../src/Gens/resource.h"
 #include "../src/Gens/kmod/z80.h"
+#include "../src/Gens/kmod/z80_ram_panel.h"
+#include "../src/Gens/kmod/main_ram_panel.h"
 extern "C" {
 #include "../src/Gens/gens.h"
 #include "../src/Gens/kmod/common.h"
@@ -15,6 +18,194 @@ extern "C" {
 #define CHECK(x) do { if(!(x)) { printf("FAIL line %d: %s\n",__LINE__,#x); return 1; } } while(0)
 static void start(const unsigned char *code,unsigned size) {
  Z80_Reset(); memcpy(Ram_Z80,code,size); Z80_State=3; z80_Clear_Odo(&M_Z80); Z80_Usage_Begin_Frame();
+}
+static unsigned ramTextUpdates,ramBarUpdates;
+static LRESULT CALLBACK CountRAMUpdates(HWND hwnd,UINT message,WPARAM wParam,LPARAM lParam,UINT_PTR id,DWORD_PTR bar) {
+ if(bar && message==PBM_SETPOS)++ramBarUpdates;
+ if(!bar && message==WM_SETTEXT)++ramTextUpdates;
+ return DefSubclassProc(hwnd,message,wParam,lParam);
+}
+static int ram_panel_tests() {
+ InitCommonControls(); Genesis_Started=SegaCD_Started=_32X_Started=0;
+ z80debug_create(GetModuleHandle(NULL),NULL);
+ z80ram_create(GetModuleHandle(NULL),NULL);
+ HWND panel=HandleWindow_KMod[DMODE_Z80_RAM-1],cpu=HandleWindow_KMod[DMODE_Z80-1];
+ CHECK(panel && cpu && panel!=cpu && !IsWindowVisible(panel) && !IsWindowVisible(cpu));
+ CHECK(!GetDlgItem(cpu,IDC_Z80_RAM_USAGE));
+ CHECK(SetWindowSubclass(GetDlgItem(panel,IDC_Z80_RAM_SUMMARY),CountRAMUpdates,1,0));
+ CHECK(SetWindowSubclass(GetDlgItem(panel,IDC_Z80_RAM_USAGE),CountRAMUpdates,1,1));
+ Z80_Reset(); z80ram_reset();
+ CHECK(!ramTextUpdates && !ramBarUpdates);
+ OpenWindow_KMod(DMODE_Z80_RAM);
+ char text[160]; GetDlgItemText(panel,IDC_Z80_RAM_SUMMARY,text,sizeof(text));
+ CHECK(!strcmp(text,"-- (no active game)") && !IsWindowVisible(cpu));
+ Genesis_Started=1; z80ram_reset();
+ GetDlgItemText(panel,IDC_Z80_RAM_SUMMARY,text,sizeof(text));
+ CHECK(!strcmp(text,"0.00%  (0 / 8192 bytes)"));
+ CHECK(SendDlgItemMessage(panel,IDC_Z80_RAM_USAGE,PBM_GETRANGE,FALSE,0)==8192);
+ // Only the panel's one-second timer samples changes during normal running.
+ MSG msg; while(PeekMessage(&msg,panel,WM_TIMER,WM_TIMER,PM_REMOVE)) {}
+ CloseWindow_KMod(DMODE_Z80_RAM); OpenWindow_KMod(DMODE_Z80_RAM);
+ Ram_Z80[8191]=0xff; Sleep(100);
+ CHECK(!PeekMessage(&msg,panel,WM_TIMER,WM_TIMER,PM_REMOVE));
+ CHECK(SendDlgItemMessage(panel,IDC_Z80_RAM_USAGE,PBM_GETPOS,0,0)==0);
+ DWORD startTime=GetTickCount(); BOOL tick=FALSE;
+ while(GetTickCount()-startTime<2000) {
+  if(PeekMessage(&msg,panel,WM_TIMER,WM_TIMER,PM_REMOVE)) { DispatchMessage(&msg); tick=TRUE; break; }
+  Sleep(20);
+ }
+ CHECK(tick); GetDlgItemText(panel,IDC_Z80_RAM_SUMMARY,text,sizeof(text));
+ CHECK(!strcmp(text,"0.01%  (1 / 8192 bytes)") && Ram_Z80[8191]==0xff);
+ Genesis_Started=0; SegaCD_Started=1;
+ memset(Ram_Z80,0,sizeof(Ram_Z80)); memset(Ram_Z80,0xff,4096); z80ram_reset();
+ GetDlgItemText(panel,IDC_Z80_RAM_SUMMARY,text,sizeof(text));
+ CHECK(!strcmp(text,"50.00%  (4096 / 8192 bytes)"));
+ CHECK(SendDlgItemMessage(panel,IDC_Z80_RAM_USAGE,PBM_GETPOS,0,0)==4096);
+ SegaCD_Started=0; _32X_Started=1; memset(Ram_Z80,0xff,sizeof(Ram_Z80)); z80ram_reset();
+ GetDlgItemText(panel,IDC_Z80_RAM_SUMMARY,text,sizeof(text));
+ CHECK(!strcmp(text,"100.00%  (8192 / 8192 bytes)"));
+ CHECK(SendDlgItemMessage(panel,IDC_Z80_RAM_USAGE,PBM_GETPOS,0,0)==8192);
+ unsigned texts=ramTextUpdates,bars=ramBarUpdates;
+ SendMessage(panel,WM_TIMER,1,0); z80ram_reset();
+ CHECK(ramTextUpdates==texts && ramBarUpdates==bars);
+ ShowWindow(panel,SW_MINIMIZE); Z80_Reset(); SendMessage(panel,WM_TIMER,1,0); z80ram_reset();
+ CHECK(ramTextUpdates==texts && ramBarUpdates==bars);
+ ShowWindow(panel,SW_RESTORE);
+ CHECK(SendDlgItemMessage(panel,IDC_Z80_RAM_USAGE,PBM_GETPOS,0,0)==0);
+ OpenWindow_KMod(DMODE_Z80); CloseWindow_KMod(DMODE_Z80_RAM);
+ CHECK(IsWindowVisible(cpu) && !IsWindowVisible(panel));
+ texts=ramTextUpdates; bars=ramBarUpdates;
+ memset(Ram_Z80,0xff,sizeof(Ram_Z80)); z80ram_reset(); SendMessage(panel,WM_TIMER,1,0);
+ CHECK(ramTextUpdates==texts && ramBarUpdates==bars);
+ CloseWindow_KMod(DMODE_Z80); OpenWindow_KMod(DMODE_Z80_RAM);
+ CHECK(!IsWindowVisible(cpu) && SendDlgItemMessage(panel,IDC_Z80_RAM_USAGE,PBM_GETPOS,0,0)==8192);
+ _32X_Started=0; SendMessage(panel,WM_TIMER,1,0);
+ GetDlgItemText(panel,IDC_Z80_RAM_SUMMARY,text,sizeof(text));
+ CHECK(!strcmp(text,"-- (no active game)"));
+ CHECK(SendDlgItemMessage(panel,IDC_Z80_RAM_USAGE,PBM_GETPOS,0,0)==0);
+ // Verify the percentage, bar and explanation fit inside the standalone dialog.
+ RECT client,group; GetClientRect(panel,&client); MapWindowPoints(panel,NULL,(POINT*)&client,2);
+ GetWindowRect(GetDlgItem(panel,IDC_Z80_RAM_GROUP),&group);
+ CHECK(group.left>=client.left && group.top>=client.top && group.right<=client.right && group.bottom<=client.bottom);
+ const int ids[]={IDC_Z80_RAM_SUMMARY,IDC_Z80_RAM_USAGE,IDC_Z80_RAM_NOTE};
+ for(unsigned i=0;i<3;++i) {
+  HWND control=GetDlgItem(panel,ids[i]); RECT r,required={0}; GetWindowRect(control,&r);
+  CHECK(r.left>=group.left && r.right<=group.right && r.top>=group.top && r.bottom<=group.bottom);
+  if(i==1)continue;
+  GetWindowText(control,text,sizeof(text)); if(i==0)strcpy(text,"100.00%  (8192 / 8192 bytes)");
+  HDC dc=GetDC(control); HGDIOBJ old=SelectObject(dc,(HFONT)SendMessage(control,WM_GETFONT,0,0));
+  DrawText(dc,text,-1,&required,DT_CALCRECT|DT_LEFT|DT_NOPREFIX);
+  SelectObject(dc,old); ReleaseDC(control,dc);
+  CHECK(r.right-r.left>=required.right && r.bottom-r.top>=required.bottom);
+ }
+ char dir[MAX_PATH],config[MAX_PATH]; RECT saved,restored;
+ CHECK(GetTempPath(sizeof(dir),dir) && GetTempFileName(dir,"zrm",0,config));
+ GetWindowRect(panel,&saved); kmod_close();
+ CHECK(IsWindowVisible(panel) && OpenedWindow_KMod[DMODE_Z80_RAM-1]);
+ z80ram_save_window(config); z80ram_destroy();
+ CHECK(!HandleWindow_KMod[DMODE_Z80_RAM-1]);
+ z80ram_create(GetModuleHandle(NULL),NULL); z80ram_restore_window(config);
+ panel=HandleWindow_KMod[DMODE_Z80_RAM-1]; GetWindowRect(panel,&restored);
+ CHECK(IsWindowVisible(panel) && EqualRect(&saved,&restored) && !IsWindowVisible(cpu));
+ SendMessage(panel,WM_COMMAND,IDCANCEL,0);
+ CHECK(!IsWindowVisible(panel) && !OpenedWindow_KMod[DMODE_Z80_RAM-1]);
+ z80ram_save_window(config); z80ram_destroy();
+ z80ram_create(GetModuleHandle(NULL),NULL); z80ram_restore_window(config);
+ CHECK(!IsWindowVisible(HandleWindow_KMod[DMODE_Z80_RAM-1]));
+ OpenWindow_KMod(DMODE_Z80_RAM); SendMessage(HandleWindow_KMod[DMODE_Z80_RAM-1],WM_CLOSE,0,0);
+ CHECK(!OpenedWindow_KMod[DMODE_Z80_RAM-1]);
+ z80ram_destroy(); z80debug_destroy(); DeleteFile(config);
+ puts("PASS: standalone Z80 RAM: 0/50/100%, $FF/last byte, MD/CD/32X, 1 Hz, cached paints, hidden/minimized, independent CPU panel, bounds, persistence, ROM switch, Escape/close");
+ return 0;
+}
+static int main_ram_panel_tests() {
+ Genesis_Started=1; SegaCD_Started=_32X_Started=0;
+ memset(Ram_68k,0,sizeof(Ram_68k)); memset(Ram_Z80,0,sizeof(Ram_Z80));
+ mainram_create(GetModuleHandle(NULL),NULL); z80ram_create(GetModuleHandle(NULL),NULL);
+ HWND panel=HandleWindow_KMod[DMODE_MAIN_RAM_USAGE-1],z80=HandleWindow_KMod[DMODE_Z80_RAM-1];
+ CHECK(panel && z80 && panel!=z80 && !IsWindowVisible(panel) && !IsWindowVisible(z80));
+ OpenWindow_KMod(DMODE_MAIN_RAM_USAGE); OpenWindow_KMod(DMODE_Z80_RAM);
+ CHECK(IsWindowVisible(panel) && IsWindowVisible(z80));
+ char text[160]; GetDlgItemText(panel,IDC_MAIN_RAM_USAGE_SUMMARY,text,sizeof(text));
+ CHECK(!strcmp(text,"0.00%  (0 / 65536 bytes)"));
+ CHECK(SendDlgItemMessage(panel,IDC_MAIN_RAM_USAGE_BAR,PBM_GETRANGE,FALSE,0)==65536);
+ // Check the last byte, and the 32-bit bar range beyond 32767 and 65535.
+ Ram_68k[65535]=0xff; mainram_reset();
+ CHECK(SendDlgItemMessage(panel,IDC_MAIN_RAM_USAGE_BAR,PBM_GETPOS,0,0)==1 && Ram_68k[65535]==0xff);
+ GetDlgItemText(panel,IDC_MAIN_RAM_USAGE_SUMMARY,text,sizeof(text));
+ CHECK(!strcmp(text,"0.00%  (1 / 65536 bytes)"));
+ Genesis_Started=0; SegaCD_Started=1;
+ memset(Ram_68k,0,sizeof(Ram_68k)); memset(Ram_68k,0xff,32768); mainram_reset();
+ GetDlgItemText(panel,IDC_MAIN_RAM_USAGE_SUMMARY,text,sizeof(text));
+ CHECK(!strcmp(text,"50.00%  (32768 / 65536 bytes)"));
+ CHECK(SendDlgItemMessage(panel,IDC_MAIN_RAM_USAGE_BAR,PBM_GETPOS,0,0)==32768);
+ SegaCD_Started=0; _32X_Started=1; memset(Ram_68k,0xff,sizeof(Ram_68k)); mainram_reset();
+ GetDlgItemText(panel,IDC_MAIN_RAM_USAGE_SUMMARY,text,sizeof(text));
+ CHECK(!strcmp(text,"100.00%  (65536 / 65536 bytes)"));
+ CHECK(SendDlgItemMessage(panel,IDC_MAIN_RAM_USAGE_BAR,PBM_GETPOS,0,0)==65536);
+ z80ram_reset(); CHECK(SendDlgItemMessage(z80,IDC_Z80_RAM_USAGE,PBM_GETPOS,0,0)==0);
+ CHECK(SetWindowSubclass(GetDlgItem(panel,IDC_MAIN_RAM_USAGE_SUMMARY),CountRAMUpdates,1,0));
+ CHECK(SetWindowSubclass(GetDlgItem(panel,IDC_MAIN_RAM_USAGE_BAR),CountRAMUpdates,1,1));
+ ramTextUpdates=ramBarUpdates=0; mainram_reset();
+ CHECK(!ramTextUpdates && !ramBarUpdates);
+ // Normal updates occur on the one-second timer; opening/restoring refreshes immediately.
+ MSG msg; CloseWindow_KMod(DMODE_MAIN_RAM_USAGE);
+ while(PeekMessage(&msg,panel,WM_TIMER,WM_TIMER,PM_REMOVE)) {}
+ CHECK(IsWindowVisible(z80) && !IsWindowVisible(panel));
+ OpenWindow_KMod(DMODE_MAIN_RAM_USAGE); memset(Ram_68k,0,sizeof(Ram_68k)); Sleep(100);
+ CHECK(!PeekMessage(&msg,panel,WM_TIMER,WM_TIMER,PM_REMOVE));
+ CHECK(SendDlgItemMessage(panel,IDC_MAIN_RAM_USAGE_BAR,PBM_GETPOS,0,0)==65536);
+ DWORD startTime=GetTickCount(); BOOL tick=FALSE;
+ while(GetTickCount()-startTime<2000) {
+  if(PeekMessage(&msg,panel,WM_TIMER,WM_TIMER,PM_REMOVE)) { DispatchMessage(&msg); tick=TRUE; break; }
+  Sleep(20);
+ }
+ CHECK(tick && SendDlgItemMessage(panel,IDC_MAIN_RAM_USAGE_BAR,PBM_GETPOS,0,0)==0);
+ ShowWindow(panel,SW_MINIMIZE); memset(Ram_68k,0xff,sizeof(Ram_68k));
+ ramTextUpdates=ramBarUpdates=0; mainram_reset(); SendMessage(panel,WM_TIMER,1,0);
+ CHECK(!ramTextUpdates && !ramBarUpdates);
+ ShowWindow(panel,SW_RESTORE);
+ CHECK(SendDlgItemMessage(panel,IDC_MAIN_RAM_USAGE_BAR,PBM_GETPOS,0,0)==65536);
+ CloseWindow_KMod(DMODE_MAIN_RAM_USAGE); memset(Ram_68k,0,sizeof(Ram_68k));
+ ramTextUpdates=ramBarUpdates=0; mainram_reset(); SendMessage(panel,WM_TIMER,1,0);
+ CHECK(!ramTextUpdates && !ramBarUpdates && IsWindowVisible(z80));
+ OpenWindow_KMod(DMODE_MAIN_RAM_USAGE);
+ CHECK(SendDlgItemMessage(panel,IDC_MAIN_RAM_USAGE_BAR,PBM_GETPOS,0,0)==0);
+ // Both panels use separate saved state in the same config file.
+ char dir[MAX_PATH],config[MAX_PATH]; RECT saved,restored,client,group;
+ CHECK(GetTempPath(sizeof(dir),dir) && GetTempFileName(dir,"mrm",0,config));
+ CloseWindow_KMod(DMODE_Z80_RAM); GetWindowRect(panel,&saved); kmod_close();
+ CHECK(IsWindowVisible(panel) && OpenedWindow_KMod[DMODE_MAIN_RAM_USAGE-1]);
+ mainram_save_window(config); z80ram_save_window(config); mainram_destroy(); z80ram_destroy();
+ CHECK(!HandleWindow_KMod[DMODE_MAIN_RAM_USAGE-1]);
+ mainram_create(GetModuleHandle(NULL),NULL); z80ram_create(GetModuleHandle(NULL),NULL);
+ mainram_restore_window(config); z80ram_restore_window(config);
+ panel=HandleWindow_KMod[DMODE_MAIN_RAM_USAGE-1]; z80=HandleWindow_KMod[DMODE_Z80_RAM-1];
+ GetWindowRect(panel,&restored); CHECK(EqualRect(&saved,&restored) && IsWindowVisible(panel) && !IsWindowVisible(z80));
+ GetClientRect(panel,&client); MapWindowPoints(panel,NULL,(POINT*)&client,2);
+ GetWindowRect(GetDlgItem(panel,IDC_MAIN_RAM_USAGE_GROUP),&group);
+ CHECK(group.left>=client.left && group.top>=client.top && group.right<=client.right && group.bottom<=client.bottom);
+ const int ids[]={IDC_MAIN_RAM_USAGE_SUMMARY,IDC_MAIN_RAM_USAGE_BAR,IDC_MAIN_RAM_USAGE_NOTE};
+ for(unsigned i=0;i<3;++i) {
+  HWND control=GetDlgItem(panel,ids[i]); RECT r,required={0}; GetWindowRect(control,&r);
+  CHECK(r.left>=group.left && r.right<=group.right && r.top>=group.top && r.bottom<=group.bottom);
+  if(i==1)continue;
+  GetWindowText(control,text,sizeof(text)); if(i==0)strcpy(text,"100.00%  (65536 / 65536 bytes)");
+  HDC dc=GetDC(control); HGDIOBJ old=SelectObject(dc,(HFONT)SendMessage(control,WM_GETFONT,0,0));
+  DrawText(dc,text,-1,&required,DT_CALCRECT|DT_LEFT|DT_NOPREFIX);
+  SelectObject(dc,old); ReleaseDC(control,dc);
+  CHECK(r.right-r.left>=required.right && r.bottom-r.top>=required.bottom);
+ }
+ _32X_Started=0; mainram_reset(); GetDlgItemText(panel,IDC_MAIN_RAM_USAGE_SUMMARY,text,sizeof(text));
+ CHECK(!strcmp(text,"-- (no active game)"));
+ SendMessage(panel,WM_COMMAND,IDCANCEL,0); CHECK(!OpenedWindow_KMod[DMODE_MAIN_RAM_USAGE-1] && !IsWindowVisible(panel));
+ mainram_save_window(config); mainram_destroy(); mainram_create(GetModuleHandle(NULL),NULL); mainram_restore_window(config);
+ CHECK(!IsWindowVisible(HandleWindow_KMod[DMODE_MAIN_RAM_USAGE-1]));
+ OpenWindow_KMod(DMODE_MAIN_RAM_USAGE); SendMessage(HandleWindow_KMod[DMODE_MAIN_RAM_USAGE-1],WM_CLOSE,0,0);
+ CHECK(!OpenedWindow_KMod[DMODE_MAIN_RAM_USAGE-1]);
+ mainram_destroy(); z80ram_destroy(); DeleteFile(config);
+ puts("PASS: standalone Main RAM: 64 KB, 0/50/100%, last byte/$FF, MD/CD/32X, 1 Hz, hidden/minimized, Z80 coexistence, independent persistence, bounds, ROM switch, Escape/close");
+ return 0;
 }
 int main() {
  Z80_Init(); unsigned long values[256];
@@ -183,5 +374,7 @@ int main() {
  CHECK(!IsWindowVisible(HandleWindow_KMod[DMODE_Z80-1]) && !OpenedWindow_KMod[DMODE_Z80-1]);
  z80debug_destroy(); DeleteFile(config);
  puts("PASS: Z80 panel: text/graph bounds, blue bars/inactive, open/closed/position restore, ROM switching");
+ CHECK(ram_panel_tests()==0);
+ CHECK(main_ram_panel_tests()==0);
  return 0;
 }
