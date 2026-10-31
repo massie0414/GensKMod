@@ -15,6 +15,8 @@ char Phrase[1024];
 int Nb_Joys = 0;
 static IDirectInputDevice2 *Joy_ID[MAX_JOYS] = {NULL};
 static DIJOYSTATE Joy_State[MAX_JOYS] = {{0}};
+static bool Joy_Valid[MAX_JOYS];
+static bool Keyboard_Valid;
 long MouseX, MouseY;
 unsigned char Keys[256];
 unsigned char Kaillera_Keys[16];
@@ -42,34 +44,42 @@ int String_Size(char *Chaine)
 }
 
 
+static void Clear_Joy_State(int i)
+{
+	ZeroMemory(&Joy_State[i], sizeof(Joy_State[i]));
+	for (int j = 0; j < 4; j++) Joy_State[i].rgdwPOV[j] = 0xFFFFFFFF;
+	Joy_Valid[i] = false;
+}
+
+
 void End_Input()
 {
-	int i;
-	
+	if (lpDIDMouse)
+	{
+		lpDIDMouse->Release();
+		lpDIDMouse = NULL;
+	}
+	if (lpDIDKeyboard)
+	{
+		lpDIDKeyboard->Unacquire();
+		lpDIDKeyboard->Release();
+		lpDIDKeyboard = NULL;
+	}
+	for (int i = 0; i < MAX_JOYS; i++)
+	{
+		if (Joy_ID[i])
+		{
+			Joy_ID[i]->Unacquire();
+			Joy_ID[i]->Release();
+			Joy_ID[i] = NULL;
+		}
+		Clear_Joy_State(i);
+	}
+	ZeroMemory(Keys, sizeof(Keys));
+	Keyboard_Valid = false;
+	Nb_Joys = 0;
 	if (lpDI)
 	{
-		if(lpDIDMouse)
-		{
-			lpDIDMouse->Release();
-			lpDIDMouse = NULL;
-		}
-
-		if(lpDIDKeyboard)
-		{
-			lpDIDKeyboard->Release();
-			lpDIDKeyboard = NULL;
-		}
-
-		for(i = 0; i < MAX_JOYS; i++)
-		{
-			if (Joy_ID[i])
-			{
-				Joy_ID[i]->Unacquire();
-				Joy_ID[i]->Release();
-			}
-		}
-
-		Nb_Joys = 0;
 		lpDI->Release();
 		lpDI = NULL;
 	}
@@ -202,153 +212,107 @@ int Init_Input(HINSTANCE hInst, HWND hWnd)
 }
 
 
-void Restore_Input()
+// One bounded sample per call; failed reads must never leave a held input behind.
+void Update_Input()
 {
-//	lpDIDMouse->Acquire();
-	lpDIDKeyboard->Acquire();
+	Keyboard_Valid = false;
+	if (lpDIDKeyboard)
+	{
+		HRESULT result = lpDIDKeyboard->GetDeviceState(sizeof(Keys), Keys);
+		if ((result == DIERR_INPUTLOST || result == DIERR_NOTACQUIRED) &&
+			SUCCEEDED(lpDIDKeyboard->Acquire()))
+			result = lpDIDKeyboard->GetDeviceState(sizeof(Keys), Keys);
+		Keyboard_Valid = SUCCEEDED(result);
+	}
+	if (!Keyboard_Valid) ZeroMemory(Keys, sizeof(Keys));
+
+	for (int i = 0; i < Nb_Joys; i++)
+	{
+		HRESULT result = DIERR_NOTACQUIRED;
+		if (Joy_ID[i])
+		{
+			result = Joy_ID[i]->Poll();
+			if (SUCCEEDED(result))
+				result = Joy_ID[i]->GetDeviceState(sizeof(Joy_State[i]), &Joy_State[i]);
+			if ((result == DIERR_INPUTLOST || result == DIERR_NOTACQUIRED) &&
+				SUCCEEDED(Joy_ID[i]->Acquire()))
+			{
+				result = Joy_ID[i]->Poll();
+				if (SUCCEEDED(result))
+					result = Joy_ID[i]->GetDeviceState(sizeof(Joy_State[i]), &Joy_State[i]);
+			}
+		}
+		Joy_Valid[i] = SUCCEEDED(result);
+		if (!Joy_Valid[i]) Clear_Joy_State(i);
+	}
 }
 
 
-void Update_Input()
+// Adjacent directions overlap at diagonals; both must work during gameplay too.
+static bool POV_Pressed(DWORD angle, unsigned int direction)
 {
-//	DIMOUSESTATE MouseState;
-	HRESULT rval;
-	int i;
-
-	rval = lpDIDKeyboard->GetDeviceState(256, &Keys);
-
-	if ((rval == DIERR_INPUTLOST) | (rval == DIERR_NOTACQUIRED))
-		Restore_Input();
-
-	for (i = 0; i < Nb_Joys; i++)
+	if (LOWORD(angle) == 0xFFFF || angle >= 36000) return false;
+	switch (direction)
 	{
-		if (Joy_ID[i])
-		{
-			Joy_ID[i]->Poll();
-			rval = Joy_ID[i]->GetDeviceState(sizeof(Joy_State[i]), &Joy_State[i]);
-			if (rval != DI_OK) Joy_ID[i]->Acquire();
-		}
+		case 1: return angle <= 4500 || angle >= 31500;
+		case 2: return angle >= 4500 && angle <= 13500;
+		case 3: return angle >= 13500 && angle <= 22500;
+		case 4: return angle >= 22500 && angle <= 31500;
 	}
-
-//	rval = lpDIDMouse->GetDeviceState(sizeof(MouseState), &MouseState);
-	
-//	if ((rval == DIERR_INPUTLOST) | (rval == DIERR_NOTACQUIRED))
-//		Restore_Input();
-
-//  MouseX = MouseState.lX;
-//  MouseY = MouseState.lY;
+	return false;
 }
 
 
 int Check_Key_Pressed(unsigned int key)
 {
-	int Num_Joy;
-
-	if (key < 0x100)
+	if (key < 0x100) return Keyboard_Valid && KEYDOWN(key);
+	unsigned int joy = (key >> 8) & 0xF;
+	if (joy >= MAX_JOYS || !Joy_ID[joy] || !Joy_Valid[joy]) return 0;
+	if (key & 0x80)
+		return POV_Pressed(Joy_State[joy].rgdwPOV[(key >> 4) & 3], key & 0xF);
+	if (key & 0x70)
 	{
-		if KEYDOWN(key) return(1);
+		unsigned int button = (key & 0xFF) - 0x10;
+		return button < 32 && (Joy_State[joy].rgbButtons[button] & 0x80);
 	}
-	else
+	switch (key & 0xF)
 	{
-		Num_Joy = ((key >> 8) & 0xF);
-
-		if (Joy_ID[Num_Joy])
-		{
-			if (key & 0x80)			// Test POV Joys
-			{
-				switch(key & 0xF)
-				{
-					case 1:
-						if (Joy_State[Num_Joy].rgdwPOV[(key >> 4) & 3] == 0) return(1); break;
-
-					case 2:
-						if (Joy_State[Num_Joy].rgdwPOV[(key >> 4) & 3] == 9000) return(1); break;
-
-					case 3:
-						if (Joy_State[Num_Joy].rgdwPOV[(key >> 4) & 3] == 18000) return(1); break;
-
-					case 4:
-						if (Joy_State[Num_Joy].rgdwPOV[(key >> 4) & 3] == 27000) return(1); break;
-				}
-
-			}
-			else if (key & 0x70)		// Test Button Joys
-			{
-				if (Joy_State[Num_Joy].rgbButtons[(key & 0xFF) - 0x10]) return(1);
-			}
-			else
-			{
-				switch(key & 0xF)
-				{
-					case 1:
-						if (Joy_State[Num_Joy].lY < -500) return(1); break;
-
-					case 2:
-						if (Joy_State[Num_Joy].lY > +500) return(1); break;
-
-					case 3:
-						if (Joy_State[Num_Joy].lX < -500) return(1); break;
-
-					case 4:
-						if (Joy_State[Num_Joy].lX > +500) return(1); break;
-				}
-			}
-		}
+		case 1: return Joy_State[joy].lY < -500;
+		case 2: return Joy_State[joy].lY > 500;
+		case 3: return Joy_State[joy].lX < -500;
+		case 4: return Joy_State[joy].lX > 500;
 	}
-
 	return 0;
 }
 
 
-unsigned int Get_Key(void)
+// Read the current sample without waiting. Prefer the requested direction when
+// a POV diagonal contains two directions (e.g. down-right while defining DOWN).
+static unsigned int Pressed_Key(unsigned int preferredPOV)
 {
-	int i, j;
-
-	while(1)
+	for (int i = 1; i < 256; i++)
+		if (Keyboard_Valid && KEYDOWN(i)) return i;
+	for (int i = 0; i < Nb_Joys; i++)
 	{
-		Update_Input();
-
-		for(i = 1; i < 256; i++)
-			if KEYDOWN(i) return i;
-
-		for(i = 0; i < Nb_Joys; i++)
+		if (!Joy_Valid[i]) continue;
+		unsigned int base = 0x1000 + 0x100 * i;
+		if (Joy_State[i].lY < -500) return base + 1;
+		if (Joy_State[i].lY > 500) return base + 2;
+		if (Joy_State[i].lX < -500) return base + 3;
+		if (Joy_State[i].lX > 500) return base + 4;
+		for (int j = 0; j < 4; j++)
 		{
-			if (Joy_ID[i])
-			{
-				if (Joy_State[i].lY < -500)
-					return(0x1000 + (0x100 * i) + 0x1);
-
-				if (Joy_State[i].lY > +500)
-					return(0x1000 + (0x100 * i) + 0x2);
-
-				if (Joy_State[i].lX < -500)
-					return(0x1000 + (0x100 * i) + 0x3);
-
-				if (Joy_State[i].lX > +500)
-					return(0x1000 + (0x100 * i) + 0x4);
-
-				for (j = 0; j < 4; j++)
-					if (Joy_State[i].rgdwPOV[j] == 0)
-						return(0x1080 + (0x100 * i) + (0x10 * j) + 0x1);
-
-				for (j = 0; j < 4; j++)
-					if (Joy_State[i].rgdwPOV[j] == 9000)
-						return(0x1080 + (0x100 * i) + (0x10 * j) + 0x2);
-
-				for (j = 0; j < 4; j++)
-					if (Joy_State[i].rgdwPOV[j] == 18000)
-						return(0x1080 + (0x100 * i) + (0x10 * j) + 0x3);
-
-				for (j = 0; j < 4; j++)
-					if (Joy_State[i].rgdwPOV[j] == 27000)
-						return(0x1080 + (0x100 * i) + (0x10 * j) + 0x4);
-
-				for (j = 0; j < 32; j++)
-					if (Joy_State[i].rgbButtons[j])
-						return(0x1010 + (0x100 * i) + j);
-			}
+			DWORD angle = Joy_State[i].rgdwPOV[j];
+			if (preferredPOV && POV_Pressed(angle, preferredPOV))
+				return base + 0x80 + 0x10 * j + preferredPOV;
+			for (unsigned int direction = 1; direction <= 4; direction++)
+				if (POV_Pressed(angle, direction))
+					return base + 0x80 + 0x10 * j + direction;
 		}
+		for (int j = 0; j < 32; j++)
+			if (Joy_State[i].rgbButtons[j] & 0x80) return base + 0x10 + j;
 	}
+	return 0;
 }
 
 
@@ -774,80 +738,166 @@ void Update_Controllers()
 }
 
 
-// define key config of player (from Controller settings dlg box)
+// Key assignment runs in the dialog's normal message loop, never in a wait loop.
+static const UINT_PTR KEY_SETTING_TIMER = 0x4B53;
+static struct KeySettingState {
+	HWND dialog, previousFocus;
+	WNDPROC textProc;
+	int player, step, count;
+	bool waitRelease;
+	unsigned int releaseKey;
+	K_Def pending;
+} KeySetting = {};
+
+static unsigned int K_Def::*const KeyFields[] = {
+	&K_Def::Up, &K_Def::Down, &K_Def::Left, &K_Def::Right,
+	&K_Def::Start, &K_Def::A, &K_Def::B, &K_Def::C,
+	&K_Def::Mode, &K_Def::X, &K_Def::Y, &K_Def::Z
+};
+static const char *const KeyPrompts[] = {
+	"INPUT KEY FOR UP", "INPUT KEY FOR DOWN", "INPUT KEY FOR LEFT", "INPUT KEY FOR RIGHT",
+	"INPUT KEY FOR START", "INPUT KEY FOR A", "INPUT KEY FOR B", "INPUT KEY FOR C",
+	"INPUT KEY FOR MODE", "INPUT KEY FOR X", "INPUT KEY FOR Y", "INPUT KEY FOR Z"
+};
+
+static void Key_Setting_Controls(HWND dialog, BOOL enabled)
+{
+	for (int id = IDC_COMBO_PORT1; id <= IDC_BUTTON_SETKEYSP2D; id++)
+		EnableWindow(GetDlgItem(dialog, id), enabled);
+	EnableWindow(GetDlgItem(dialog, ID_HELP_HELP), enabled);
+	SetDlgItemText(dialog, IDOK, enabled ? "OK" : "Cancel");
+}
+
+static void Finish_Key_Setting(bool commit)
+{
+	HWND dialog = KeySetting.dialog;
+	if (!dialog) return;
+	KillTimer(dialog, KEY_SETTING_TIMER);
+	if (commit) Keys_Def[KeySetting.player] = KeySetting.pending;
+	HWND text = GetDlgItem(dialog, IDC_STATIC_TEXT1);
+	SetWindowLongPtr(text, GWLP_WNDPROC, (LONG_PTR)KeySetting.textProc);
+	KeySetting.dialog = NULL;
+	Key_Setting_Controls(dialog, TRUE);
+	SetDlgItemText(dialog, IDC_STATIC_TEXT0, "SETTING KEYS");
+	SetDlgItemText(dialog, IDC_STATIC_TEXT1, commit ? "CONFIGURATION SUCCESSFUL" : "");
+	SetDlgItemText(dialog, IDC_STATIC_TEXT2, "");
+	if (GetForegroundWindow() == dialog)
+		SetFocus(IsWindow(KeySetting.previousFocus) ? KeySetting.previousFocus : GetDlgItem(dialog, IDOK));
+}
+
+// Keep Enter, Space, Tab and arrow keys available for binding instead of letting
+// the dialog manager turn them into button clicks or focus navigation.
+static LRESULT CALLBACK Key_Setting_Text_Proc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	if (message == WM_GETDLGCODE) return DLGC_WANTALLKEYS;
+	if (message == WM_KEYDOWN || message == WM_KEYUP || message == WM_CHAR)
+	{
+		if (message == WM_KEYUP && wParam == VK_ESCAPE) Finish_Key_Setting(false);
+		return 0;
+	}
+	return CallWindowProc(KeySetting.textProc, hwnd, message, wParam, lParam);
+}
+
 int Setting_Keys(HWND hset, int Player, int TypeP)
 {
-	HWND Txt1, Txt2;
-	MSG m;
-
-	Sleep(250);
-	Txt1 = GetDlgItem(hset, IDC_STATIC_TEXT1);
-	Txt2 = GetDlgItem(hset, IDC_STATIC_TEXT2);
-	if (Txt1 == NULL) return 0;
-	if (Txt2 == NULL) return 0;
-
-	SetWindowText(Txt1, "INPUT KEY FOR UP");
-	Keys_Def[Player].Up = Get_Key();
-	Sleep(250);
-
-	SetWindowText(Txt1, "INPUT KEY FOR DOWN");
-	Keys_Def[Player].Down = Get_Key();
-	Sleep(250);
-	
-	SetWindowText(Txt1, "INPUT KEY FOR LEFT");
-	Keys_Def[Player].Left = Get_Key();
-	Sleep(250);
-	
-	SetWindowText(Txt1, "INPUT KEY FOR RIGHT");
-	Keys_Def[Player].Right = Get_Key();
-	Sleep(250);
-	
-	SetWindowText(Txt1, "INPUT KEY FOR START");
-	Keys_Def[Player].Start = Get_Key();
-	Sleep(250);
-	
-	SetWindowText(Txt1, "INPUT KEY FOR A");
-	Keys_Def[Player].A = Get_Key();
-	Sleep(250);
-	
-	SetWindowText(Txt1, "INPUT KEY FOR B");
-	Keys_Def[Player].B = Get_Key();
-	Sleep(250);
-	
-	SetWindowText(Txt1, "INPUT KEY FOR C");
-	Keys_Def[Player].C = Get_Key();
-	Sleep(250);
-
-	if (TypeP)
+	if (KeySetting.dialog || Player < 0 || Player >= 8) return 0;
+	HWND text = GetDlgItem(hset, IDC_STATIC_TEXT1);
+	if (!text || !GetDlgItem(hset, IDC_STATIC_TEXT2)) return 0;
+	KeySetting.dialog = hset;
+	KeySetting.previousFocus = GetFocus();
+	KeySetting.player = Player;
+	KeySetting.step = 0;
+	KeySetting.count = TypeP ? 12 : 8;
+	KeySetting.waitRelease = true;
+	KeySetting.releaseKey = 0;
+	KeySetting.pending = Keys_Def[Player];
+	KeySetting.textProc = (WNDPROC)SetWindowLongPtr(text, GWLP_WNDPROC, (LONG_PTR)Key_Setting_Text_Proc);
+	Key_Setting_Controls(hset, FALSE);
+	SetFocus(text);
+	SetDlgItemText(hset, IDC_STATIC_TEXT1, KeyPrompts[0]);
+	SetDlgItemText(hset, IDC_STATIC_TEXT2, "Release all controls. Esc / Cancel to cancel.");
+	if (!SetTimer(hset, KEY_SETTING_TIMER, 20, NULL))
 	{
-		SetWindowText(Txt1, "INPUT KEY FOR MODE");
-		Keys_Def[Player].Mode = Get_Key();
-		Sleep(250);
-
-		SetWindowText(Txt1, "INPUT KEY FOR X");
-		Keys_Def[Player].X = Get_Key();
-		Sleep(250);
-
-		SetWindowText(Txt1, "INPUT KEY FOR Y");
-		Keys_Def[Player].Y = Get_Key();
-		Sleep(250);
-
-		SetWindowText(Txt1, "INPUT KEY FOR Z");
-		Keys_Def[Player].Z = Get_Key();
-		Sleep(250);
+		Finish_Key_Setting(false);
+		SetDlgItemText(hset, IDC_STATIC_TEXT1, "Could not start key assignment.");
+		return 0;
 	}
-
-	SetWindowText(Txt1, "CONFIGURATION SUCCESSFULL");
-	SetWindowText(Txt2, "PRESS A KEY TO CONTINUE ...");
-	Get_Key();
-	Sleep(500);
-
-	while (PeekMessage(&m, hset, WM_KEYDOWN, WM_KEYDOWN, PM_REMOVE));
-
-	SetWindowText(Txt1, "");
-	SetWindowText(Txt2, "");
-
 	return 1;
+}
+
+static void Tick_Key_Setting()
+{
+	HWND dialog = KeySetting.dialog;
+	if (GetForegroundWindow() != dialog)
+	{
+		KeySetting.waitRelease = true;
+		return;
+	}
+	Update_Input();
+	static const unsigned int povDirections[] = {1, 3, 4, 2};
+	unsigned int key = Pressed_Key(KeySetting.step < 4 ? povDirections[KeySetting.step] : 0);
+	// Escape is reserved for cancellation on key-up, handled by the focused control.
+	if (key == DIK_ESCAPE) return;
+	if (KeySetting.waitRelease)
+	{
+		unsigned int previous = KeySetting.releaseKey;
+		bool valid = previous == 0 || (previous < 0x100 ? Keyboard_Valid : Joy_Valid[(previous >> 8) & 0xF]);
+		if (!valid)
+		{
+			SetDlgItemText(dialog, IDC_STATIC_TEXT2, "Input unavailable. Reconnect or cancel.");
+			return;
+		}
+		if (key)
+		{
+			SetDlgItemText(dialog, IDC_STATIC_TEXT2, "Release all controls. Esc / Cancel to cancel.");
+			return;
+		}
+		KeySetting.waitRelease = false;
+		if (KeySetting.step == KeySetting.count)
+		{
+			Finish_Key_Setting(true);
+			return;
+		}
+	}
+	bool available = Keyboard_Valid;
+	for (int i = 0; i < Nb_Joys; i++) available = available || Joy_Valid[i];
+	unsigned int previous = KeySetting.releaseKey;
+	bool lostPrevious = previous >= 0x100 && !Joy_Valid[(previous >> 8) & 0xF];
+	SetDlgItemText(dialog, IDC_STATIC_TEXT2, !available || lostPrevious ?
+		"Input unavailable. Reconnect or cancel." : "Press a control. Esc / Cancel to cancel.");
+	if (!key) return;
+	KeySetting.pending.*KeyFields[KeySetting.step] = key;
+	KeySetting.step++;
+	KeySetting.waitRelease = true;
+	KeySetting.releaseKey = key;
+	if (KeySetting.step < KeySetting.count)
+		SetDlgItemText(dialog, IDC_STATIC_TEXT1, KeyPrompts[KeySetting.step]);
+	SetDlgItemText(dialog, IDC_STATIC_TEXT2, "Release all controls. Esc / Cancel to cancel.");
+}
+
+int Handle_Key_Setting_Message(HWND hset, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	if (KeySetting.dialog != hset) return 0;
+	switch (message)
+	{
+		case WM_TIMER:
+			if (wParam != KEY_SETTING_TIMER) return 0;
+			Tick_Key_Setting();
+			return 1;
+		case WM_COMMAND:
+			if (LOWORD(wParam) == IDCANCEL || (LOWORD(wParam) == IDOK && lParam))
+				Finish_Key_Setting(false);
+			return 1;
+		case WM_ACTIVATE:
+			KeySetting.waitRelease = true;
+			if (LOWORD(wParam) != WA_INACTIVE) SetFocus(GetDlgItem(hset, IDC_STATIC_TEXT1));
+			break;
+		case WM_CLOSE:
+		case WM_DESTROY:
+			Finish_Key_Setting(false);
+			break;
+	}
+	return 0;
 }
 
 

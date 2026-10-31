@@ -5089,6 +5089,8 @@ LRESULT CALLBACK ControllerProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lPar
     int i; 
 	static HWND Tex0 = NULL;
 
+	if (Handle_Key_Setting_Message(hDlg, uMsg, wParam, lParam)) return true;
+
 	switch(uMsg)
 	{
 		case WM_INITDIALOG:
@@ -5146,6 +5148,11 @@ LRESULT CALLBACK ControllerProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lPar
 		case WM_COMMAND:
 			switch(wParam)
 			{
+				case IDCANCEL:
+					End_Input();
+					EndDialog(hDlg, false);
+					return true;
+
 				case IDOK:
 					Controller_1_Type = (SendDlgItemMessage(hDlg, IDC_COMBO_PORT1, CB_GETCURSEL, (WPARAM) 0, (LPARAM) 0) & 1);
 					Controller_1_Type <<= 4;
@@ -5173,56 +5180,48 @@ LRESULT CALLBACK ControllerProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lPar
 				case IDC_BUTTON_SETKEYSP1:
 					SetWindowText(Tex0, "SETTING KEYS P1");
 					Setting_Keys(hDlg, 0, (SendDlgItemMessage(hDlg, IDC_COMBO_PADP1, CB_GETCURSEL, (WPARAM) 0, (LPARAM) 0) & 1));
-					SetWindowText(Tex0, "SETTING KEYS");
 					return true;
 					break;
 
 				case IDC_BUTTON_SETKEYSP1B:
 					SetWindowText(GetDlgItem(hDlg, IDC_STATIC_TEXT0), "SETTING KEYS P1B");
 					Setting_Keys(hDlg, 2, (SendDlgItemMessage(hDlg, IDC_COMBO_PADP1B, CB_GETCURSEL, (WPARAM) 0, (LPARAM) 0) & 1));
-					SetWindowText(GetDlgItem(hDlg, IDC_STATIC_TEXT0), "SETTING KEYS");
 					return true;
 					break;
 
 				case IDC_BUTTON_SETKEYSP1C:
 					SetWindowText(GetDlgItem(hDlg, IDC_STATIC_TEXT0), "SETTING KEYS P1C");
 					Setting_Keys(hDlg, 3, (SendDlgItemMessage(hDlg, IDC_COMBO_PADP1C, CB_GETCURSEL, (WPARAM) 0, (LPARAM) 0) & 1));
-					SetWindowText(GetDlgItem(hDlg, IDC_STATIC_TEXT0), "SETTING KEYS");
 					return true;
 					break;
 
 				case IDC_BUTTON_SETKEYSP1D:
 					SetWindowText(GetDlgItem(hDlg, IDC_STATIC_TEXT0), "SETTING KEYS P1D");
 					Setting_Keys(hDlg, 4, (SendDlgItemMessage(hDlg, IDC_COMBO_PADP1D, CB_GETCURSEL, (WPARAM) 0, (LPARAM) 0) & 1));
-					SetWindowText(GetDlgItem(hDlg, IDC_STATIC_TEXT0), "SETTING KEYS");
 					return true;
 					break;
 
 				case IDC_BUTTON_SETKEYSP2:
 					SetWindowText(GetDlgItem(hDlg, IDC_STATIC_TEXT0), "SETTING KEYS P2");
 					Setting_Keys(hDlg, 1, (SendDlgItemMessage(hDlg, IDC_COMBO_PADP2, CB_GETCURSEL, (WPARAM) 0, (LPARAM) 0) & 1));
-					SetWindowText(GetDlgItem(hDlg, IDC_STATIC_TEXT0), "SETTING KEYS");
 					return true;
 					break;
 
 				case IDC_BUTTON_SETKEYSP2B:
 					SetWindowText(GetDlgItem(hDlg, IDC_STATIC_TEXT0), "SETTING KEYS P2B");
 					Setting_Keys(hDlg, 5, (SendDlgItemMessage(hDlg, IDC_COMBO_PADP2B, CB_GETCURSEL, (WPARAM) 0, (LPARAM) 0) & 1));
-					SetWindowText(GetDlgItem(hDlg, IDC_STATIC_TEXT0), "SETTING KEYS");
 					return true;
 					break;
 
 				case IDC_BUTTON_SETKEYSP2C:
 					SetWindowText(GetDlgItem(hDlg, IDC_STATIC_TEXT0), "SETTING KEYS P2C");
 					Setting_Keys(hDlg, 6, (SendDlgItemMessage(hDlg, IDC_COMBO_PADP2C, CB_GETCURSEL, (WPARAM) 0, (LPARAM) 0) & 1));
-					SetWindowText(GetDlgItem(hDlg, IDC_STATIC_TEXT0), "SETTING KEYS");
 					return true;
 					break;
 
 				case IDC_BUTTON_SETKEYSP2D:
 					SetWindowText(GetDlgItem(hDlg, IDC_STATIC_TEXT0), "SETTING KEYS P2D");
 					Setting_Keys(hDlg, 7, (SendDlgItemMessage(hDlg, IDC_COMBO_PADP2D, CB_GETCURSEL, (WPARAM) 0, (LPARAM) 0) & 1));
-					SetWindowText(GetDlgItem(hDlg, IDC_STATIC_TEXT0), "SETTING KEYS");
 					return true;
 					break;
 
